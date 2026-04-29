@@ -1,0 +1,14 @@
+logging:
+  level:
+    com.example.rag: DEBUG
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/rag_db
+    username: rag_user
+    password: rag_password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
