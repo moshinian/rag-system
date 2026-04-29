@@ -66,7 +66,7 @@
 ## 技术选型
 
 - Java 17
-- Spring Boot 3.3.5
+- Spring Boot 3.5.14
 - Spring Web
 - Spring Validation
 - Spring Data JPA
@@ -323,6 +323,8 @@ Content-Type: multipart/form-data
 ### 请求追踪
 
 当前已经接入请求级 `X-Request-Id` 透传与生成，便于后续日志排障和接口追踪。
+
+请求 ID 基于 Snowflake 算法生成；当系统时钟出现短暂回拨，或者同一毫秒内序列号耗尽时，生成器会阻塞等待到下一可用毫秒，而不是直接抛错。
 
 ### 基础线程池
 

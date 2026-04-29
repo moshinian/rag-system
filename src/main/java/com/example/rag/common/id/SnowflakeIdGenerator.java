@@ -28,18 +28,18 @@ public class SnowflakeIdGenerator {
         this.workerId = properties.workerId();
         this.datacenterId = properties.datacenterId();
 
-        if (workerId > MAX_WORKER_ID) {
-            throw new IllegalArgumentException("workerId exceeds max value: " + MAX_WORKER_ID);
+        if (workerId < 0 || workerId > MAX_WORKER_ID) {
+            throw new IllegalArgumentException("workerId must be between 0 and " + MAX_WORKER_ID);
         }
-        if (datacenterId > MAX_DATACENTER_ID) {
-            throw new IllegalArgumentException("datacenterId exceeds max value: " + MAX_DATACENTER_ID);
+        if (datacenterId < 0 || datacenterId > MAX_DATACENTER_ID) {
+            throw new IllegalArgumentException("datacenterId must be between 0 and " + MAX_DATACENTER_ID);
         }
     }
 
     public synchronized long nextId() {
         long currentTimestamp = timestamp();
         if (currentTimestamp < lastTimestamp) {
-            throw new IllegalStateException("Clock moved backwards. Refusing to generate id.");
+            currentTimestamp = waitUntilNextMillis(lastTimestamp);
         }
 
         if (currentTimestamp == lastTimestamp) {
@@ -71,7 +71,7 @@ public class SnowflakeIdGenerator {
         return currentTimestamp;
     }
 
-    private long timestamp() {
+    protected long timestamp() {
         return System.currentTimeMillis();
     }
 }
