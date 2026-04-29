@@ -2,10 +2,18 @@
 
 一个面向企业内部知识库场景的 RAG 后端服务，用来沉淀结算领域文档，并逐步演进为可检索、可引用、可追溯的问答系统。
 
-当前仓库已经完成了第 1 周前半段的核心骨架，并且已经落地了两条真实链路：
+当前仓库已经完成了第 1 周前半段到 Day 3 的核心工程骨架，并且已经落地了两条真实链路：
 
 1. 知识库创建
 2. 文档上传入库
+
+同时已经补齐了本地开发所需的基础设施底座：
+
+1. PostgreSQL 容器化运行与持久化
+2. Redis 容器化运行与持久化
+3. Flyway 迁移恢复能力
+4. 线程池基础配置
+5. Redis 最小读写验证接口
 
 这份 README 只描述当前仓库已经实现的内容，以及下一步明确要做的事情，不把规划写成现状。
 
@@ -30,27 +38,30 @@
 
 1. Spring Boot 3 + Java 17 服务骨架
 2. PostgreSQL 真连通
-3. Flyway 迁移可执行
-4. JPA 实体与 Repository 已接通
-5. 统一响应结构 `ApiResponse`
-6. 全局异常处理
-7. 请求级 `X-Request-Id` 透传与生成
-8. 健康检查接口 `/api/health`
-9. 知识库创建接口
-10. 文档上传接口
-11. 本地文件落盘
-12. 文档去重校验
+3. Redis 真连通
+4. Flyway 迁移可执行
+5. JPA 实体与 Repository 已接通
+6. 统一响应结构 `ApiResponse`
+7. 全局异常处理
+8. 请求级 `X-Request-Id` 透传与生成
+9. 健康检查接口 `/api/health`
+10. Redis 探针接口 `/api/health/redis-probe`
+11. 知识库创建接口
+12. 文档上传接口
+13. 本地文件落盘
+14. 文档去重校验
+15. 基础线程池 `indexingExecutor`
+16. Actuator 基础接入
 
 当前还没完成的能力：
 
-1. Redis 接入与连通校验
-2. Markdown / txt / PDF 解析
-3. `document_chunk` 表与切块入库
-4. 异步索引任务
-5. 向量化与检索
-6. 大模型问答链路
-7. 引用来源展示
-8. 评测集与效果评测
+1. Markdown / txt / PDF 解析
+2. `document_chunk` 表与切块入库
+3. 异步索引任务编排
+4. 向量化与检索
+5. 大模型问答链路
+6. 引用来源展示
+7. 评测集与效果评测
 
 ## 技术选型
 
@@ -59,25 +70,29 @@
 - Spring Web
 - Spring Validation
 - Spring Data JPA
+- Spring Data Redis
+- Spring Boot Actuator
 - PostgreSQL
+- Redis
 - Flyway
 - Lombok
 
 当前配置里已经预留但尚未真正接入主链路的外围能力：
 
-- Redis 配置
-- OpenAI 兼容 API 配置
+- `rag.embedding.*`
+- `rag.llm.*`
 - 检索与生成模块占位
 
 ## 目录结构
 
 ```text
 rag-system/
+├── docker-compose.yml
 ├── pom.xml
 ├── src/main/java/com/example/rag/
 │   ├── RagApplication.java
 │   ├── common/                # 统一返回、错误码、异常
-│   ├── config/                # 配置属性、请求 ID 过滤器
+│   ├── config/                # 配置属性、线程池、请求 ID 过滤器
 │   ├── controller/            # HTTP 接口
 │   │   ├── HealthController.java
 │   │   ├── KnowledgeBaseController.java
@@ -101,7 +116,7 @@ rag-system/
 │   ├── application-local.yml
 │   └── db/migration/
 │       └── V1__init_schema.sql
-├── data/uploads/              # 已上传原始文件
+├── data/                      # 本地持久化目录（已被 .gitignore 忽略）
 └── work/                      # 过程文档与阶段记录
 ```
 
@@ -150,11 +165,45 @@ rag-system/
 - `idx_document_kb_status`
 - `idx_document_content_hash`
 
+## 本地运行
+
+### 1. 启动基础设施
+
+项目根目录已经提供 [docker-compose.yml](/root/workspace/rag-system/docker-compose.yml:1)：
+
+```bash
+docker compose up -d
+```
+
+当前会启动：
+
+1. `rag-postgres`
+2. `rag-redis`
+
+其中：
+
+- PostgreSQL：`localhost:5432`
+- Redis：`localhost:6379`
+- Redis 已启用密码：`rag_password`
+- 数据持久化目录：`./data/postgres`、`./data/redis`
+
+### 2. 启动应用
+
+```bash
+mvn -s maven-settings.xml spring-boot:run
+```
+
+或者执行测试做一次完整启动校验：
+
+```bash
+mvn -s maven-settings.xml test
+```
+
 ## 配置说明
 
-主配置文件见 [src/main/resources/application.yml](/root/workspace/rag-system/src/main/resources/application.yml)。
+主配置文件见 [src/main/resources/application.yml](/root/workspace/rag-system/src/main/resources/application.yml:1)。
 
-当前数据库配置已经调整为：
+当前关键配置包括：
 
 ```yaml
 spring:
@@ -162,23 +211,20 @@ spring:
     url: jdbc:postgresql://localhost:5432/rag_db
     username: rag_user
     password: rag_password
-    driver-class-name: org.postgresql.Driver
-  jpa:
-    hibernate:
-      ddl-auto: update
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: rag_password
   flyway:
     enabled: true
-```
 
-`application-local.yml` 不再排除数据源和 JPA 自动配置，默认 `local` profile 会真实连接 PostgreSQL。
-
-文件存储目录：
-
-```yaml
 rag:
   storage:
     base-dir: ./data/uploads
 ```
+
+`application-local.yml` 负责本地环境增强配置，包括更细的日志级别。
 
 ## 当前接口
 
@@ -188,7 +234,25 @@ rag:
 GET /api/health
 ```
 
-### 2. 创建知识库
+当前返回除了服务状态，还会附带组件状态：
+
+1. `postgres`
+2. `redis`
+
+### 2. Redis 连通探针
+
+```http
+POST /api/health/redis-probe
+```
+
+这个接口会执行一次最小 `set/get`，返回：
+
+1. 写入 key
+2. 写入值
+3. 读出值
+4. 是否一致
+
+### 3. 创建知识库
 
 ```http
 POST /api/knowledge-bases
@@ -206,7 +270,7 @@ Content-Type: application/json
 }
 ```
 
-### 3. 上传文档
+### 4. 上传文档
 
 ```http
 POST /api/knowledge-bases/{kbCode}/documents/upload
@@ -233,15 +297,14 @@ Content-Type: multipart/form-data
 
 1. Spring Boot 可正常启动
 2. PostgreSQL 可正常连接
-3. Flyway 可成功执行迁移
-4. 知识库创建接口可写库
-5. 文档上传接口可写库
-6. 原始文件可保存到本地目录
-7. 同知识库重复文件会被拦截
-
-示例上传落盘路径：
-
-- [data/uploads/settlement-kb/20260428/DOC-1d10213fa0da4b84_plan.md](/root/workspace/rag-system/data/uploads/settlement-kb/20260428/DOC-1d10213fa0da4b84_plan.md)
+3. Redis 可正常连接
+4. Flyway 可成功执行迁移
+5. 新建 PostgreSQL 容器后可重新建表
+6. 知识库创建接口可写库
+7. 文档上传接口可写库
+8. 原始文件可保存到本地目录
+9. 同知识库重复文件会被拦截
+10. Redis 探针接口可完成一次最小读写
 
 ## 已实现的工程约束
 
@@ -259,59 +322,26 @@ Content-Type: multipart/form-data
 
 ### 请求追踪
 
-服务会读取或生成 `X-Request-Id`，并在响应头中回写，便于问题排查。
+当前已经接入请求级 `X-Request-Id` 透传与生成，便于后续日志排障和接口追踪。
 
-实现见 [RequestIdFilter.java](/root/workspace/rag-system/src/main/java/com/example/rag/config/RequestIdFilter.java:1)。
+### 基础线程池
 
-### 异常处理
+当前已经提供 `indexingExecutor`，为后续异步解析、切块、索引任务预留执行器。
 
-当前已区分：
-
-1. 参数校验异常
-2. 业务异常
-3. 未知系统异常
-
-实现见 [GlobalExceptionHandler.java](/root/workspace/rag-system/src/main/java/com/example/rag/common/exception/GlobalExceptionHandler.java:1)。
-
-## 快速启动
-
-### 1. 环境要求
-
-- JDK 17
-- Maven 3.9+
-- PostgreSQL
-
-### 2. 启动服务
-
-```bash
-mvn spring-boot:run
-```
-
-### 3. 验证服务
-
-```bash
-curl --noproxy '*' -s http://127.0.0.1:8080/api/health
-```
+实现见 [ExecutorConfig.java](/root/workspace/rag-system/src/main/java/com/example/rag/config/ExecutorConfig.java:1)。
 
 ## 下一步
 
-当前最应该继续补的，不是再扩大量接口，而是把文档入库主链路往前推进一层：
+当前 Day 3 已基本收口，下一阶段应该直接进入 Day 4 / Day 5 主线：
 
-1. 增加 `document_chunk` 表和实体
-2. 支持 `md` / `txt` 解析
-3. 实现第一版固定长度切块
-4. 保存 chunk 与元数据
-5. 再决定是否引入异步任务
+1. 完成 Day 4 的文档上传链路复核与样本文档整理
+2. 新增 `document_chunk` 表、实体、Repository
+3. 实现 Markdown / txt 第一版解析
+4. 实现固定长度切块策略
+5. 保存 chunk 与元数据
 
-Redis 建议放在这之后补。现在更缺的是文档解析和切块，不是缓存。
+更详细的阶段记录可参考：
 
-## 文档
-
-过程文档统一放在 [work](/root/workspace/rag-system/work)：
-
-- [work/preface.md](/root/workspace/rag-system/work/preface.md)
-- [work/plan.md](/root/workspace/rag-system/work/plan.md)
-- [work/week1.md](/root/workspace/rag-system/work/week1.md)
-- [work/work day1.md](/root/workspace/rag-system/work/work%20day1.md)
-- [work/work day2.md](/root/workspace/rag-system/work/work%20day2.md)
-- [work/work day3.md](/root/workspace/rag-system/work/work%20day3.md)
+1. [work/current-status.md](/root/workspace/rag-system/work/current-status.md)
+2. [work/week1.md](/root/workspace/rag-system/work/week1.md)
+3. [work/work day3.md](/root/workspace/rag-system/work/work%20day3.md)

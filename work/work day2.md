@@ -219,6 +219,17 @@
 
 ---
 
+## 当前落地对齐情况
+
+截至当前仓库状态，Day 2 的设计和代码现状对齐情况是：
+
+1. `knowledge_base` 已落表并在业务链路中使用
+2. `document` 已落表并在业务链路中使用
+3. `document_chunk` 仍未落地
+4. `indexing_task` / `chat_session` / `chat_message` 仍停留在设计阶段
+
+这意味着 Day 2 的设计没有白做，反而刚好给接下来的 Day 4 / Day 5 提供了直接落地依据。
+
 ## 5. chat_session
 
 虽然第 1 周不重点做问答，但表结构可以先预留，避免后面补链路时推翻设计。

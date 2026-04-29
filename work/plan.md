@@ -1,5 +1,16 @@
 # AI 工程师面试 1 个月冲刺计划
 
+## 当前进度快照
+
+截至当前仓库状态：
+
+1. Day 1 到 Day 3 已基本完成
+2. PostgreSQL / Redis / Flyway / JPA 已真实跑通
+3. 知识库创建与文档上传链路已落地
+4. 下一步应该进入 Day 4 / Day 5 的文档解析与切块主线
+
+这个计划文档仍然保留长期目标，当前真实状态以 [work/current-status.md](/root/workspace/rag-system/work/current-status.md) 为准。
+
 ## 1. 目标
 
 你的目标不是在 1 个月内“学完 AI”，而是：
