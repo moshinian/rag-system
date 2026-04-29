@@ -1,6 +1,7 @@
 package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
+import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.ingestion.storage.LocalFileStorageService;
 import com.example.rag.model.entity.DocumentEntity;
 import com.example.rag.model.entity.KnowledgeBaseEntity;
@@ -20,7 +21,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
 import java.util.Set;
-import java.util.UUID;
 
 @Service
 public class DocumentService {
@@ -31,13 +31,16 @@ public class DocumentService {
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentRepository documentRepository;
     private final LocalFileStorageService localFileStorageService;
+    private final SnowflakeIdGenerator snowflakeIdGenerator;
 
     public DocumentService(KnowledgeBaseRepository knowledgeBaseRepository,
                            DocumentRepository documentRepository,
-                           LocalFileStorageService localFileStorageService) {
+                           LocalFileStorageService localFileStorageService,
+                           SnowflakeIdGenerator snowflakeIdGenerator) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentRepository = documentRepository;
         this.localFileStorageService = localFileStorageService;
+        this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
     @Transactional
@@ -60,7 +63,8 @@ public class DocumentService {
             throw new BusinessException("Duplicate document in knowledge base: " + kbCode);
         }
 
-        String documentCode = generateDocumentCode();
+        long documentId = snowflakeIdGenerator.nextId();
+        String documentCode = generateDocumentCode(documentId);
         String displayName = normalizeDisplayName(documentName, fileName);
         String normalizedOperator = normalizeOperator(operator);
         String storagePath;
@@ -77,6 +81,7 @@ public class DocumentService {
         }
 
         DocumentEntity entity = new DocumentEntity();
+        entity.setId(documentId);
         entity.setKnowledgeBase(knowledgeBase);
         entity.setDocumentCode(documentCode);
         entity.setFileName(fileName);
@@ -143,8 +148,8 @@ public class DocumentService {
         }
     }
 
-    private String generateDocumentCode() {
-        return "DOC-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+    private String generateDocumentCode(long documentId) {
+        return "DOC-" + documentId;
     }
 
     private String normalizeDisplayName(String documentName, String fileName) {

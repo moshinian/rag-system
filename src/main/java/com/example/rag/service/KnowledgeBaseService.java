@@ -1,6 +1,7 @@
 package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
+import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.model.entity.KnowledgeBaseEntity;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.request.CreateKnowledgeBaseRequest;
@@ -13,9 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class KnowledgeBaseService {
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private final SnowflakeIdGenerator snowflakeIdGenerator;
 
-    public KnowledgeBaseService(KnowledgeBaseRepository knowledgeBaseRepository) {
+    public KnowledgeBaseService(KnowledgeBaseRepository knowledgeBaseRepository,
+                                SnowflakeIdGenerator snowflakeIdGenerator) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
+        this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
     @Transactional
@@ -26,6 +30,7 @@ public class KnowledgeBaseService {
                 });
 
         KnowledgeBaseEntity entity = new KnowledgeBaseEntity();
+        entity.setId(snowflakeIdGenerator.nextId());
         entity.setKbCode(request.kbCode().trim());
         entity.setName(request.name().trim());
         entity.setDescription(trimToNull(request.description()));

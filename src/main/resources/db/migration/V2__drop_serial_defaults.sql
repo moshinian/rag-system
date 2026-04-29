@@ -1,0 +1,8 @@
+ALTER TABLE knowledge_base
+    ALTER COLUMN id DROP DEFAULT;
+
+ALTER TABLE document
+    ALTER COLUMN id DROP DEFAULT;
+
+DROP SEQUENCE IF EXISTS knowledge_base_id_seq;
+DROP SEQUENCE IF EXISTS document_id_seq;

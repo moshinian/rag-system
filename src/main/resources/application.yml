@@ -43,6 +43,9 @@ logging:
     "[com.example.rag]": INFO
 
 rag:
+  id:
+    worker-id: 1
+    datacenter-id: 1
   storage:
     base-dir: ./data/uploads
     max-file-size-mb: 20
