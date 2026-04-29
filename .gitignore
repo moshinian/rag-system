@@ -2,5 +2,7 @@ target/
 .idea/
 .vscode/
 .codex
+maven-settings.xml
+data/
 *.iml
 .DS_Store
