@@ -1,6 +1,6 @@
 logging:
   level:
-    com.example.rag: DEBUG
+    "[com.example.rag]": DEBUG
 
 spring:
   datasource:
@@ -8,6 +8,12 @@ spring:
     username: rag_user
     password: rag_password
     driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: rag_password
+      timeout: 3s
   jpa:
     hibernate:
       ddl-auto: update

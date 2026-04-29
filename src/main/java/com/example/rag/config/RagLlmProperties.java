@@ -1,0 +1,13 @@
+package com.example.rag.config;
+
+import lombok.Data;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@Data
+@ConfigurationProperties(prefix = "rag.llm")
+public class RagLlmProperties {
+
+    private String baseUrl = "http://localhost:8000/v1";
+    private String apiKey = "change-me";
+    private String chatModel = "gpt-4o-mini";
+}
