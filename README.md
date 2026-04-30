@@ -2,10 +2,11 @@
 
 一个面向企业内部知识库场景的 RAG 后端服务，用来沉淀结算领域文档，并逐步演进为可检索、可引用、可追溯的问答系统。
 
-当前仓库已经完成了第 1 周前半段到 Day 3 的核心工程骨架，并且已经落地了两条真实链路：
+当前仓库已经完成了第 1 周核心工程骨架，并且已经落地了三段关键链路：
 
 1. 知识库创建
 2. 文档上传入库
+3. 文档解析、切块与 chunk 入库
 
 同时已经补齐了本地开发所需的基础设施底座：
 
@@ -15,7 +16,7 @@
 4. 线程池基础配置
 5. Redis 最小读写验证接口
 
-当前 Day 4 的上传与存储链路也已经完成收口，已经可以直接作为 Day 5 解析与切块的前置。
+当前状态已经不再停留在 Day 3 或 Day 4，而是已经进入 Day 5 的首版文档处理阶段。
 
 这份 README 只描述当前仓库已经实现的内容，以及下一步明确要做的事情，不把规划写成现状。
 
@@ -305,26 +306,6 @@ POST /api/knowledge-bases
 Content-Type: application/json
 ```
 
-### 4. 上传文档
-
-```http
-POST /api/knowledge-bases/{kbCode}/documents/upload
-Content-Type: multipart/form-data
-```
-
-### 5. 处理文档
-
-```http
-POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/process
-```
-
-这个接口负责：
-
-1. 根据文件类型选择解析器
-2. 执行第一版切块
-3. 写入 `document_chunk`
-4. 推进文档状态到 `INDEXED` 或 `FAILED`
-
 请求示例：
 
 ```json
@@ -356,6 +337,19 @@ Content-Type: multipart/form-data
 - `md`
 - `txt`
 - `pdf`
+
+### 5. 处理文档
+
+```http
+POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/process
+```
+
+这个接口负责：
+
+1. 根据文件类型选择解析器
+2. 执行第一版切块
+3. 写入 `document_chunk`
+4. 推进文档状态到 `INDEXED` 或 `FAILED`
 
 ## 已验证结果
 
@@ -400,16 +394,16 @@ Content-Type: multipart/form-data
 
 ## 下一步
 
-当前 Day 3 已基本收口，下一阶段应该直接进入 Day 4 / Day 5 主线：
+当前主链路已经推进到文档处理阶段，下一阶段应该继续补齐第 1 周尾项并进入检索主线：
 
-1. 完成 Day 4 的文档上传链路复核与样本文档整理
-2. 新增 `document_chunk` 表、实体、Repository
-3. 实现 Markdown / txt 第一版解析
-4. 实现固定长度切块策略
-5. 保存 chunk 与元数据
+1. 补 PDF 解析
+2. 接入 embedding 与向量存储
+3. 实现基础检索链路
+4. 准备问答接口和引用来源展示
+5. 开始评测与效果优化
 
 更详细的阶段记录可参考：
 
 1. [work/current-status.md](/root/workspace/rag-system/work/current-status.md)
 2. [work/week1.md](/root/workspace/rag-system/work/week1.md)
-3. [work/work day3.md](/root/workspace/rag-system/work/work%20day3.md)
+3. [work/work day5.md](/root/workspace/rag-system/work/work%20day5.md)
