@@ -10,6 +10,9 @@ import com.example.rag.repository.KnowledgeBaseRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 知识库管理服务。
+ */
 @Service
 public class KnowledgeBaseService {
 
@@ -22,8 +25,10 @@ public class KnowledgeBaseService {
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
+    /** 创建知识库。 */
     @Transactional
     public KnowledgeBaseResponse create(CreateKnowledgeBaseRequest request) {
+        // 同一 kbCode 不允许重复创建。
         knowledgeBaseRepository.findByKbCode(request.kbCode())
                 .ifPresent(existing -> {
                     throw new BusinessException("Knowledge base already exists: " + request.kbCode());
@@ -41,6 +46,7 @@ public class KnowledgeBaseService {
         return toResponse(saved);
     }
 
+    /** 把实体转换成返回对象。 */
     private KnowledgeBaseResponse toResponse(KnowledgeBaseEntity entity) {
         return new KnowledgeBaseResponse(
                 entity.getId(),
@@ -54,6 +60,7 @@ public class KnowledgeBaseService {
         );
     }
 
+    /** 把空白字符串归一化成 null。 */
     private String trimToNull(String value) {
         if (value == null) {
             return null;
@@ -62,6 +69,7 @@ public class KnowledgeBaseService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    /** 没有传入创建人时，统一记为 system。 */
     private String defaultCreatedBy(String createdBy) {
         String normalized = trimToNull(createdBy);
         return normalized == null ? "system" : normalized;

@@ -15,6 +15,8 @@
 4. 线程池基础配置
 5. Redis 最小读写验证接口
 
+当前 Day 4 的上传与存储链路也已经完成收口，已经可以直接作为 Day 5 解析与切块的前置。
+
 这份 README 只描述当前仓库已经实现的内容，以及下一步明确要做的事情，不把规划写成现状。
 
 ## 项目目标
@@ -50,18 +52,24 @@
 12. 文档上传接口
 13. 本地文件落盘
 14. 文档去重校验
-15. 基础线程池 `indexingExecutor`
-16. Actuator 基础接入
+15. 文档状态枚举已预留到 `INDEXED / FAILED / DISABLED`
+16. 文档 `media_type` 元数据已落库
+17. Day 4 样本文档已补齐 `md / txt / pdf`
+18. `document_chunk` 表、实体与 Repository 已落地
+19. `md / txt` 第一版解析已落地
+20. 第一版固定长度切块已落地
+21. 文档处理接口 `/process` 已接入
+22. 基础线程池 `indexingExecutor`
+23. Actuator 基础接入
 
 当前还没完成的能力：
 
-1. Markdown / txt / PDF 解析
-2. `document_chunk` 表与切块入库
-3. 异步索引任务编排
-4. 向量化与检索
-5. 大模型问答链路
-6. 引用来源展示
-7. 评测集与效果评测
+1. PDF 解析
+2. 异步索引任务编排
+3. 向量化与检索
+4. 大模型问答链路
+5. 引用来源展示
+6. 评测集与效果评测
 
 ## 技术选型
 
@@ -99,6 +107,8 @@ rag-system/
 │   │   └── DocumentController.java
 │   ├── generation/            # 生成链路占位
 │   ├── ingestion/
+│   │   ├── chunk/             # 文本切块
+│   │   ├── parser/            # 文档解析
 │   │   └── storage/           # 本地文件存储
 │   ├── integration/
 │   │   └── llm/               # OpenAI 兼容客户端占位
@@ -115,14 +125,17 @@ rag-system/
 │   ├── application.yml
 │   ├── application-local.yml
 │   └── db/migration/
-│       └── V1__init_schema.sql
+│       ├── V1__init_schema.sql
+│       ├── V2__drop_serial_defaults.sql
+│       ├── V3__add_document_media_type.sql
+│       └── V4__create_document_chunk_table.sql
 ├── data/                      # 本地持久化目录（已被 .gitignore 忽略）
 └── work/                      # 过程文档与阶段记录
 ```
 
 ## 数据模型
 
-当前 Flyway 初始化脚本已落地两张表：
+当前 Flyway 脚本已落地三张表：
 
 ### `knowledge_base`
 
@@ -149,6 +162,7 @@ rag-system/
 - `file_name`
 - `display_name`
 - `file_type`
+- `media_type`
 - `storage_path`
 - `file_size`
 - `content_hash`
@@ -158,12 +172,44 @@ rag-system/
 - `tags`
 - `error_message`
 
+### `document_chunk`
+
+用于保存解析和切块后的检索基础数据。
+
+核心字段：
+
+- `knowledge_base_id`
+- `document_id`
+- `chunk_index`
+- `chunk_type`
+- `title`
+- `content`
+- `content_length`
+- `token_count`
+- `start_offset`
+- `end_offset`
+- `metadata_json`
+- `status`
+
 当前索引：
 
 - `knowledge_base.kb_code` 唯一约束
 - `document.document_code` 唯一约束
 - `idx_document_kb_status`
 - `idx_document_content_hash`
+- `uk_document_chunk_document_index`
+- `idx_document_chunk_kb_document`
+- `idx_document_chunk_document_status`
+
+当前文档状态枚举：
+
+- `UPLOADED`
+- `PARSING`
+- `PARSED`
+- `CHUNKING`
+- `INDEXED`
+- `FAILED`
+- `DISABLED`
 
 ## 本地运行
 
@@ -258,6 +304,26 @@ POST /api/health/redis-probe
 POST /api/knowledge-bases
 Content-Type: application/json
 ```
+
+### 4. 上传文档
+
+```http
+POST /api/knowledge-bases/{kbCode}/documents/upload
+Content-Type: multipart/form-data
+```
+
+### 5. 处理文档
+
+```http
+POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/process
+```
+
+这个接口负责：
+
+1. 根据文件类型选择解析器
+2. 执行第一版切块
+3. 写入 `document_chunk`
+4. 推进文档状态到 `INDEXED` 或 `FAILED`
 
 请求示例：
 

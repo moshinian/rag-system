@@ -3,6 +3,9 @@ package com.example.rag.model.request;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+/**
+ * 创建知识库请求对象。
+ */
 public record CreateKnowledgeBaseRequest(
         @NotBlank(message = "kbCode must not be blank")
         @Size(max = 64, message = "kbCode length must be <= 64")

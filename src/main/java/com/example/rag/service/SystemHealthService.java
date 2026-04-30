@@ -16,6 +16,9 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 系统健康检查服务。
+ */
 @Service
 public class SystemHealthService {
 
@@ -31,6 +34,7 @@ public class SystemHealthService {
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
+    /** 返回服务当前状态及关键依赖组件状态。 */
     public HealthStatusResponse currentStatus() {
         List<String> activeProfiles = Arrays.asList(environment.getActiveProfiles());
         Map<String, String> components = new LinkedHashMap<>();
@@ -46,6 +50,7 @@ public class SystemHealthService {
                 Instant.now());
     }
 
+    /** 执行一次最小 Redis 读写探针。 */
     public RedisProbeResponse probeRedis() {
         String key = "rag:health:probe";
         String value = "ok-" + Instant.now().truncatedTo(ChronoUnit.MILLIS);
@@ -54,6 +59,7 @@ public class SystemHealthService {
         return new RedisProbeResponse(key, value, cachedValue, value.equals(cachedValue));
     }
 
+    /** 检查数据库连通状态。 */
     private String databaseStatus() {
         try {
             Integer result = jdbcTemplate.queryForObject("SELECT 1", Integer.class);
@@ -63,6 +69,7 @@ public class SystemHealthService {
         }
     }
 
+    /** 检查 Redis 连通状态。 */
     private String redisStatus() {
         try {
             String pong = stringRedisTemplate.execute((RedisConnection connection) -> connection.ping());

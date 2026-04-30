@@ -17,6 +17,11 @@ import lombok.Setter;
 
 import java.time.OffsetDateTime;
 
+/**
+ * 文档主表实体。
+ *
+ * 保存原始文档的元数据，不保存切块后的检索数据。
+ */
 @Getter
 @Setter
 @Entity
@@ -42,6 +47,9 @@ public class DocumentEntity {
     @Column(name = "file_type", nullable = false, length = 32)
     private String fileType;
 
+    @Column(name = "media_type", nullable = false, length = 128)
+    private String mediaType;
+
     @Column(name = "storage_path", nullable = false, length = 512)
     private String storagePath;
 
@@ -51,6 +59,7 @@ public class DocumentEntity {
     @Column(name = "content_hash", nullable = false, length = 128)
     private String contentHash;
 
+    // 文档当前处理阶段，例如 UPLOADED / PARSING / INDEXED。
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private DocumentStatus status = DocumentStatus.UPLOADED;
@@ -78,6 +87,7 @@ public class DocumentEntity {
 
     @PrePersist
     void prePersist() {
+        // 创建时统一补齐创建时间和更新时间。
         OffsetDateTime now = OffsetDateTime.now();
         createdAt = now;
         updatedAt = now;
@@ -85,6 +95,7 @@ public class DocumentEntity {
 
     @PreUpdate
     void preUpdate() {
+        // 每次更新实体时自动刷新更新时间。
         updatedAt = OffsetDateTime.now();
     }
 }

@@ -14,6 +14,9 @@ import lombok.Setter;
 
 import java.time.OffsetDateTime;
 
+/**
+ * 知识库主表实体。
+ */
 @Getter
 @Setter
 @Entity
@@ -47,6 +50,7 @@ public class KnowledgeBaseEntity {
 
     @PrePersist
     void prePersist() {
+        // 首次创建时补齐时间字段。
         OffsetDateTime now = OffsetDateTime.now();
         createdAt = now;
         updatedAt = now;
@@ -54,6 +58,7 @@ public class KnowledgeBaseEntity {
 
     @PreUpdate
     void preUpdate() {
+        // 更新时只刷新更新时间。
         updatedAt = OffsetDateTime.now();
     }
 }

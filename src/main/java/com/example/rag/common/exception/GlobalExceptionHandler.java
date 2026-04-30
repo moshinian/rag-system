@@ -12,27 +12,34 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+/**
+ * 全局异常处理器。
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    /** 处理参数校验异常。 */
     @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class, ConstraintViolationException.class})
     public ResponseEntity<ApiResponse<Void>> handleValidationException(Exception ex, HttpServletRequest request) {
         return ResponseEntity.badRequest()
                 .body(ApiResponse.failure(ErrorCode.INVALID_ARGUMENT.getCode(), ex.getMessage(), requestId(request)));
     }
 
+    /** 处理业务异常。 */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.failure(ex.getErrorCode().getCode(), ex.getMessage(), requestId(request)));
     }
 
+    /** 处理未预期异常。 */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(Exception ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.failure(ErrorCode.INTERNAL_ERROR.getCode(), ex.getMessage(), requestId(request)));
     }
 
+    /** 从请求上下文中提取 requestId。 */
     private String requestId(HttpServletRequest request) {
         Object value = request.getAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE);
         return value == null ? "unknown" : value.toString();

@@ -12,6 +12,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * 请求级 requestId 过滤器。
+ *
+ * 如果请求头没有携带 X-Request-Id，则自动生成一个。
+ */
 @Component
 public class RequestIdFilter extends OncePerRequestFilter {
 
@@ -23,6 +28,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
+    /** 为请求补充 requestId 并写回响应头。 */
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,
@@ -32,6 +38,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
             requestId = snowflakeIdGenerator.nextId("REQ-");
         }
 
+        // requestId 同时放入请求上下文和响应头，便于链路追踪。
         request.setAttribute(REQUEST_ID_ATTRIBUTE, requestId);
         response.setHeader(REQUEST_ID_HEADER, requestId);
         filterChain.doFilter(request, response);

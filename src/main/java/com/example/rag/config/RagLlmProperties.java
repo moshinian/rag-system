@@ -3,6 +3,9 @@ package com.example.rag.config;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * 大模型调用配置。
+ */
 @Data
 @ConfigurationProperties(prefix = "rag.llm")
 public class RagLlmProperties {

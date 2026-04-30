@@ -2,6 +2,9 @@ package com.example.rag.common;
 
 import lombok.Getter;
 
+/**
+ * 通用错误码定义。
+ */
 @Getter
 public enum ErrorCode {
     INVALID_ARGUMENT("INVALID_ARGUMENT", "Invalid request argument"),
@@ -11,6 +14,7 @@ public enum ErrorCode {
     private final String code;
     private final String defaultMessage;
 
+    /** 初始化错误码及其默认消息。 */
     ErrorCode(String code, String defaultMessage) {
         this.code = code;
         this.defaultMessage = defaultMessage;

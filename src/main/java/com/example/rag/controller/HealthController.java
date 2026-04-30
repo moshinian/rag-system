@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import static com.example.rag.config.RequestIdFilter.REQUEST_ID_ATTRIBUTE;
 
+/**
+ * 健康检查接口。
+ */
 @RestController
 @RequestMapping("/api")
 public class HealthController {
@@ -22,12 +25,14 @@ public class HealthController {
         this.systemHealthService = systemHealthService;
     }
 
+    /** 返回服务和依赖组件的当前状态。 */
     @GetMapping("/health")
     public ApiResponse<HealthStatusResponse> health(HttpServletRequest request) {
         String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
         return ApiResponse.success(systemHealthService.currentStatus(), requestId);
     }
 
+    /** 执行一次最小 Redis 读写探针。 */
     @PostMapping("/health/redis-probe")
     public ApiResponse<RedisProbeResponse> redisProbe(HttpServletRequest request) {
         String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));

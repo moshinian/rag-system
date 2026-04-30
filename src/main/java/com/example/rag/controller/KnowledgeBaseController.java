@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import static com.example.rag.config.RequestIdFilter.REQUEST_ID_ATTRIBUTE;
 
+/**
+ * 知识库管理接口。
+ */
 @RestController
 @RequestMapping("/api/knowledge-bases")
 public class KnowledgeBaseController {
@@ -23,6 +26,7 @@ public class KnowledgeBaseController {
         this.knowledgeBaseService = knowledgeBaseService;
     }
 
+    /** 创建知识库。 */
     @PostMapping
     public ApiResponse<KnowledgeBaseResponse> create(@Valid @RequestBody CreateKnowledgeBaseRequest request,
                                                      HttpServletRequest httpRequest) {

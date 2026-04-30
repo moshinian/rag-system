@@ -6,9 +6,13 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
 
+/**
+ * 异步执行器配置。
+ */
 @Configuration
 public class ExecutorConfig {
 
+    /** 定义索引处理线程池。 */
     @Bean("indexingExecutor")
     public Executor indexingExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

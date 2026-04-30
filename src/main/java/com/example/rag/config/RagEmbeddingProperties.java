@@ -3,6 +3,9 @@ package com.example.rag.config;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * Embedding 模型配置。
+ */
 @Data
 @ConfigurationProperties(prefix = "rag.embedding")
 public class RagEmbeddingProperties {

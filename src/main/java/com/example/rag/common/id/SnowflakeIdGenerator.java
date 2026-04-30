@@ -2,6 +2,11 @@ package com.example.rag.common.id;
 
 import org.springframework.stereotype.Component;
 
+/**
+ * 雪花 ID 生成器。
+ *
+ * 用于生成趋势递增的全局唯一 ID。
+ */
 @Component
 public class SnowflakeIdGenerator {
 
@@ -36,6 +41,7 @@ public class SnowflakeIdGenerator {
         }
     }
 
+    /** 生成下一个长整型 ID。 */
     public synchronized long nextId() {
         long currentTimestamp = timestamp();
         if (currentTimestamp < lastTimestamp) {
@@ -59,10 +65,12 @@ public class SnowflakeIdGenerator {
                 | sequence;
     }
 
+    /** 生成带前缀的字符串 ID。 */
     public String nextId(String prefix) {
         return prefix + nextId();
     }
 
+    /** 等待到下一个毫秒。 */
     private long waitUntilNextMillis(long lastTimestamp) {
         long currentTimestamp = timestamp();
         while (currentTimestamp <= lastTimestamp) {
@@ -71,6 +79,7 @@ public class SnowflakeIdGenerator {
         return currentTimestamp;
     }
 
+    /** 获取当前时间戳，便于测试时重写。 */
     protected long timestamp() {
         return System.currentTimeMillis();
     }
