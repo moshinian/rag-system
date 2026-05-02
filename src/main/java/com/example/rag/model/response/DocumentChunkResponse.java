@@ -18,6 +18,9 @@ public record DocumentChunkResponse(
         Integer endOffset,
         String metadataJson,
         String status,
+        String embeddingStatus,
+        String embeddingModel,
+        OffsetDateTime embeddingUpdatedAt,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

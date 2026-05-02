@@ -3,10 +3,12 @@ package com.example.rag.controller;
 import com.example.rag.common.ApiResponse;
 import com.example.rag.model.response.DocumentChunkResponse;
 import com.example.rag.model.response.DocumentDetailResponse;
+import com.example.rag.model.response.DocumentEmbeddingResponse;
 import com.example.rag.model.response.DocumentProcessResponse;
 import com.example.rag.model.response.DocumentSummaryResponse;
 import com.example.rag.model.response.DocumentUploadResponse;
 import com.example.rag.model.response.PageResponse;
+import com.example.rag.service.DocumentEmbeddingService;
 import com.example.rag.service.DocumentProcessingService;
 import com.example.rag.service.DocumentService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,11 +34,14 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final DocumentProcessingService documentProcessingService;
+    private final DocumentEmbeddingService documentEmbeddingService;
 
     public DocumentController(DocumentService documentService,
-                              DocumentProcessingService documentProcessingService) {
+                              DocumentProcessingService documentProcessingService,
+                              DocumentEmbeddingService documentEmbeddingService) {
         this.documentService = documentService;
         this.documentProcessingService = documentProcessingService;
+        this.documentEmbeddingService = documentEmbeddingService;
     }
 
     /** 分页查询知识库下的文档。 */
@@ -114,6 +119,16 @@ public class DocumentController {
                                                           HttpServletRequest request) {
         String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
         DocumentProcessResponse response = documentProcessingService.process(kbCode, documentCode, operator);
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 对已切块文档执行本地 embedding，并把向量写入 pgvector。 */
+    @PostMapping("/{documentCode}/embed")
+    public ApiResponse<DocumentEmbeddingResponse> embed(@PathVariable String kbCode,
+                                                        @PathVariable String documentCode,
+                                                        HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        DocumentEmbeddingResponse response = documentEmbeddingService.embed(kbCode, documentCode);
         return ApiResponse.success(response, requestId);
     }
 }

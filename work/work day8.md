@@ -2,84 +2,42 @@
 
 ## 当前结论
 
-Day 8 的意义不是继续补 Week 1 的尾项，而是：
+Day 8 的任务已经完成。
 
-**正式从文档入库主链路切到问答主链路。**
+Day 8 完成的不是“效果优化”，而是：
 
-Week 1 已经完成上传、解析、切块、chunk 入库、联调和文档收口。  
-所以从 Day 8 开始，项目要解决的核心问题已经变成：
+**把 Week 2 需要的本地 embedding 与向量存储地基真正搭起来。**
 
-**如何基于已入库 chunk，完成 embedding、检索、问答和引用来源返回。**
+## Day 8 已完成
 
-## 为什么 Day 8 标志着进入 Week 2
+当前仓库在 Day 8 已经落下：
 
-结合 `week2.md` 和 `plan.md` 的拆分口径，第 2 周的目标是：
+1. `rag.embedding / rag.llm / rag.retrieval` 配置入口
+2. embedding 默认方案切到本地 `bge-small-zh-v1.5`
+3. 本地 `embedding-service/` 服务代码
+4. `docker-compose.yml` 中的 embedding 服务定义
+5. PostgreSQL 切到 `pgvector`
+6. `document_chunk` embedding 状态字段
+7. `document_chunk.embedding_vector` 向量字段
+8. `GET /api/knowledge-bases/{kbCode}/qa/readiness`
+9. 本地模型加载验证
+10. PostgreSQL collation mismatch 修复
+11. Day 9 所需的本地 embedding 与 `pgvector` 前置条件已全部验证
 
-1. 接入 embedding 模型
-2. 用 `pgvector` 保存向量
-3. 实现 TopK 检索
-4. 设计 Prompt 模板
-5. 接入大模型回答
-6. 返回引用来源
-7. 保存问答记录
-8. 提供基础问答接口
+## Day 8 收口
 
-这意味着 Day 8 的职责不是把这些事情一天做完，而是：
+到 Day 8 结束时，项目已经具备下面这些 Week 2 前置条件：
 
-1. 明确第 2 周的主线顺序
-2. 选定最小可行技术方案
-3. 开始第一批实现
+1. 本地 embedding 技术路线已明确，不依赖 OpenAI API
+2. `bge-small-zh-v1.5` 已能通过本地服务返回真实向量
+3. PostgreSQL 已切到 `pgvector`
+4. `document_chunk` 已具备向量字段和向量状态字段
+5. Day 9 可以直接进入 chunk 向量写库与真实联调
 
-## Day 8 最该做什么
+## Day 8 之后
 
-今天最重要的不是直接追求“回答效果很好”，而是先把技术路径定清楚。
+Day 8 之后最合理的推进顺序就是：
 
-按当前项目状态，Day 8 最合理的任务顺序应该是：
-
-1. 确认 embedding 模型和配置入口
-2. 确认 `pgvector` 作为第 2 周向量存储方案
-3. 设计 chunk 向量落库方式
-4. 明确 query embedding 和 TopK 检索接口
-5. 设计第一版问答接口输入输出
-6. 设计引用来源和问答记录结构
-
-## Day 8 当前起点
-
-进入 Day 8 时，仓库已经具备下面这些条件：
-
-1. 知识库和文档主数据已稳定
-2. `document_chunk` 已可真实写库
-3. `md / txt / pdf` 第一版解析已完成
-4. Day 6 联调已证明 chunk 数据可作为下一阶段输入
-5. Day 7 已完成 README、架构图和阶段记录收口
-
-所以 Day 8 现在不是“先继续修文档”，而是：
-
-**直接基于现有 chunk 数据，开始搭建 RAG 检索和问答链路。**
-
-## Day 8 完成后应该得到什么
-
-如果 Day 8 做到位，到结束时至少应该有：
-
-1. 第 2 周的技术路径已经明确
-2. embedding、向量存储、检索、问答的最小拆分已经清楚
-3. 需要新增的表结构、迁移和接口已经列清楚
-4. 第 2 周第一批实现已经开始
-
-## 当前判断
-
-Day 8 可以下一个明确判断：
-
-1. Week 1 已经结束
-2. Week 2 已经正式开始
-3. 当前主线已经切到 embedding、检索和问答
-4. 后续工作的优先级应该围绕 RAG 闭环，而不是再回头补 Week 1 主线
-
-## 下一步建议
-
-Day 8 之后，最合理的推进顺序应该是：
-
-1. 先落 embedding 和向量存储
-2. 再做基础检索
+1. 先做 Day 9 chunk 向量写库
+2. 再做 Day 10 TopK 检索
 3. 然后接问答接口和引用来源
-4. 最后补问答记录和第 2 周联调验收

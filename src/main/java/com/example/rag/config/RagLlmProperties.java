@@ -13,4 +13,7 @@ public class RagLlmProperties {
     private String baseUrl = "http://localhost:8000/v1";
     private String apiKey = "change-me";
     private String chatModel = "gpt-4o-mini";
+    private String chatCompletionPath = "/chat/completions";
+    private Double temperature = 0.2D;
+    private Integer maxOutputTokens = 1200;
 }

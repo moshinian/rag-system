@@ -8,6 +8,7 @@ import com.example.rag.ingestion.parser.DocumentTextParser;
 import com.example.rag.ingestion.parser.ParsedDocument;
 import com.example.rag.model.enums.DocumentChunkStatus;
 import com.example.rag.model.enums.DocumentStatus;
+import com.example.rag.model.enums.EmbeddingStatus;
 import com.example.rag.model.enums.IndexingTaskStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.DocumentProcessResponse;
@@ -164,6 +165,10 @@ public class DocumentProcessingService {
         entity.setEndOffset(draft.endOffset());
         entity.setMetadataJson(buildMetadataJson(document, draft, parserName));
         entity.setStatus(DocumentChunkStatus.ACTIVE);
+        entity.setEmbeddingStatus(EmbeddingStatus.PENDING);
+        entity.setEmbeddingModel(null);
+        entity.setEmbeddingErrorMessage(null);
+        entity.setEmbeddingUpdatedAt(null);
         return entity;
     }
 

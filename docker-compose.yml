@@ -1,7 +1,25 @@
 services:
 
+  embedding-service:
+    build:
+      context: ./embedding-service
+    container_name: rag-embedding-service
+    restart: always
+    ports:
+      - "8001:8001"
+    environment:
+      EMBEDDING_MODEL_NAME: BAAI/bge-small-zh-v1.5
+      EMBEDDING_MODEL_PATH: /models/bge-small-zh-v1.5
+      EMBEDDING_DEVICE: cpu
+      EMBEDDING_NORMALIZE: "true"
+      EMBEDDING_LOCAL_FILES_ONLY: "true"
+      EMBEDDING_PORT: 8001
+    volumes:
+      - ./data/huggingface:/root/.cache/huggingface
+      - ./data/models:/models
+
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: rag-postgres
     restart: always
     environment:

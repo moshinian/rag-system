@@ -47,9 +47,22 @@ rag:
     base-dir: ./data/uploads
     max-file-size-mb: 20
   embedding:
-    provider: openai-compatible
-    model: text-embedding-3-small
+    provider: local-openai-compatible
+    base-url: http://localhost:8001/v1
+    api-key: ""
+    model: bge-small-zh-v1.5
+    vector-dimensions: 512
+    embedding-path: /embeddings
+    batch-size: 16
   llm:
     base-url: http://localhost:8000/v1
     api-key: change-me
     chat-model: gpt-4o-mini
+    chat-completion-path: /chat/completions
+    temperature: 0.2
+    max-output-tokens: 1200
+  retrieval:
+    vector-store: pgvector
+    default-top-k: 5
+    max-top-k: 10
+    max-context-chars: 6000

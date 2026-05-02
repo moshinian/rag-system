@@ -417,6 +417,9 @@ public class DocumentService {
                 entity.getEndOffset(),
                 entity.getMetadataJson(),
                 entity.getStatus().name(),
+                entity.getEmbeddingStatus() == null ? null : entity.getEmbeddingStatus().name(),
+                entity.getEmbeddingModel(),
+                entity.getEmbeddingUpdatedAt(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

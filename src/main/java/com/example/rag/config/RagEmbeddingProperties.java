@@ -10,6 +10,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "rag.embedding")
 public class RagEmbeddingProperties {
 
-    private String provider = "openai-compatible";
-    private String model = "text-embedding-3-small";
+    /**
+     * 当前默认约定本地 embedding 服务暴露 OpenAI-compatible /embeddings 接口。
+     */
+    private String provider = "local-openai-compatible";
+    private String baseUrl = "http://localhost:8001/v1";
+    private String apiKey = "";
+    private String model = "bge-small-zh-v1.5";
+    private Integer vectorDimensions = 512;
+    private String embeddingPath = "/embeddings";
+    private Integer batchSize = 16;
 }

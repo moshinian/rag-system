@@ -1,6 +1,7 @@
 package com.example.rag.persistence.entity;
 
 import com.example.rag.model.enums.DocumentChunkStatus;
+import com.example.rag.model.enums.EmbeddingStatus;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -57,6 +58,18 @@ public class DocumentChunkEntity {
 
     // 当前阶段只区分可用和禁用，后续可再扩展更多状态。
     private DocumentChunkStatus status = DocumentChunkStatus.ACTIVE;
+
+    @TableField("embedding_status")
+    private EmbeddingStatus embeddingStatus = EmbeddingStatus.PENDING;
+
+    @TableField("embedding_model")
+    private String embeddingModel;
+
+    @TableField("embedding_error_message")
+    private String embeddingErrorMessage;
+
+    @TableField("embedding_updated_at")
+    private OffsetDateTime embeddingUpdatedAt;
 
     @TableField(value = "created_at", fill = FieldFill.INSERT)
     private OffsetDateTime createdAt;

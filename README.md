@@ -2,11 +2,12 @@
 
 一个面向企业内部知识库场景的 RAG 后端服务，用来沉淀结算领域文档，并逐步演进为可检索、可引用、可追溯的问答系统。
 
-当前仓库已经完成了第 1 周核心工程骨架，并且已经落地了三段关键链路：
+当前仓库已经完成了第 1 周核心工程骨架，并且已经落地了四段关键链路：
 
 1. 知识库创建
 2. 文档上传入库
 3. 文档解析、切块与 chunk 入库
+4. 文档 chunk 向量写库
 
 同时已经补齐了本地开发所需的基础设施底座：
 
@@ -18,7 +19,7 @@
 
 当前状态已经不再停留在 Day 3 或 Day 4。
 
-**第 1 周的目标已经完成收口，项目已经具备可运行、可联调、可讲清楚的文档入库主链路。**
+**第 1 周的目标已经完成收口，Week 2 的向量化主链路也已经打通第一版。**
 
 这份 README 只描述当前仓库已经实现的内容，以及下一步明确要做的事情，不把规划写成现状。
 
@@ -72,14 +73,43 @@
 29. Actuator 基础接入
 30. `md / txt / pdf` 三类样本文档已完成 Day 6 真实联调验证
 31. Markdown `media_type` 联调问题已发现并修正
+32. `document_chunk` 已补齐 embedding 状态元数据
+33. `qa/readiness` 观察接口已补入
+34. 本地 embedding 与 `pgvector` 配置入口已明确
+35. 本地 `bge-small-zh-v1.5` embedding 服务已接入并可返回真实向量
+36. PostgreSQL 已切到 `pgvector`
+37. `document_chunk.embedding_vector` 已在当前数据库中可用
+38. 文档 chunk 向量写库第一版接口与服务已完成真实联调
+39. 真实文档 `/embed` 已写入 `pgvector`
+40. 本地 `bge-small-zh-v1.5` 模型加载与 512 维向量返回已验证
 
 当前还没完成的能力：
 
 1. 异步索引任务编排
-2. 向量化与检索
-3. 大模型问答链路
-4. 引用来源展示
-5. 评测集与效果评测
+2. TopK 向量检索
+3. query embedding 与检索编排
+4. 大模型问答链路
+5. 引用来源展示
+6. 评测集与效果评测
+
+## 当前阶段
+
+当前仓库可以分成两部分理解：
+
+1. Week 1 已完成：知识库、文档上传、解析、切块、chunk 入库、联调验收都已经闭环。
+2. Week 2 已推进到 Day 9：本地 embedding 服务、`pgvector`、chunk 向量写库、真实文档联调都已经打通。
+
+现在项目的真实状态已经不是“RAG 设计中”，而是：
+
+```text
+知识库创建 -> 文档上传 -> 解析 -> 切块 -> chunk 入库 -> chunk 向量写库
+```
+
+尚未完成的是：
+
+```text
+query embedding -> TopK 检索 -> Prompt 组装 -> LLM 回答 -> 引用来源 -> 问答记录
+```
 
 ## 第 1 周完成情况
 
@@ -117,7 +147,17 @@
 
 - `rag.embedding.*`
 - `rag.llm.*`
-- 检索与生成模块占位
+- `rag.retrieval.*`
+- 检索与生成模块第一版骨架
+
+当前第 2 周采用的最小技术路线是：
+
+- 本地 embedding 服务，模型为 `bge-small-zh-v1.5`
+- 本地服务默认按 OpenAI-compatible `/v1/embeddings` 协议接入
+- PostgreSQL 使用 `pgvector`
+- 本地 embedding 服务代码位于 `embedding-service/`
+- Java 侧通过 `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/embed` 触发向量写库
+- 真实文档已经完成一次端到端 `/embed` 写库验证
 
 ## 架构图
 
@@ -190,14 +230,15 @@ rag-system/
 │   ├── controller/            # HTTP 接口
 │   │   ├── HealthController.java
 │   │   ├── KnowledgeBaseController.java
-│   │   └── DocumentController.java
+│   │   ├── DocumentController.java
+│   │   └── QuestionAnsweringController.java
 │   ├── generation/            # 生成链路占位
 │   ├── ingestion/
 │   │   ├── chunk/             # 文本切块
 │   │   ├── parser/            # 文档解析
 │   │   └── storage/           # 本地文件存储
 │   ├── integration/
-│   │   └── llm/               # OpenAI 兼容客户端占位
+│   │   └── llm/               # 本地 OpenAI-compatible 客户端骨架
 │   ├── mapper/                # MyBatis-Plus Mapper
 │   ├── model/
 │   │   ├── dto/
@@ -217,7 +258,9 @@ rag-system/
 │       ├── V2__drop_serial_defaults.sql
 │       ├── V3__add_document_media_type.sql
 │       ├── V4__create_document_chunk_table.sql
-│       └── V5__create_indexing_task_table.sql
+│       ├── V5__create_indexing_task_table.sql
+│       ├── V6__add_chunk_embedding_metadata.sql
+│       └── V7__enable_pgvector_and_add_chunk_vector.sql
 ├── data/                      # 本地持久化目录（已被 .gitignore 忽略）
 └── work/                      # 过程文档与阶段记录
 ```
@@ -278,7 +321,17 @@ rag-system/
 - `start_offset`
 - `end_offset`
 - `metadata_json`
+- `embedding_status`
+- `embedding_model`
+- `embedding_error_message`
+- `embedding_updated_at`
+- `embedding_vector`
 - `status`
+
+当前第 2 周第一版新增接口：
+
+- `GET /api/knowledge-bases/{kbCode}/qa/readiness`
+- `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/embed`
 
 ### `indexing_task`
 
@@ -357,13 +410,22 @@ docker compose up -d
 
 1. `rag-postgres`
 2. `rag-redis`
+3. `rag-embedding-service`
 
 其中：
 
 - PostgreSQL：`localhost:5432`
 - Redis：`localhost:6379`
+- Embedding Service：`localhost:8001`
 - Redis 已启用密码：`rag_password`
+- 模型目录挂载：`./data/models -> /models`
 - 数据持久化目录：`./data/postgres`、`./data/redis`
+
+本地 embedding 服务默认读取：
+
+- 模型：`BAAI/bge-small-zh-v1.5`
+- 路径：`/models/bge-small-zh-v1.5`
+- 向量维度：`512`
 
 ### 2. 启动应用
 
@@ -400,6 +462,16 @@ spring:
 rag:
   storage:
     base-dir: ./data/uploads
+  embedding:
+    provider: local-openai-compatible
+    base-url: http://localhost:8001/v1
+    model: bge-small-zh-v1.5
+    vector-dimensions: 512
+    embedding-path: /embeddings
+    batch-size: 16
+  retrieval:
+    vector-store: pgvector
+    default-top-k: 5
 ```
 
 `application-local.yml` 负责本地环境增强配置，包括更细的日志级别。
@@ -566,6 +638,38 @@ POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/reprocess
 
 当前实现与 `/process` 复用同一条处理链路；重新处理时会先删除旧 chunk，再重新生成。
 
+### 15. 执行文档向量化
+
+```http
+POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/embed
+```
+
+这个接口负责：
+
+1. 读取指定文档下可向量化的 chunk
+2. 批量调用本地 embedding 服务
+3. 将向量写入 `document_chunk.embedding_vector`
+4. 更新 `embedding_status`
+
+当前联调验证过的成功结果包括：
+
+1. `embedding_status = EMBEDDED`
+2. `embedding_model = bge-small-zh-v1.5`
+3. `embedding_vector is not null`
+
+### 16. 查询问答准备状态
+
+```http
+GET /api/knowledge-bases/{kbCode}/qa/readiness
+```
+
+这个接口用于观察当前知识库是否具备进入检索与问答阶段的前置条件，例如：
+
+1. chunk 总数
+2. 已完成 embedding 的 chunk 数
+3. 当前 embedding 模型
+4. 默认 `TopK`
+
 ## 已验证结果
 
 当前仓库已经做过实际验证：
@@ -583,6 +687,10 @@ POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/reprocess
 11. 文档处理集成测试可真实写入 `document_chunk`
 12. MyBatis-Plus 自动填充 `created_at / updated_at` 已验证生效
 13. MyBatis-Plus 分页查询已通过单测与启动验证
+14. 本地 `bge-small-zh-v1.5` 模型已成功加载
+15. 本地 embedding 服务已返回真实 512 维向量
+16. `POST /embed` 已完成真实文档联调
+17. `document_chunk.embedding_vector` 已验证非空
 
 ## 已实现的工程约束
 
@@ -623,15 +731,15 @@ POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/reprocess
 
 ## 下一步
 
-Week 1 已完成并完成收口，项目现在已经正式进入 Week 2。
+Week 1 已完成并完成收口，Week 2 当前已经推进到 Day 9 完成。
 
-下一阶段的重点，不再是继续补上传和切块，而是把问答主链路真正跑通：
+下一步的重点已经非常明确，不再是补 embedding 和向量写库，而是进入检索与问答：
 
-1. 接入 embedding 模型
-2. 用 `pgvector` 落地向量存储
-3. 实现基础 TopK 检索链路
-4. 设计问答接口、Prompt 模板和引用来源返回
-5. 保存问答记录并完成 Week 2 首轮联调
+1. 实现 query embedding 调用
+2. 基于 `pgvector` 实现基础 TopK 相似度检索
+3. 设计检索结果返回结构，包含 chunk 内容和来源信息
+4. 接入问答接口、Prompt 组装和引用来源返回
+5. 保存问答记录，并完成 Week 2 第一版问答链路联调
 
 更详细的阶段记录可参考：
 
