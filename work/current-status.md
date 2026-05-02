@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-当前工程已经完成了第 1 周最关键的骨架和文档处理主链路首版：
+当前工程已经完成了第 1 周主线目标，并完成了 Day 7 文档收口：
 
 1. 知识库创建链路可运行
 2. 文档上传入库链路可运行
@@ -11,8 +11,12 @@
 5. 线程池和 Actuator 基础底座已补齐
 6. `md / txt / pdf` 第一版解析与切块链路已落地
 7. `indexing_task` 独立处理记录已落地
+8. Day 6 真实联调、字段校验与问题修正已完成
+9. README、架构图与阶段文档已完成对齐收口
 
-这意味着项目已经从“有后端服务、有数据库落地、有文件存储入口”进一步进入了“Day 5 主链路已开始落地，已经具备第一版解析与切块能力”的阶段。
+这意味着项目当前已经不再停留在“Day 5 主链路已落地”的阶段，而是：
+
+**Week 1 已完成，Day 7 已完成，项目已经具备进入 Week 2 embedding / 检索主线的稳定起点。**
 
 ## 已完成
 
@@ -36,7 +40,7 @@
 4. Flyway PostgreSQL 模块已补齐
 5. `V1__init_schema.sql` 已成功执行
 6. PostgreSQL 容器重建后，迁移可自动恢复表结构
-7. JPA 实体与 Repository 已打通
+7. MyBatis-Plus Mapper 与 `persistence` 封装已打通
 
 ### Redis
 
@@ -54,6 +58,7 @@
 2. `document`
 3. `document_chunk`
 4. `indexing_task`
+5. `media_type` 等补充字段与处理状态已完成落库
 
 当前已有实体：
 
@@ -67,8 +72,17 @@
 1. `GET /api/health`
 2. `POST /api/health/redis-probe`
 3. `POST /api/knowledge-bases`
-4. `POST /api/knowledge-bases/{kbCode}/documents/upload`
-5. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/process`
+4. `GET /api/knowledge-bases`
+5. `GET /api/knowledge-bases/{kbCode}`
+6. `POST /api/knowledge-bases/{kbCode}/activate`
+7. `POST /api/knowledge-bases/{kbCode}/deactivate`
+8. `POST /api/knowledge-bases/{kbCode}/documents/upload`
+9. `GET /api/knowledge-bases/{kbCode}/documents`
+10. `GET /api/knowledge-bases/{kbCode}/documents/{documentCode}`
+11. `GET /api/knowledge-bases/{kbCode}/documents/{documentCode}/chunks`
+12. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/disable`
+13. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/process`
+14. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/reprocess`
 
 ### 文档上传链路
 
@@ -98,6 +112,8 @@
 7. 文档状态流转已开始落地
 8. `indexing_task` 独立结果记录已完成
 9. 文档处理接口已接入控制层
+10. Day 6 三类样本文档真实联调已完成
+11. Markdown `media_type` 联调问题已修正
 
 ## 已验证
 
@@ -117,6 +133,8 @@
 12. `document_chunk` 迁移脚本已补入仓库
 13. 文档处理服务单元测试已通过
 14. 文档处理真实写库集成测试已通过
+15. `md / txt / pdf` 三类样本文档 Day 6 联调已通过
+16. README、阶段文档与当前实现口径已完成对齐
 
 当前已验证样例：
 
@@ -150,7 +168,7 @@
 
 ## 当前判断
 
-如果只看主线推进，当前最缺的已经不是继续补基础设施，也不是从零开始做解析切块，而是进入检索前的最后缺口补齐。
+如果只看主线推进，当前最缺的已经不是继续补基础设施，也不是继续收尾 Week 1，而是正式进入 Week 2。
 
 所以当前阶段的真实优先级应该是：
 
@@ -163,10 +181,10 @@
 
 建议按下面顺序继续：
 
-1. 进入 Day 6，做真实联调与字段校验
-2. 开始 embedding 与向量存储设计
-3. 接入基础检索链路
-4. 准备第一版问答接口
+1. 进入 Week 2，开始 embedding 与向量存储设计
+2. 接入基础检索链路
+3. 准备第一版问答接口
+4. 设计引用来源返回结构
 5. 再进入评测与优化
 
 ## 备注

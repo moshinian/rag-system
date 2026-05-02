@@ -4,10 +4,11 @@
 
 截至当前仓库状态：
 
-1. Day 1 到 Day 3 已基本完成
-2. PostgreSQL / Redis / Flyway / JPA 已真实跑通
-3. 知识库创建与文档上传链路已落地
-4. 下一步应该进入 Day 4 / Day 5 的文档解析与切块主线
+1. Day 1 到 Day 7 已完成，Week 1 已完成收口
+2. PostgreSQL / Redis / Flyway / MyBatis-Plus 已真实跑通
+3. 知识库创建、文档上传、解析、切块、chunk 入库链路已落地
+4. Day 6 真实联调、字段校验与 Day 7 文档沉淀已完成
+5. 下一步应该直接进入 Week 2 的 embedding、向量存储、检索与问答主线
 
 这个计划文档仍然保留长期目标，当前真实状态以 [work/current-status.md](/root/workspace/rag-system/work/current-status.md) 为准。
 
