@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -60,6 +61,9 @@ class DocumentProcessingServiceTest {
 
     @Mock
     private SnowflakeIdGenerator snowflakeIdGenerator;
+
+    @Captor
+    private ArgumentCaptor<List<DocumentChunkEntity>> documentChunkCaptor;
 
     @TempDir
     Path tempDir;
@@ -112,11 +116,10 @@ class DocumentProcessingServiceTest {
         assertThat(response.chunkCount()).isGreaterThan(0);
         assertThat(response.parserName()).isEqualTo("markdown");
 
-        ArgumentCaptor<List<DocumentChunkEntity>> captor = ArgumentCaptor.forClass(List.class);
-        verify(documentChunkRepository).batchInsert(captor.capture());
-        assertThat(captor.getValue()).isNotEmpty();
-        assertThat(captor.getValue().get(0).getTitle()).isEqualTo("Settlement Overview");
-        assertThat(captor.getValue().get(0).getMetadataJson()).contains("\"parser\":\"markdown\"");
+        verify(documentChunkRepository).batchInsert(documentChunkCaptor.capture());
+        assertThat(documentChunkCaptor.getValue()).isNotEmpty();
+        assertThat(documentChunkCaptor.getValue().get(0).getTitle()).isEqualTo("Settlement Overview");
+        assertThat(documentChunkCaptor.getValue().get(0).getMetadataJson()).contains("\"parser\":\"markdown\"");
         assertThat(document.getStatus()).isEqualTo(DocumentStatus.INDEXED);
         ArgumentCaptor<IndexingTaskEntity> taskCaptor = ArgumentCaptor.forClass(IndexingTaskEntity.class);
         verify(indexingTaskRepository).updateById(taskCaptor.capture());
@@ -164,8 +167,6 @@ class DocumentProcessingServiceTest {
 
     @Test
     void processShouldRejectWhenKnowledgeBaseInactive() {
-        DocumentEntity document = createDocument("md");
-
         KnowledgeBaseEntity knowledgeBase = createKnowledgeBase();
         knowledgeBase.setStatus(KnowledgeBaseStatus.INACTIVE);
 
