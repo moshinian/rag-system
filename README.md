@@ -636,6 +636,7 @@ Week 1 已完成并完成收口，项目现在已经正式进入 Week 2。
 更详细的阶段记录可参考：
 
 1. [work/current-status.md](/root/workspace/rag-system/work/current-status.md)
-2. [work/week1.md](/root/workspace/rag-system/work/week1.md)
-3. [work/week2.md](/root/workspace/rag-system/work/week2.md)
-4. [work/work day8.md](/root/workspace/rag-system/work/work%20day8.md)
+2. [work/plan.md](/root/workspace/rag-system/work/plan.md)
+3. [work/week1.md](/root/workspace/rag-system/work/week1.md)
+4. [work/week2.md](/root/workspace/rag-system/work/week2.md)
+5. [work/work day8.md](/root/workspace/rag-system/work/work%20day8.md)
