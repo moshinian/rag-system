@@ -5,14 +5,15 @@ import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.ingestion.chunk.FixedWindowChunker;
 import com.example.rag.ingestion.parser.MarkdownDocumentTextParser;
 import com.example.rag.ingestion.parser.PlainTextDocumentTextParser;
-import com.example.rag.model.entity.DocumentChunkEntity;
-import com.example.rag.model.entity.DocumentEntity;
-import com.example.rag.model.entity.KnowledgeBaseEntity;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.DocumentProcessResponse;
-import com.example.rag.repository.DocumentChunkRepository;
-import com.example.rag.repository.DocumentRepository;
+import com.example.rag.persistence.DocumentChunkRepository;
+import com.example.rag.persistence.DocumentRepository;
+import com.example.rag.persistence.KnowledgeBaseRepository;
+import com.example.rag.persistence.entity.DocumentChunkEntity;
+import com.example.rag.persistence.entity.DocumentEntity;
+import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +49,9 @@ class DocumentProcessingServiceTest {
     private DocumentChunkRepository documentChunkRepository;
 
     @Mock
+    private KnowledgeBaseRepository knowledgeBaseRepository;
+
+    @Mock
     private SnowflakeIdGenerator snowflakeIdGenerator;
 
     @TempDir
@@ -71,19 +75,21 @@ class DocumentProcessingServiceTest {
                 """);
         document.setStoragePath(file.toString());
 
-        when(documentRepository.findByDocumentCodeAndKnowledgeBase_KbCode("DOC-1", "settlement-kb"))
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb"))
                 .thenReturn(Optional.of(document));
-        when(documentRepository.save(any())).thenAnswer(invocation -> {
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(createKnowledgeBase()));
+        when(documentRepository.updateById(any())).thenAnswer(invocation -> {
             DocumentEntity entity = invocation.getArgument(0);
             entity.setUpdatedAt(OffsetDateTime.now());
             return entity;
         });
         when(snowflakeIdGenerator.nextId()).thenReturn(11L, 12L, 13L, 14L, 15L);
-        when(documentChunkRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(documentChunkRepository.batchInsert(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         DocumentProcessingService service = new DocumentProcessingService(
                 documentRepository,
                 documentChunkRepository,
+                knowledgeBaseRepository,
                 List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
                 new FixedWindowChunker(),
                 snowflakeIdGenerator,
@@ -97,7 +103,7 @@ class DocumentProcessingServiceTest {
         assertThat(response.parserName()).isEqualTo("markdown");
 
         ArgumentCaptor<List<DocumentChunkEntity>> captor = ArgumentCaptor.forClass(List.class);
-        verify(documentChunkRepository).saveAll(captor.capture());
+        verify(documentChunkRepository).batchInsert(captor.capture());
         assertThat(captor.getValue()).isNotEmpty();
         assertThat(captor.getValue().get(0).getTitle()).isEqualTo("Settlement Overview");
         assertThat(captor.getValue().get(0).getMetadataJson()).contains("\"parser\":\"markdown\"");
@@ -112,9 +118,10 @@ class DocumentProcessingServiceTest {
         Files.writeString(file, "fake");
         document.setStoragePath(file.toString());
 
-        when(documentRepository.findByDocumentCodeAndKnowledgeBase_KbCode("DOC-1", "settlement-kb"))
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb"))
                 .thenReturn(Optional.of(document));
-        when(documentRepository.save(any())).thenAnswer(invocation -> {
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(createKnowledgeBase()));
+        when(documentRepository.updateById(any())).thenAnswer(invocation -> {
             DocumentEntity entity = invocation.getArgument(0);
             entity.setUpdatedAt(OffsetDateTime.now());
             return entity;
@@ -123,6 +130,7 @@ class DocumentProcessingServiceTest {
         DocumentProcessingService service = new DocumentProcessingService(
                 documentRepository,
                 documentChunkRepository,
+                knowledgeBaseRepository,
                 List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
                 new FixedWindowChunker(),
                 snowflakeIdGenerator,
@@ -135,19 +143,37 @@ class DocumentProcessingServiceTest {
         assertThat(document.getStatus()).isEqualTo(DocumentStatus.FAILED);
     }
 
+    @Test
+    void processShouldRejectWhenKnowledgeBaseInactive() {
+        DocumentEntity document = createDocument("md");
+
+        KnowledgeBaseEntity knowledgeBase = createKnowledgeBase();
+        knowledgeBase.setStatus(KnowledgeBaseStatus.INACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+
+        DocumentProcessingService service = new DocumentProcessingService(
+                documentRepository,
+                documentChunkRepository,
+                knowledgeBaseRepository,
+                List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
+                new FixedWindowChunker(),
+                snowflakeIdGenerator,
+                new ObjectMapper()
+        );
+
+        assertThatThrownBy(() -> service.process("settlement-kb", "DOC-1", "tester"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Knowledge base is inactive");
+    }
+
     /**
      * 构造一份最小文档实体，供不同测试复用。
      */
     private DocumentEntity createDocument(String fileType) {
-        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
-        knowledgeBase.setId(100L);
-        knowledgeBase.setKbCode("settlement-kb");
-        knowledgeBase.setName("Settlement");
-        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
-
         DocumentEntity document = new DocumentEntity();
         document.setId(1L);
-        document.setKnowledgeBase(knowledgeBase);
+        document.setKnowledgeBaseId(100L);
         document.setDocumentCode("DOC-1");
         document.setFileName("sample." + fileType);
         document.setDisplayName("Sample Document");
@@ -156,5 +182,14 @@ class DocumentProcessingServiceTest {
         document.setContentHash("hash");
         document.setStatus(DocumentStatus.UPLOADED);
         return document;
+    }
+
+    private KnowledgeBaseEntity createKnowledgeBase() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setName("Settlement");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+        return knowledgeBase;
     }
 }

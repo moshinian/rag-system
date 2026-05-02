@@ -3,12 +3,20 @@ package com.example.rag.service;
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.ingestion.storage.LocalFileStorageService;
-import com.example.rag.model.entity.DocumentEntity;
-import com.example.rag.model.entity.KnowledgeBaseEntity;
+import com.example.rag.model.response.DocumentChunkResponse;
+import com.example.rag.model.enums.DocumentStatus;
+import com.example.rag.model.response.DocumentDetailResponse;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
+import com.example.rag.model.response.DocumentSummaryResponse;
+import com.example.rag.model.response.PageResponse;
 import com.example.rag.model.response.DocumentUploadResponse;
-import com.example.rag.repository.DocumentRepository;
-import com.example.rag.repository.KnowledgeBaseRepository;
+import com.example.rag.persistence.DocumentChunkRepository;
+import com.example.rag.persistence.DocumentRepository;
+import com.example.rag.persistence.KnowledgeBaseRepository;
+import com.example.rag.persistence.entity.DocumentChunkEntity;
+import com.example.rag.persistence.entity.DocumentEntity;
+import com.example.rag.persistence.entity.KnowledgeBaseEntity;
+import com.example.rag.persistence.query.PageResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +28,7 @@ import org.springframework.mock.web.MockMultipartFile;
 
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +51,9 @@ class DocumentServiceTest {
 
     @Mock
     private DocumentRepository documentRepository;
+
+    @Mock
+    private DocumentChunkRepository documentChunkRepository;
 
     @Mock
     private LocalFileStorageService localFileStorageService;
@@ -75,12 +87,12 @@ class DocumentServiceTest {
                 "# title".getBytes()
         );
 
-        when(knowledgeBaseRepository.findByKbCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
-        when(documentRepository.existsByKnowledgeBaseIdAndContentHash(eq(100L), any())).thenReturn(false);
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.existsInKnowledgeBaseByContentHash(eq(100L), any())).thenReturn(false);
         when(snowflakeIdGenerator.nextId()).thenReturn(123456789L);
         when(localFileStorageService.store(any(), any(), any(), any(), any()))
                 .thenReturn(Path.of("data/uploads/settlement-kb/20260430/DOC-123456789_plan.md"));
-        when(documentRepository.save(any())).thenAnswer(invocation -> {
+        when(documentRepository.insert(any())).thenAnswer(invocation -> {
             DocumentEntity entity = invocation.getArgument(0);
             OffsetDateTime now = OffsetDateTime.now();
             entity.setCreatedAt(now);
@@ -100,7 +112,7 @@ class DocumentServiceTest {
         assertThat(response.mediaType()).isEqualTo("text/markdown");
 
         ArgumentCaptor<DocumentEntity> captor = ArgumentCaptor.forClass(DocumentEntity.class);
-        verify(documentRepository).save(captor.capture());
+        verify(documentRepository).insert(captor.capture());
         assertThat(captor.getValue().getMediaType()).isEqualTo("text/markdown");
     }
 
@@ -114,12 +126,12 @@ class DocumentServiceTest {
                 "hello".getBytes()
         );
 
-        when(knowledgeBaseRepository.findByKbCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
-        when(documentRepository.existsByKnowledgeBaseIdAndContentHash(eq(100L), any())).thenReturn(false);
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.existsInKnowledgeBaseByContentHash(eq(100L), any())).thenReturn(false);
         when(snowflakeIdGenerator.nextId()).thenReturn(999L);
         when(localFileStorageService.store(any(), any(), any(), any(), any()))
                 .thenReturn(Path.of("data/uploads/settlement-kb/20260430/DOC-999_notes.txt"));
-        when(documentRepository.save(any())).thenAnswer(invocation -> {
+        when(documentRepository.insert(any())).thenAnswer(invocation -> {
             DocumentEntity entity = invocation.getArgument(0);
             OffsetDateTime now = OffsetDateTime.now();
             entity.setCreatedAt(now);
@@ -149,7 +161,7 @@ class DocumentServiceTest {
                 "bad".getBytes()
         );
 
-        when(knowledgeBaseRepository.findByKbCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
 
         assertThatThrownBy(() -> documentService.upload(
                 "settlement-kb",
@@ -160,5 +172,138 @@ class DocumentServiceTest {
                 null
         )).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Unsupported file type");
+    }
+
+    @Test
+    void listDocumentsShouldReturnPagedResults() {
+        DocumentEntity document = new DocumentEntity();
+        document.setId(1L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setFileName("plan.md");
+        document.setDisplayName("Plan");
+        document.setFileType("md");
+        document.setMediaType("text/markdown");
+        document.setFileSize(128L);
+        document.setStatus(DocumentStatus.UPLOADED);
+        document.setCreatedBy("tester");
+        document.setCreatedAt(OffsetDateTime.now());
+        document.setUpdatedAt(OffsetDateTime.now());
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.pageByKnowledgeBase(any()))
+                .thenReturn(new PageResult<>(List.of(document), 1, 1, 20));
+
+        PageResponse<DocumentSummaryResponse> response = documentService.listDocuments(
+                "settlement-kb",
+                "uploaded",
+                1L,
+                20L
+        );
+
+        assertThat(response.total()).isEqualTo(1);
+        assertThat(response.records()).singleElement()
+                .extracting(DocumentSummaryResponse::documentCode, DocumentSummaryResponse::knowledgeBaseCode)
+                .containsExactly("DOC-1", "settlement-kb");
+    }
+
+    @Test
+    void getDocumentShouldReturnDetail() {
+        DocumentEntity document = new DocumentEntity();
+        document.setId(1L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setFileName("plan.md");
+        document.setDisplayName("Plan");
+        document.setFileType("md");
+        document.setMediaType("text/markdown");
+        document.setStoragePath("data/uploads/plan.md");
+        document.setFileSize(128L);
+        document.setContentHash("hash");
+        document.setStatus(DocumentStatus.UPLOADED);
+        document.setVersion(1);
+        document.setSource("work");
+        document.setTags("plan");
+        document.setCreatedBy("tester");
+        document.setCreatedAt(OffsetDateTime.now());
+        document.setUpdatedAt(OffsetDateTime.now());
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+
+        DocumentDetailResponse response = documentService.getDocument("settlement-kb", "DOC-1");
+
+        assertThat(response.documentCode()).isEqualTo("DOC-1");
+        assertThat(response.knowledgeBaseCode()).isEqualTo("settlement-kb");
+        assertThat(response.storagePath()).isEqualTo("data/uploads/plan.md");
+    }
+
+    @Test
+    void disableDocumentShouldUpdateStatus() {
+        DocumentEntity document = new DocumentEntity();
+        document.setId(1L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.UPLOADED);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(documentRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DocumentDetailResponse response = documentService.disableDocument("settlement-kb", "DOC-1");
+
+        assertThat(response.status()).isEqualTo("DISABLED");
+    }
+
+    @Test
+    void uploadShouldRejectWhenKnowledgeBaseInactive() {
+        knowledgeBase.setStatus(KnowledgeBaseStatus.INACTIVE);
+        MockMultipartFile file = new MockMultipartFile("file", "plan.md", null, "# title".getBytes());
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+
+        assertThatThrownBy(() -> documentService.upload(
+                "settlement-kb",
+                file,
+                null,
+                null,
+                null,
+                null
+        )).isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Knowledge base is inactive");
+    }
+
+    @Test
+    void listDocumentChunksShouldReturnOrderedChunks() {
+        DocumentEntity document = new DocumentEntity();
+        document.setId(1L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+
+        DocumentChunkEntity chunk = new DocumentChunkEntity();
+        chunk.setId(11L);
+        chunk.setDocumentId(1L);
+        chunk.setChunkIndex(0);
+        chunk.setChunkType("TEXT");
+        chunk.setTitle("Intro");
+        chunk.setContent("hello");
+        chunk.setContentLength(5);
+        chunk.setTokenCount(1);
+        chunk.setStartOffset(0);
+        chunk.setEndOffset(5);
+        chunk.setMetadataJson("{\"parser\":\"markdown\"}");
+        chunk.setStatus(com.example.rag.model.enums.DocumentChunkStatus.ACTIVE);
+        chunk.setCreatedAt(OffsetDateTime.now());
+        chunk.setUpdatedAt(OffsetDateTime.now());
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(documentChunkRepository.findByDocumentIdOrderByChunkIndex(1L)).thenReturn(List.of(chunk));
+
+        List<DocumentChunkResponse> response = documentService.listDocumentChunks("settlement-kb", "DOC-1");
+
+        assertThat(response).singleElement()
+                .extracting(DocumentChunkResponse::chunkIndex, DocumentChunkResponse::title, DocumentChunkResponse::status)
+                .containsExactly(0, "Intro", "ACTIVE");
     }
 }

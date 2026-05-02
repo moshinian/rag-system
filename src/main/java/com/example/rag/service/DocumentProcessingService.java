@@ -6,13 +6,16 @@ import com.example.rag.ingestion.chunk.ChunkDraft;
 import com.example.rag.ingestion.chunk.FixedWindowChunker;
 import com.example.rag.ingestion.parser.DocumentTextParser;
 import com.example.rag.ingestion.parser.ParsedDocument;
-import com.example.rag.model.entity.DocumentChunkEntity;
-import com.example.rag.model.entity.DocumentEntity;
 import com.example.rag.model.enums.DocumentChunkStatus;
 import com.example.rag.model.enums.DocumentStatus;
+import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.DocumentProcessResponse;
-import com.example.rag.repository.DocumentChunkRepository;
-import com.example.rag.repository.DocumentRepository;
+import com.example.rag.persistence.DocumentChunkRepository;
+import com.example.rag.persistence.DocumentRepository;
+import com.example.rag.persistence.KnowledgeBaseRepository;
+import com.example.rag.persistence.entity.DocumentChunkEntity;
+import com.example.rag.persistence.entity.DocumentEntity;
+import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -35,6 +38,7 @@ public class DocumentProcessingService {
 
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
+    private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final List<DocumentTextParser> documentTextParsers;
     private final FixedWindowChunker fixedWindowChunker;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
@@ -42,12 +46,14 @@ public class DocumentProcessingService {
 
     public DocumentProcessingService(DocumentRepository documentRepository,
                                      DocumentChunkRepository documentChunkRepository,
+                                     KnowledgeBaseRepository knowledgeBaseRepository,
                                      List<DocumentTextParser> documentTextParsers,
                                      FixedWindowChunker fixedWindowChunker,
                                      SnowflakeIdGenerator snowflakeIdGenerator,
                                      ObjectMapper objectMapper) {
         this.documentRepository = documentRepository;
         this.documentChunkRepository = documentChunkRepository;
+        this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentTextParsers = documentTextParsers;
         this.fixedWindowChunker = fixedWindowChunker;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
@@ -61,7 +67,11 @@ public class DocumentProcessingService {
      * 写入 document_chunk，并在结束时更新最终状态。
      */
     public DocumentProcessResponse process(String kbCode, String documentCode, String operator) {
-        DocumentEntity document = documentRepository.findByDocumentCodeAndKnowledgeBase_KbCode(documentCode, kbCode)
+        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
+                .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
+        ensureKnowledgeBaseActive(knowledgeBase);
+
+        DocumentEntity document = documentRepository.findByCodeInKnowledgeBase(documentCode, kbCode)
                 .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
 
         // 被禁用的文档不允许再进入处理链路。
@@ -85,17 +95,17 @@ public class DocumentProcessingService {
 
             updateStatus(document, DocumentStatus.CHUNKING, null);
             // 重新处理同一文档时，先清掉旧 chunk，避免重复数据残留。
-            documentChunkRepository.deleteByDocument_Id(document.getId());
+            documentChunkRepository.deleteByDocumentId(document.getId());
             List<DocumentChunkEntity> chunks = chunkDrafts.stream()
                     .map(draft -> toChunkEntity(document, draft, parsedDocument.parserName()))
                     .toList();
-            documentChunkRepository.saveAll(chunks);
+            documentChunkRepository.batchInsert(chunks);
 
             updateStatus(document, DocumentStatus.INDEXED, null);
             return new DocumentProcessResponse(
                     document.getId(),
                     document.getDocumentCode(),
-                    document.getKnowledgeBase().getKbCode(),
+                    kbCode,
                     document.getFileType(),
                     document.getStatus().name(),
                     chunks.size(),
@@ -132,8 +142,8 @@ public class DocumentProcessingService {
     private DocumentChunkEntity toChunkEntity(DocumentEntity document, ChunkDraft draft, String parserName) {
         DocumentChunkEntity entity = new DocumentChunkEntity();
         entity.setId(snowflakeIdGenerator.nextId());
-        entity.setKnowledgeBase(document.getKnowledgeBase());
-        entity.setDocument(document);
+        entity.setKnowledgeBaseId(document.getKnowledgeBaseId());
+        entity.setDocumentId(document.getId());
         entity.setChunkIndex(draft.chunkIndex());
         entity.setChunkType("TEXT");
         entity.setTitle(normalizeTitle(draft.title(), document));
@@ -190,14 +200,14 @@ public class DocumentProcessingService {
     private void updateStatus(DocumentEntity document, DocumentStatus status, String errorMessage) {
         document.setStatus(status);
         document.setErrorMessage(errorMessage);
-        documentRepository.save(document);
+        documentRepository.updateById(document);
     }
 
     /** 在处理失败时记录错误原因。 */
     private void markFailed(DocumentEntity document, String message) {
         document.setStatus(DocumentStatus.FAILED);
         document.setErrorMessage(truncate(message));
-        documentRepository.save(document);
+        documentRepository.updateById(document);
     }
 
     /** 截断错误信息，避免超过数据库字段长度。 */
@@ -209,5 +219,12 @@ public class DocumentProcessingService {
             return message;
         }
         return message.substring(0, 1024);
+    }
+
+    /** 校验知识库是否仍处于启用状态。 */
+    private void ensureKnowledgeBaseActive(KnowledgeBaseEntity knowledgeBase) {
+        if (knowledgeBase.getStatus() != KnowledgeBaseStatus.ACTIVE) {
+            throw new BusinessException("Knowledge base is inactive: " + knowledgeBase.getKbCode());
+        }
     }
 }

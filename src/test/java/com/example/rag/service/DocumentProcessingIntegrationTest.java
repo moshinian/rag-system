@@ -1,14 +1,14 @@
 package com.example.rag.service;
 
 import com.example.rag.common.id.SnowflakeIdGenerator;
-import com.example.rag.model.entity.DocumentEntity;
-import com.example.rag.model.entity.KnowledgeBaseEntity;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.DocumentProcessResponse;
-import com.example.rag.repository.DocumentChunkRepository;
-import com.example.rag.repository.DocumentRepository;
-import com.example.rag.repository.KnowledgeBaseRepository;
+import com.example.rag.persistence.DocumentChunkRepository;
+import com.example.rag.persistence.DocumentRepository;
+import com.example.rag.persistence.KnowledgeBaseRepository;
+import com.example.rag.persistence.entity.DocumentEntity;
+import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,11 +75,11 @@ class DocumentProcessingIntegrationTest {
         knowledgeBase.setName("Integration KB");
         knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
         knowledgeBase.setCreatedBy("itest");
-        knowledgeBaseRepository.save(knowledgeBase);
+        knowledgeBaseRepository.insert(knowledgeBase);
 
         DocumentEntity document = new DocumentEntity();
         document.setId(documentId);
-        document.setKnowledgeBase(knowledgeBase);
+        document.setKnowledgeBaseId(knowledgeBaseId);
         document.setDocumentCode(documentCode);
         document.setFileName("integration.md");
         document.setDisplayName("Integration Document");
@@ -91,15 +91,15 @@ class DocumentProcessingIntegrationTest {
         document.setStatus(DocumentStatus.UPLOADED);
         document.setVersion(1);
         document.setCreatedBy("itest");
-        documentRepository.save(document);
+        documentRepository.insert(document);
 
         // 执行真实主链路处理。
         DocumentProcessResponse response = documentProcessingService.process(kbCode, documentCode, "itest");
 
         assertThat(response.status()).isEqualTo("INDEXED");
         assertThat(response.chunkCount()).isGreaterThan(0);
-        assertThat(documentChunkRepository.findByDocument_IdOrderByChunkIndexAsc(documentId)).isNotEmpty();
-        assertThat(documentRepository.findByDocumentCode(documentCode))
+        assertThat(documentChunkRepository.findByDocumentIdOrderByChunkIndex(documentId)).isNotEmpty();
+        assertThat(documentRepository.findByCode(documentCode))
                 .get()
                 .extracting(DocumentEntity::getStatus)
                 .isEqualTo(DocumentStatus.INDEXED);

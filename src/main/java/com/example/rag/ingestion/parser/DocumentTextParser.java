@@ -1,6 +1,6 @@
 package com.example.rag.ingestion.parser;
 
-import com.example.rag.model.entity.DocumentEntity;
+import com.example.rag.persistence.entity.DocumentEntity;
 
 import java.io.IOException;
 import java.nio.file.Path;

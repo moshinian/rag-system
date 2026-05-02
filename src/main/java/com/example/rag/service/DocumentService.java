@@ -3,12 +3,21 @@ package com.example.rag.service;
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.ingestion.storage.LocalFileStorageService;
-import com.example.rag.model.entity.DocumentEntity;
-import com.example.rag.model.entity.KnowledgeBaseEntity;
 import com.example.rag.model.enums.DocumentStatus;
+import com.example.rag.model.response.DocumentChunkResponse;
+import com.example.rag.model.enums.KnowledgeBaseStatus;
+import com.example.rag.model.response.DocumentDetailResponse;
+import com.example.rag.model.response.DocumentSummaryResponse;
+import com.example.rag.model.response.PageResponse;
 import com.example.rag.model.response.DocumentUploadResponse;
-import com.example.rag.repository.DocumentRepository;
-import com.example.rag.repository.KnowledgeBaseRepository;
+import com.example.rag.persistence.DocumentChunkRepository;
+import com.example.rag.persistence.DocumentRepository;
+import com.example.rag.persistence.KnowledgeBaseRepository;
+import com.example.rag.persistence.entity.DocumentChunkEntity;
+import com.example.rag.persistence.entity.DocumentEntity;
+import com.example.rag.persistence.entity.KnowledgeBaseEntity;
+import com.example.rag.persistence.query.DocumentPageQuery;
+import com.example.rag.persistence.query.PageResult;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,6 +29,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -34,6 +44,9 @@ import java.util.Set;
 public class DocumentService {
 
     private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("md", "txt", "pdf");
+    private static final long DEFAULT_PAGE_NO = 1;
+    private static final long DEFAULT_PAGE_SIZE = 20;
+    private static final long MAX_PAGE_SIZE = 100;
     private static final Map<String, String> DEFAULT_MEDIA_TYPES = Map.of(
             "md", "text/markdown",
             "txt", "text/plain",
@@ -42,15 +55,18 @@ public class DocumentService {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private final DocumentChunkRepository documentChunkRepository;
     private final DocumentRepository documentRepository;
     private final LocalFileStorageService localFileStorageService;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
     public DocumentService(KnowledgeBaseRepository knowledgeBaseRepository,
+                           DocumentChunkRepository documentChunkRepository,
                            DocumentRepository documentRepository,
                            LocalFileStorageService localFileStorageService,
                            SnowflakeIdGenerator snowflakeIdGenerator) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
+        this.documentChunkRepository = documentChunkRepository;
         this.documentRepository = documentRepository;
         this.localFileStorageService = localFileStorageService;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
@@ -65,8 +81,9 @@ public class DocumentService {
                                          String source,
                                          String operator) {
         // 先确认知识库存在，再进入文件上传流程。
-        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByKbCode(kbCode)
+        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
+        ensureKnowledgeBaseActive(knowledgeBase);
 
         validateFile(file);
 
@@ -76,7 +93,7 @@ public class DocumentService {
         String contentHash = calculateSha256(file);
 
         // 当前阶段以“同知识库内容去重”为准，避免重复 chunk 污染后续检索结果。
-        if (documentRepository.existsByKnowledgeBaseIdAndContentHash(knowledgeBase.getId(), contentHash)) {
+        if (documentRepository.existsInKnowledgeBaseByContentHash(knowledgeBase.getId(), contentHash)) {
             throw new BusinessException("Duplicate document in knowledge base: " + kbCode);
         }
 
@@ -99,7 +116,7 @@ public class DocumentService {
 
         DocumentEntity entity = new DocumentEntity();
         entity.setId(documentId);
-        entity.setKnowledgeBase(knowledgeBase);
+        entity.setKnowledgeBaseId(knowledgeBase.getId());
         entity.setDocumentCode(documentCode);
         entity.setFileName(fileName);
         entity.setDisplayName(displayName);
@@ -115,8 +132,67 @@ public class DocumentService {
         entity.setCreatedBy(normalizedOperator);
 
         // 上传阶段只写入初始状态，后续处理由独立链路继续推进。
-        DocumentEntity saved = documentRepository.save(entity);
+        DocumentEntity saved = documentRepository.insert(entity);
         return toResponse(saved, knowledgeBase.getKbCode());
+    }
+
+    /** 分页查询知识库下的文档。 */
+    @Transactional(readOnly = true)
+    public PageResponse<DocumentSummaryResponse> listDocuments(String kbCode,
+                                                               String status,
+                                                               Long pageNo,
+                                                               Long pageSize) {
+        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
+                .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
+
+        long normalizedPageNo = normalizePageNo(pageNo);
+        long normalizedPageSize = normalizePageSize(pageSize);
+        DocumentStatus documentStatus = parseStatus(status);
+        DocumentPageQuery query = new DocumentPageQuery(
+                knowledgeBase.getId(),
+                documentStatus,
+                normalizedPageNo,
+                normalizedPageSize
+        );
+        PageResult<DocumentEntity> page = documentRepository.pageByKnowledgeBase(query);
+        List<DocumentSummaryResponse> records = page.records().stream()
+                .map(document -> toSummaryResponse(document, knowledgeBase.getKbCode()))
+                .toList();
+        return new PageResponse<>(records, page.total(), page.pageNo(), page.pageSize());
+    }
+
+    /** 查询文档详情。 */
+    @Transactional(readOnly = true)
+    public DocumentDetailResponse getDocument(String kbCode, String documentCode) {
+        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
+                .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
+        DocumentEntity document = documentRepository.findByCodeInKnowledgeBase(documentCode, kbCode)
+                .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
+        return toDetailResponse(document, knowledgeBase.getKbCode());
+    }
+
+    /** 禁用文档。 */
+    @Transactional
+    public DocumentDetailResponse disableDocument(String kbCode, String documentCode) {
+        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
+                .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
+        DocumentEntity document = documentRepository.findByCodeInKnowledgeBase(documentCode, kbCode)
+                .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
+        document.setStatus(DocumentStatus.DISABLED);
+        documentRepository.updateById(document);
+        return toDetailResponse(document, knowledgeBase.getKbCode());
+    }
+
+    /** 查询文档的全部 chunk。 */
+    @Transactional(readOnly = true)
+    public List<DocumentChunkResponse> listDocumentChunks(String kbCode, String documentCode) {
+        knowledgeBaseRepository.findByCode(kbCode)
+                .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
+        DocumentEntity document = documentRepository.findByCodeInKnowledgeBase(documentCode, kbCode)
+                .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
+        return documentChunkRepository.findByDocumentIdOrderByChunkIndex(document.getId()).stream()
+                .map(this::toChunkResponse)
+                .toList();
     }
 
     /** 执行必要的上传校验。 */
@@ -209,6 +285,48 @@ public class DocumentService {
         return normalized == null ? "system" : normalized;
     }
 
+    /** 校验知识库是否仍处于启用状态。 */
+    private void ensureKnowledgeBaseActive(KnowledgeBaseEntity knowledgeBase) {
+        if (knowledgeBase.getStatus() != KnowledgeBaseStatus.ACTIVE) {
+            throw new BusinessException("Knowledge base is inactive: " + knowledgeBase.getKbCode());
+        }
+    }
+
+    /** 解析文档状态过滤条件。 */
+    private DocumentStatus parseStatus(String status) {
+        String normalized = trimToNull(status);
+        if (normalized == null) {
+            return null;
+        }
+        try {
+            return DocumentStatus.valueOf(normalized.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException("Unsupported document status: " + status);
+        }
+    }
+
+    /** 归一化页码。 */
+    private long normalizePageNo(Long pageNo) {
+        if (pageNo == null) {
+            return DEFAULT_PAGE_NO;
+        }
+        if (pageNo < 1) {
+            throw new BusinessException("Page number must be greater than 0");
+        }
+        return pageNo;
+    }
+
+    /** 归一化分页大小。 */
+    private long normalizePageSize(Long pageSize) {
+        if (pageSize == null) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        if (pageSize < 1 || pageSize > MAX_PAGE_SIZE) {
+            throw new BusinessException("Page size must be between 1 and " + MAX_PAGE_SIZE);
+        }
+        return pageSize;
+    }
+
     /** 把空白字符串归一化成 null。 */
     private String trimToNull(String value) {
         if (value == null) {
@@ -233,6 +351,68 @@ public class DocumentService {
                 entity.getContentHash(),
                 entity.getStatus().name(),
                 entity.getCreatedBy(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
+        );
+    }
+
+    /** 把持久化对象转换成列表项响应。 */
+    private DocumentSummaryResponse toSummaryResponse(DocumentEntity entity, String knowledgeBaseCode) {
+        return new DocumentSummaryResponse(
+                entity.getId(),
+                entity.getDocumentCode(),
+                knowledgeBaseCode,
+                entity.getFileName(),
+                entity.getDisplayName(),
+                entity.getFileType(),
+                entity.getMediaType(),
+                entity.getFileSize(),
+                entity.getStatus().name(),
+                entity.getCreatedBy(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
+        );
+    }
+
+    /** 把持久化对象转换成详情响应。 */
+    private DocumentDetailResponse toDetailResponse(DocumentEntity entity, String knowledgeBaseCode) {
+        return new DocumentDetailResponse(
+                entity.getId(),
+                entity.getDocumentCode(),
+                knowledgeBaseCode,
+                entity.getFileName(),
+                entity.getDisplayName(),
+                entity.getFileType(),
+                entity.getMediaType(),
+                entity.getStoragePath(),
+                entity.getFileSize(),
+                entity.getContentHash(),
+                entity.getStatus().name(),
+                entity.getVersion(),
+                entity.getSource(),
+                entity.getTags(),
+                entity.getErrorMessage(),
+                entity.getCreatedBy(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt()
+        );
+    }
+
+    /** 把持久化对象转换成 chunk 响应。 */
+    private DocumentChunkResponse toChunkResponse(DocumentChunkEntity entity) {
+        return new DocumentChunkResponse(
+                entity.getId(),
+                entity.getDocumentId(),
+                entity.getChunkIndex(),
+                entity.getChunkType(),
+                entity.getTitle(),
+                entity.getContent(),
+                entity.getContentLength(),
+                entity.getTokenCount(),
+                entity.getStartOffset(),
+                entity.getEndOffset(),
+                entity.getMetadataJson(),
+                entity.getStatus().name(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );

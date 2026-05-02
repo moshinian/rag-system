@@ -43,25 +43,29 @@
 2. PostgreSQL 真连通
 3. Redis 真连通
 4. Flyway 迁移可执行
-5. JPA 实体与 Repository 已接通
-6. 统一响应结构 `ApiResponse`
-7. 全局异常处理
-8. 请求级 `X-Request-Id` 透传与生成
-9. 健康检查接口 `/api/health`
-10. Redis 探针接口 `/api/health/redis-probe`
-11. 知识库创建接口
-12. 文档上传接口
-13. 本地文件落盘
-14. 文档去重校验
-15. 文档状态枚举已预留到 `INDEXED / FAILED / DISABLED`
-16. 文档 `media_type` 元数据已落库
-17. Day 4 样本文档已补齐 `md / txt / pdf`
-18. `document_chunk` 表、实体与 Repository 已落地
-19. `md / txt` 第一版解析已落地
-20. 第一版固定长度切块已落地
-21. 文档处理接口 `/process` 已接入
-22. 基础线程池 `indexingExecutor`
-23. Actuator 基础接入
+5. MyBatis-Plus 持久层已替换 JPA
+6. `mapper + persistence + persistence/entity` 分层已收口
+7. MyBatis-Plus 自动填充 `created_at / updated_at`
+8. MyBatis-Plus 分页查询能力已接入
+9. 统一响应结构 `ApiResponse`
+10. 全局异常处理
+11. 请求级 `X-Request-Id` 透传与生成
+12. 健康检查接口 `/api/health`
+13. Redis 探针接口 `/api/health/redis-probe`
+14. 知识库创建、列表、详情、启用/禁用接口
+15. 文档上传、列表、详情、chunk 查询、禁用、处理、重处理接口
+16. 本地文件落盘
+17. 文档去重校验
+18. 知识库禁用后上传/处理保护
+19. 文档状态枚举已预留到 `INDEXED / FAILED / DISABLED`
+20. 文档 `media_type` 元数据已落库
+21. Day 4 样本文档已补齐 `md / txt / pdf`
+22. `document_chunk` 表、实体与 Repository 已落地
+23. `md / txt` 第一版解析已落地
+24. 第一版固定长度切块已落地
+25. 文档处理接口 `/process` 已接入
+26. 基础线程池 `indexingExecutor`
+27. Actuator 基础接入
 
 当前还没完成的能力：
 
@@ -78,7 +82,7 @@
 - Spring Boot 3.5.14
 - Spring Web
 - Spring Validation
-- Spring Data JPA
+- MyBatis-Plus
 - Spring Data Redis
 - Spring Boot Actuator
 - PostgreSQL
@@ -91,6 +95,27 @@
 - `rag.embedding.*`
 - `rag.llm.*`
 - 检索与生成模块占位
+
+## 当前架构
+
+当前代码结构已经按“接口层 / 业务层 / 持久层 / 解析层”拆开：
+
+- `controller`
+  - 对外暴露 HTTP 接口，只负责参数接入和统一响应包装
+- `service`
+  - 编排业务流程、状态流转、异常语义
+- `mapper`
+  - MyBatis-Plus 原子数据库访问入口
+- `persistence`
+  - 面向业务的持久化访问封装
+- `persistence/entity`
+  - 数据库存储对象
+- `persistence/query`
+  - 分页与查询条件对象
+- `model/request|response`
+  - HTTP 请求/响应模型
+- `ingestion/parser|chunk|storage`
+  - 文档解析、切块、本地存储
 
 ## 目录结构
 
@@ -113,13 +138,15 @@ rag-system/
 │   │   └── storage/           # 本地文件存储
 │   ├── integration/
 │   │   └── llm/               # OpenAI 兼容客户端占位
+│   ├── mapper/                # MyBatis-Plus Mapper
 │   ├── model/
 │   │   ├── dto/
-│   │   ├── entity/
 │   │   ├── enums/
 │   │   ├── request/
 │   │   └── response/
-│   ├── repository/
+│   ├── persistence/          # 持久化访问封装
+│   │   └── entity/           # 数据库存储对象
+│   │   └── query/            # 分页与查询条件
 │   ├── retrieval/             # 检索链路占位
 │   └── service/
 ├── src/main/resources/
@@ -210,6 +237,16 @@ rag-system/
 - `CHUNKING`
 - `INDEXED`
 - `FAILED`
+- `DISABLED`
+
+当前知识库状态枚举：
+
+- `ACTIVE`
+- `INACTIVE`
+
+当前 chunk 状态枚举：
+
+- `ACTIVE`
 - `DISABLED`
 
 ## 本地运行
@@ -317,7 +354,37 @@ Content-Type: application/json
 }
 ```
 
-### 4. 上传文档
+### 4. 查询知识库列表
+
+```http
+GET /api/knowledge-bases?status=ACTIVE&pageNo=1&pageSize=20
+```
+
+支持参数：
+
+- `status`，可选，当前支持 `ACTIVE / INACTIVE`
+- `pageNo`，可选，默认 `1`
+- `pageSize`，可选，默认 `20`，最大 `100`
+
+### 5. 查询知识库详情
+
+```http
+GET /api/knowledge-bases/{kbCode}
+```
+
+### 6. 禁用知识库
+
+```http
+POST /api/knowledge-bases/{kbCode}/disable
+```
+
+### 7. 启用知识库
+
+```http
+POST /api/knowledge-bases/{kbCode}/enable
+```
+
+### 8. 上传文档
 
 ```http
 POST /api/knowledge-bases/{kbCode}/documents/upload
@@ -338,7 +405,48 @@ Content-Type: multipart/form-data
 - `txt`
 - `pdf`
 
-### 5. 处理文档
+补充约束：
+
+- 知识库状态为 `INACTIVE` 时不允许上传新文档
+- 同一知识库下内容哈希重复的文档会被拦截
+
+### 9. 查询文档列表
+
+```http
+GET /api/knowledge-bases/{kbCode}/documents?status=UPLOADED&pageNo=1&pageSize=20
+```
+
+支持参数：
+
+- `status`，可选，当前支持 `UPLOADED / PARSING / PARSED / CHUNKING / INDEXED / FAILED / DISABLED`
+- `pageNo`，可选，默认 `1`
+- `pageSize`，可选，默认 `20`，最大 `100`
+
+### 10. 查询文档详情
+
+```http
+GET /api/knowledge-bases/{kbCode}/documents/{documentCode}
+```
+
+### 11. 查询文档 chunk 列表
+
+```http
+GET /api/knowledge-bases/{kbCode}/documents/{documentCode}/chunks
+```
+
+这个接口会按 `chunk_index` 升序返回该文档全部 chunk，适合排查：
+
+1. 解析结果是否完整
+2. 切块边界是否合理
+3. `metadata_json` 是否符合预期
+
+### 12. 禁用文档
+
+```http
+POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/disable
+```
+
+### 13. 处理文档
 
 ```http
 POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/process
@@ -350,6 +458,19 @@ POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/process
 2. 执行第一版切块
 3. 写入 `document_chunk`
 4. 推进文档状态到 `INDEXED` 或 `FAILED`
+
+补充约束：
+
+- 知识库状态为 `INACTIVE` 时不允许处理文档
+- 文档状态为 `DISABLED` 时不允许处理
+
+### 14. 重处理文档
+
+```http
+POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/reprocess
+```
+
+当前实现与 `/process` 复用同一条处理链路；重新处理时会先删除旧 chunk，再重新生成。
 
 ## 已验证结果
 
@@ -365,6 +486,9 @@ POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/process
 8. 原始文件可保存到本地目录
 9. 同知识库重复文件会被拦截
 10. Redis 探针接口可完成一次最小读写
+11. 文档处理集成测试可真实写入 `document_chunk`
+12. MyBatis-Plus 自动填充 `created_at / updated_at` 已验证生效
+13. MyBatis-Plus 分页查询已通过单测与启动验证
 
 ## 已实现的工程约束
 
@@ -391,6 +515,17 @@ POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/process
 当前已经提供 `indexingExecutor`，为后续异步解析、切块、索引任务预留执行器。
 
 实现见 [ExecutorConfig.java](/root/workspace/rag-system/src/main/java/com/example/rag/config/ExecutorConfig.java:1)。
+
+### 持久层约束
+
+当前持久层已经明确切到 MyBatis-Plus，不再混用 JPA：
+
+- `mapper` 只做数据库原子访问
+- `persistence` 负责组合型查询和持久化语义封装
+- `persistence/entity` 明确表示数据库持久化对象
+- `config/MybatisPlusConfig.java` 同时维护分页插件和审计时间自动填充
+
+当前不会再在 service 里手工维护 `createdAt / updatedAt`，统一交给 MyBatis-Plus 自动填充。
 
 ## 下一步
 

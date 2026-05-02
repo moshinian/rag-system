@@ -1,11 +1,16 @@
 package com.example.rag.controller;
 
 import com.example.rag.common.ApiResponse;
+import com.example.rag.model.response.DocumentChunkResponse;
+import com.example.rag.model.response.DocumentDetailResponse;
 import com.example.rag.model.response.DocumentProcessResponse;
+import com.example.rag.model.response.DocumentSummaryResponse;
 import com.example.rag.model.response.DocumentUploadResponse;
+import com.example.rag.model.response.PageResponse;
 import com.example.rag.service.DocumentProcessingService;
 import com.example.rag.service.DocumentService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,6 +39,48 @@ public class DocumentController {
         this.documentProcessingService = documentProcessingService;
     }
 
+    /** 分页查询知识库下的文档。 */
+    @GetMapping
+    public ApiResponse<PageResponse<DocumentSummaryResponse>> list(@PathVariable String kbCode,
+                                                                  @RequestParam(value = "status", required = false) String status,
+                                                                  @RequestParam(value = "pageNo", required = false) Long pageNo,
+                                                                  @RequestParam(value = "pageSize", required = false) Long pageSize,
+                                                                  HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        PageResponse<DocumentSummaryResponse> response = documentService.listDocuments(kbCode, status, pageNo, pageSize);
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 查询文档详情。 */
+    @GetMapping("/{documentCode}")
+    public ApiResponse<DocumentDetailResponse> get(@PathVariable String kbCode,
+                                                   @PathVariable String documentCode,
+                                                   HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        DocumentDetailResponse response = documentService.getDocument(kbCode, documentCode);
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 禁用文档。 */
+    @PostMapping("/{documentCode}/disable")
+    public ApiResponse<DocumentDetailResponse> disable(@PathVariable String kbCode,
+                                                       @PathVariable String documentCode,
+                                                       HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        DocumentDetailResponse response = documentService.disableDocument(kbCode, documentCode);
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 查询文档的全部 chunk。 */
+    @GetMapping("/{documentCode}/chunks")
+    public ApiResponse<java.util.List<DocumentChunkResponse>> listChunks(@PathVariable String kbCode,
+                                                                         @PathVariable String documentCode,
+                                                                         HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        java.util.List<DocumentChunkResponse> response = documentService.listDocumentChunks(kbCode, documentCode);
+        return ApiResponse.success(response, requestId);
+    }
+
     /** 上传原始文档。 */
     @PostMapping("/upload")
     public ApiResponse<DocumentUploadResponse> upload(@PathVariable String kbCode,
@@ -54,6 +101,17 @@ public class DocumentController {
                                                         @PathVariable String documentCode,
                                                         @RequestParam(value = "operator", required = false) String operator,
                                                         HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        DocumentProcessResponse response = documentProcessingService.process(kbCode, documentCode, operator);
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 重新处理已上传文档。 */
+    @PostMapping("/{documentCode}/reprocess")
+    public ApiResponse<DocumentProcessResponse> reprocess(@PathVariable String kbCode,
+                                                          @PathVariable String documentCode,
+                                                          @RequestParam(value = "operator", required = false) String operator,
+                                                          HttpServletRequest request) {
         String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
         DocumentProcessResponse response = documentProcessingService.process(kbCode, documentCode, operator);
         return ApiResponse.success(response, requestId);
