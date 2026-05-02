@@ -52,6 +52,10 @@ public class DocumentService {
             "txt", "text/plain",
             "pdf", "application/pdf"
     );
+    private static final Set<String> GENERIC_MEDIA_TYPES = Set.of(
+            "application/octet-stream",
+            "binary/octet-stream"
+    );
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
@@ -251,7 +255,7 @@ public class DocumentService {
      * 解析媒体类型。
      *
      * 优先使用 multipart 自带的 content-type；
-     * 如果客户端没有传，则退回到基于扩展名的默认媒体类型。
+     * 如果客户端没有传，或者只传了通用二进制类型，则退回到基于扩展名的默认媒体类型。
      */
     private String resolveMediaType(MultipartFile file, String fileType) {
         String contentType = trimToNull(file.getContentType());
@@ -261,7 +265,7 @@ public class DocumentService {
                     ? contentType.substring(0, parameterIndex)
                     : contentType;
             String mediaType = normalized.trim().toLowerCase(Locale.ROOT);
-            if (!mediaType.isEmpty()) {
+            if (!mediaType.isEmpty() && !GENERIC_MEDIA_TYPES.contains(mediaType)) {
                 return mediaType;
             }
         }

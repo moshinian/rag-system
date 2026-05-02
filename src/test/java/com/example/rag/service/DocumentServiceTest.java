@@ -152,6 +152,41 @@ class DocumentServiceTest {
     }
 
     @Test
+    void uploadShouldFallbackWhenMultipartContentTypeIsGenericBinary() throws Exception {
+        // curl -F 这类客户端可能把 markdown 作为通用二进制上传，此时应退回扩展名判断。
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "notes.md",
+                "application/octet-stream",
+                "# note".getBytes()
+        );
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.existsInKnowledgeBaseByContentHash(eq(100L), any())).thenReturn(false);
+        when(snowflakeIdGenerator.nextId()).thenReturn(1001L);
+        when(localFileStorageService.store(any(), any(), any(), any(), any()))
+                .thenReturn(Path.of("data/uploads/settlement-kb/20260430/DOC-1001_notes.md"));
+        when(documentRepository.insert(any())).thenAnswer(invocation -> {
+            DocumentEntity entity = invocation.getArgument(0);
+            OffsetDateTime now = OffsetDateTime.now();
+            entity.setCreatedAt(now);
+            entity.setUpdatedAt(now);
+            return entity;
+        });
+
+        DocumentUploadResponse response = documentService.upload(
+                "settlement-kb",
+                file,
+                null,
+                null,
+                null,
+                null
+        );
+
+        assertThat(response.mediaType()).isEqualTo("text/markdown");
+    }
+
+    @Test
     void uploadShouldRejectUnsupportedFileType() {
         // 当前阶段只允许 md / txt / pdf，其他类型要直接拒绝。
         MockMultipartFile file = new MockMultipartFile(
