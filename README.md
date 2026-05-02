@@ -16,7 +16,9 @@
 4. 线程池基础配置
 5. Redis 最小读写验证接口
 
-当前状态已经不再停留在 Day 3 或 Day 4，而是已经进入 Day 5 的首版文档处理阶段。
+当前状态已经不再停留在 Day 3 或 Day 4。
+
+**第 1 周的目标已经完成收口，项目已经具备可运行、可联调、可讲清楚的文档入库主链路。**
 
 这份 README 只描述当前仓库已经实现的内容，以及下一步明确要做的事情，不把规划写成现状。
 
@@ -68,6 +70,8 @@
 27. `indexing_task` 独立处理记录已落地
 28. 基础线程池 `indexingExecutor`
 29. Actuator 基础接入
+30. `md / txt / pdf` 三类样本文档已完成 Day 6 真实联调验证
+31. Markdown `media_type` 联调问题已发现并修正
 
 当前还没完成的能力：
 
@@ -76,6 +80,24 @@
 3. 大模型问答链路
 4. 引用来源展示
 5. 评测集与效果评测
+
+## 第 1 周完成情况
+
+结合 [work/week1.md](/root/workspace/rag-system/work/week1.md) 的拆分目标，当前第 1 周已经覆盖并落实的内容包括：
+
+1. Day 1：项目边界、目标和 README 大纲已明确
+2. Day 2：核心表与状态模型已设计并落地到 Flyway
+3. Day 3：Spring Boot、PostgreSQL、Redis、统一响应、异常处理、健康检查已完成
+4. Day 4：文档上传、本地落盘、去重、元数据入库已完成
+5. Day 5：`md / txt / pdf` 第一版解析、固定窗口切块、chunk 入库、`indexing_task` 记录已完成
+6. Day 6：真实接口联调、字段校验、样本文档验证、问题修正已完成
+7. Day 7：README、阶段文档和架构图收口
+
+这意味着第 1 周的主线目标已经达成：
+
+```text
+项目骨架 -> 数据模型 -> 上传 -> 解析 -> 切块 -> chunk 入库 -> 联调验收 -> 文档沉淀
+```
 
 ## 技术选型
 
@@ -305,6 +327,21 @@ rag-system/
 
 - `ACTIVE`
 - `DISABLED`
+
+## 联调记录
+
+当前已经完成过一轮面向 `day6-kb` 的真实接口联调，覆盖 `md / txt / pdf` 三类样本：
+
+1. Markdown 样本处理成功，`status = INDEXED`，`chunkCount = 2`
+2. txt 样本处理成功，`status = INDEXED`，`chunkCount = 1`
+3. PDF 样本处理成功，`status = INDEXED`，`chunkCount = 1`
+4. `document_chunk` 与 `indexing_task` 都已在 PostgreSQL 中完成真实落库
+
+这轮联调中还发现并修正了一个真实问题：
+
+1. Markdown 经 `curl -F` 上传时，客户端可能上送通用 `application/octet-stream`
+2. 服务现在会把这类通用二进制类型回退到扩展名判断
+3. 因此 `.md` 文件现在能正确落成 `text/markdown`
 
 ## 本地运行
 
