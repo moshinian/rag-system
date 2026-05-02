@@ -5,14 +5,17 @@ import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.ingestion.chunk.FixedWindowChunker;
 import com.example.rag.ingestion.parser.MarkdownDocumentTextParser;
 import com.example.rag.ingestion.parser.PlainTextDocumentTextParser;
+import com.example.rag.ingestion.parser.PdfDocumentTextParser;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.DocumentProcessResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
 import com.example.rag.persistence.DocumentRepository;
+import com.example.rag.persistence.IndexingTaskRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.DocumentChunkEntity;
 import com.example.rag.persistence.entity.DocumentEntity;
+import com.example.rag.persistence.entity.IndexingTaskEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -25,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.List;
 import java.util.Optional;
 
@@ -50,6 +54,9 @@ class DocumentProcessingServiceTest {
 
     @Mock
     private KnowledgeBaseRepository knowledgeBaseRepository;
+
+    @Mock
+    private IndexingTaskRepository indexingTaskRepository;
 
     @Mock
     private SnowflakeIdGenerator snowflakeIdGenerator;
@@ -83,12 +90,15 @@ class DocumentProcessingServiceTest {
             entity.setUpdatedAt(OffsetDateTime.now());
             return entity;
         });
-        when(snowflakeIdGenerator.nextId()).thenReturn(11L, 12L, 13L, 14L, 15L);
+        when(indexingTaskRepository.insert(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(indexingTaskRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        mockSnowflakeSequence(10L);
         when(documentChunkRepository.batchInsert(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         DocumentProcessingService service = new DocumentProcessingService(
                 documentRepository,
                 documentChunkRepository,
+                indexingTaskRepository,
                 knowledgeBaseRepository,
                 List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
                 new FixedWindowChunker(),
@@ -108,14 +118,17 @@ class DocumentProcessingServiceTest {
         assertThat(captor.getValue().get(0).getTitle()).isEqualTo("Settlement Overview");
         assertThat(captor.getValue().get(0).getMetadataJson()).contains("\"parser\":\"markdown\"");
         assertThat(document.getStatus()).isEqualTo(DocumentStatus.INDEXED);
+        ArgumentCaptor<IndexingTaskEntity> taskCaptor = ArgumentCaptor.forClass(IndexingTaskEntity.class);
+        verify(indexingTaskRepository).updateById(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getChunkCount()).isGreaterThan(0);
+        assertThat(taskCaptor.getValue().getParserName()).isEqualTo("markdown");
     }
 
     @Test
-    void processShouldMarkDocumentFailedWhenParserUnavailable() throws Exception {
-        // 当前还没支持 PDF 解析，所以应该明确进入 FAILED。
+    void processShouldParsePdfAndPersistChunks() throws Exception {
         DocumentEntity document = createDocument("pdf");
         Path file = tempDir.resolve("sample.pdf");
-        Files.writeString(file, "fake");
+        Files.copy(Path.of("work/samples/day4-upload-sample.pdf"), file);
         document.setStoragePath(file.toString());
 
         when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb"))
@@ -126,21 +139,27 @@ class DocumentProcessingServiceTest {
             entity.setUpdatedAt(OffsetDateTime.now());
             return entity;
         });
+        when(indexingTaskRepository.insert(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(indexingTaskRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        mockSnowflakeSequence(10L);
+        when(documentChunkRepository.batchInsert(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         DocumentProcessingService service = new DocumentProcessingService(
                 documentRepository,
                 documentChunkRepository,
+                indexingTaskRepository,
                 knowledgeBaseRepository,
-                List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
+                List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser(), new PdfDocumentTextParser()),
                 new FixedWindowChunker(),
                 snowflakeIdGenerator,
                 new ObjectMapper()
         );
 
-        assertThatThrownBy(() -> service.process("settlement-kb", "DOC-1", "tester"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("No parser available");
-        assertThat(document.getStatus()).isEqualTo(DocumentStatus.FAILED);
+        DocumentProcessResponse response = service.process("settlement-kb", "DOC-1", "tester");
+
+        assertThat(response.status()).isEqualTo("INDEXED");
+        assertThat(response.chunkCount()).isGreaterThan(0);
+        assertThat(response.parserName()).isEqualTo("pdfbox");
     }
 
     @Test
@@ -155,6 +174,7 @@ class DocumentProcessingServiceTest {
         DocumentProcessingService service = new DocumentProcessingService(
                 documentRepository,
                 documentChunkRepository,
+                indexingTaskRepository,
                 knowledgeBaseRepository,
                 List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
                 new FixedWindowChunker(),
@@ -191,5 +211,10 @@ class DocumentProcessingServiceTest {
         knowledgeBase.setName("Settlement");
         knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
         return knowledgeBase;
+    }
+
+    private void mockSnowflakeSequence(long startValue) {
+        AtomicLong sequence = new AtomicLong(startValue);
+        when(snowflakeIdGenerator.nextId()).thenAnswer(invocation -> sequence.getAndIncrement());
     }
 }

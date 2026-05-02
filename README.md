@@ -62,19 +62,20 @@
 21. Day 4 样本文档已补齐 `md / txt / pdf`
 22. `document_chunk` 表、实体与 Repository 已落地
 23. `md / txt` 第一版解析已落地
-24. 第一版固定长度切块已落地
-25. 文档处理接口 `/process` 已接入
-26. 基础线程池 `indexingExecutor`
-27. Actuator 基础接入
+24. `pdf` 第一版基础解析已落地
+25. 第一版固定长度切块已落地
+26. 文档处理接口 `/process` 已接入
+27. `indexing_task` 独立处理记录已落地
+28. 基础线程池 `indexingExecutor`
+29. Actuator 基础接入
 
 当前还没完成的能力：
 
-1. PDF 解析
-2. 异步索引任务编排
-3. 向量化与检索
-4. 大模型问答链路
-5. 引用来源展示
-6. 评测集与效果评测
+1. 异步索引任务编排
+2. 向量化与检索
+3. 大模型问答链路
+4. 引用来源展示
+5. 评测集与效果评测
 
 ## 技术选型
 
@@ -95,6 +96,43 @@
 - `rag.embedding.*`
 - `rag.llm.*`
 - 检索与生成模块占位
+
+## 架构图
+
+```mermaid
+flowchart LR
+    Client[Client / cURL / Future UI] --> KB[KnowledgeBaseController]
+    Client --> DOC[DocumentController]
+    Client --> HEALTH[HealthController]
+
+    KB --> KBSVC[KnowledgeBaseService]
+    DOC --> DSVC[DocumentService]
+    DOC --> PSVC[DocumentProcessingService]
+    HEALTH --> HSVC[SystemHealthService]
+
+    DSVC --> STORAGE[LocalFileStorageService]
+    DSVC --> KBREPO[KnowledgeBaseRepository]
+    DSVC --> DREPO[DocumentRepository]
+
+    PSVC --> PARSER[DocumentTextParser<br/>Markdown / Text / PDF]
+    PSVC --> CHUNKER[FixedWindowChunker]
+    PSVC --> DREPO
+    PSVC --> CHREPO[DocumentChunkRepository]
+    PSVC --> ITREPO[IndexingTaskRepository]
+    PSVC --> KBREPO
+
+    KBREPO --> KBM[KnowledgeBaseMapper]
+    DREPO --> DM[DocumentMapper]
+    CHREPO --> CHM[DocumentChunkMapper]
+    ITREPO --> ITM[IndexingTaskMapper]
+
+    KBM --> PG[(PostgreSQL)]
+    DM --> PG
+    CHM --> PG
+    ITM --> PG
+    STORAGE --> FS[(Local File Storage)]
+    HSVC --> REDIS[(Redis)]
+```
 
 ## 当前架构
 
@@ -156,14 +194,15 @@ rag-system/
 │       ├── V1__init_schema.sql
 │       ├── V2__drop_serial_defaults.sql
 │       ├── V3__add_document_media_type.sql
-│       └── V4__create_document_chunk_table.sql
+│       ├── V4__create_document_chunk_table.sql
+│       └── V5__create_indexing_task_table.sql
 ├── data/                      # 本地持久化目录（已被 .gitignore 忽略）
 └── work/                      # 过程文档与阶段记录
 ```
 
 ## 数据模型
 
-当前 Flyway 脚本已落地三张表：
+当前 Flyway 脚本已落地四张表：
 
 ### `knowledge_base`
 
@@ -219,6 +258,22 @@ rag-system/
 - `metadata_json`
 - `status`
 
+### `indexing_task`
+
+用于独立记录一次文档处理任务的执行结果。
+
+核心字段：
+
+- `knowledge_base_id`
+- `document_id`
+- `task_type`
+- `status`
+- `parser_name`
+- `chunk_count`
+- `error_message`
+- `started_at`
+- `finished_at`
+
 当前索引：
 
 - `knowledge_base.kb_code` 唯一约束
@@ -228,6 +283,8 @@ rag-system/
 - `uk_document_chunk_document_index`
 - `idx_document_chunk_kb_document`
 - `idx_document_chunk_document_status`
+- `idx_indexing_task_document_created`
+- `idx_indexing_task_status`
 
 当前文档状态枚举：
 

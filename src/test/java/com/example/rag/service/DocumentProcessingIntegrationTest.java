@@ -7,7 +7,9 @@ import com.example.rag.model.response.DocumentProcessResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
 import com.example.rag.persistence.DocumentRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
+import com.example.rag.persistence.IndexingTaskRepository;
 import com.example.rag.persistence.entity.DocumentEntity;
+import com.example.rag.persistence.entity.IndexingTaskEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,6 +42,9 @@ class DocumentProcessingIntegrationTest {
 
     @Autowired
     private DocumentChunkRepository documentChunkRepository;
+
+    @Autowired
+    private IndexingTaskRepository indexingTaskRepository;
 
     @Autowired
     private SnowflakeIdGenerator snowflakeIdGenerator;
@@ -103,5 +108,9 @@ class DocumentProcessingIntegrationTest {
                 .get()
                 .extracting(DocumentEntity::getStatus)
                 .isEqualTo(DocumentStatus.INDEXED);
+        assertThat(indexingTaskRepository.findByDocumentIdOrderByCreatedAtDesc(documentId))
+                .extracting(IndexingTaskEntity::getChunkCount)
+                .first()
+                .isEqualTo(response.chunkCount());
     }
 }

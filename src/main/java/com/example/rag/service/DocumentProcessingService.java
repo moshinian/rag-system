@@ -8,13 +8,16 @@ import com.example.rag.ingestion.parser.DocumentTextParser;
 import com.example.rag.ingestion.parser.ParsedDocument;
 import com.example.rag.model.enums.DocumentChunkStatus;
 import com.example.rag.model.enums.DocumentStatus;
+import com.example.rag.model.enums.IndexingTaskStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.DocumentProcessResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
 import com.example.rag.persistence.DocumentRepository;
+import com.example.rag.persistence.IndexingTaskRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.DocumentChunkEntity;
 import com.example.rag.persistence.entity.DocumentEntity;
+import com.example.rag.persistence.entity.IndexingTaskEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +26,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +42,7 @@ public class DocumentProcessingService {
 
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
+    private final IndexingTaskRepository indexingTaskRepository;
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final List<DocumentTextParser> documentTextParsers;
     private final FixedWindowChunker fixedWindowChunker;
@@ -46,6 +51,7 @@ public class DocumentProcessingService {
 
     public DocumentProcessingService(DocumentRepository documentRepository,
                                      DocumentChunkRepository documentChunkRepository,
+                                     IndexingTaskRepository indexingTaskRepository,
                                      KnowledgeBaseRepository knowledgeBaseRepository,
                                      List<DocumentTextParser> documentTextParsers,
                                      FixedWindowChunker fixedWindowChunker,
@@ -53,6 +59,7 @@ public class DocumentProcessingService {
                                      ObjectMapper objectMapper) {
         this.documentRepository = documentRepository;
         this.documentChunkRepository = documentChunkRepository;
+        this.indexingTaskRepository = indexingTaskRepository;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentTextParsers = documentTextParsers;
         this.fixedWindowChunker = fixedWindowChunker;
@@ -79,6 +86,7 @@ public class DocumentProcessingService {
             throw new BusinessException("Document is disabled and cannot be processed: " + documentCode);
         }
 
+        IndexingTaskEntity task = createRunningTask(document, operator);
         try {
             // 先进入 PARSING，便于观察当前处理阶段。
             updateStatus(document, DocumentStatus.PARSING, null);
@@ -102,6 +110,7 @@ public class DocumentProcessingService {
             documentChunkRepository.batchInsert(chunks);
 
             updateStatus(document, DocumentStatus.INDEXED, null);
+            markTaskSucceeded(task, parsedDocument.parserName(), chunks.size());
             return new DocumentProcessResponse(
                     document.getId(),
                     document.getDocumentCode(),
@@ -115,6 +124,7 @@ public class DocumentProcessingService {
         } catch (RuntimeException ex) {
             // 任一阶段失败都统一落到 FAILED，方便后续排障和重试。
             markFailed(document, ex.getMessage());
+            markTaskFailed(task, ex.getMessage());
             throw ex;
         }
     }
@@ -210,6 +220,37 @@ public class DocumentProcessingService {
         documentRepository.updateById(document);
     }
 
+    /** 创建一条运行中的切块任务记录。 */
+    private IndexingTaskEntity createRunningTask(DocumentEntity document, String operator) {
+        IndexingTaskEntity task = new IndexingTaskEntity();
+        task.setId(snowflakeIdGenerator.nextId());
+        task.setKnowledgeBaseId(document.getKnowledgeBaseId());
+        task.setDocumentId(document.getId());
+        task.setTaskType("DOCUMENT_PROCESS");
+        task.setStatus(IndexingTaskStatus.RUNNING);
+        task.setStartedAt(OffsetDateTime.now());
+        task.setCreatedBy(normalizeOperator(operator));
+        return indexingTaskRepository.insert(task);
+    }
+
+    /** 把任务标记为成功。 */
+    private void markTaskSucceeded(IndexingTaskEntity task, String parserName, int chunkCount) {
+        task.setStatus(IndexingTaskStatus.SUCCEEDED);
+        task.setParserName(parserName);
+        task.setChunkCount(chunkCount);
+        task.setErrorMessage(null);
+        task.setFinishedAt(OffsetDateTime.now());
+        indexingTaskRepository.updateById(task);
+    }
+
+    /** 把任务标记为失败。 */
+    private void markTaskFailed(IndexingTaskEntity task, String message) {
+        task.setStatus(IndexingTaskStatus.FAILED);
+        task.setErrorMessage(truncate(message));
+        task.setFinishedAt(OffsetDateTime.now());
+        indexingTaskRepository.updateById(task);
+    }
+
     /** 截断错误信息，避免超过数据库字段长度。 */
     private String truncate(String message) {
         if (message == null) {
@@ -219,6 +260,15 @@ public class DocumentProcessingService {
             return message;
         }
         return message.substring(0, 1024);
+    }
+
+    /** 没有传入操作人时，统一记为 system。 */
+    private String normalizeOperator(String operator) {
+        if (operator == null) {
+            return "system";
+        }
+        String normalized = operator.trim();
+        return normalized.isEmpty() ? "system" : normalized;
     }
 
     /** 校验知识库是否仍处于启用状态。 */
