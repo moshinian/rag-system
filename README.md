@@ -623,16 +623,19 @@ POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/reprocess
 
 ## 下一步
 
-当前主链路已经推进到文档处理阶段，下一阶段应该继续补齐第 1 周尾项并进入检索主线：
+Week 1 已完成并完成收口，项目现在已经正式进入 Week 2。
 
-1. 补 PDF 解析
-2. 接入 embedding 与向量存储
-3. 实现基础检索链路
-4. 准备问答接口和引用来源展示
-5. 开始评测与效果优化
+下一阶段的重点，不再是继续补上传和切块，而是把问答主链路真正跑通：
+
+1. 接入 embedding 模型
+2. 用 `pgvector` 落地向量存储
+3. 实现基础 TopK 检索链路
+4. 设计问答接口、Prompt 模板和引用来源返回
+5. 保存问答记录并完成 Week 2 首轮联调
 
 更详细的阶段记录可参考：
 
 1. [work/current-status.md](/root/workspace/rag-system/work/current-status.md)
 2. [work/week1.md](/root/workspace/rag-system/work/week1.md)
-3. [work/work day5.md](/root/workspace/rag-system/work/work%20day5.md)
+3. [work/week2.md](/root/workspace/rag-system/work/week2.md)
+4. [work/work day8.md](/root/workspace/rag-system/work/work%20day8.md)
