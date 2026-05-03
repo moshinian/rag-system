@@ -10,10 +10,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "rag.llm")
 public class RagLlmProperties {
 
-    private String baseUrl = "http://localhost:8000/v1";
-    private String apiKey = "change-me";
-    private String chatModel = "gpt-4o-mini";
-    private String chatCompletionPath = "/chat/completions";
-    private Double temperature = 0.2D;
-    private Integer maxOutputTokens = 1200;
+    private ChatProperties chat = new ChatProperties();
+
+    @Data
+    public static class ChatProperties {
+
+        private String baseUrl = "https://api.deepseek.com";
+        private String apiKey = "${DEEPSEEK_API_KEY}";
+        private String model = "deepseek-v4-pro";
+        private String chatPath = "/chat/completions";
+        private Double temperature = 0.2D;
+        private Integer maxOutputTokens = 1200;
+    }
 }

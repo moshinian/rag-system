@@ -86,3 +86,44 @@ Day 11 第一版 prompt 先遵守下面约束：
 这意味着 Day 12 就可以直接进入：
 
 **引用来源结构化返回。**
+
+## Day 11 实际完成情况
+
+今天已经落地并验证：
+
+1. 新增 `POST /api/knowledge-bases/{kbCode}/qa/ask`
+2. 新增 `QaService`，只负责编排问答流程
+3. 新增 `PromptBuilder`，负责拼装 system prompt 和 user prompt
+4. 新增 `ChatClient`，基于 OpenAI-compatible 配置调用 chat completion
+5. `rag.llm.chat.*` 已支持通过 `base-url / api-key / model / chat-path` 切换提供方
+6. `QaServiceTest` 已通过
+7. DeepSeek `deepseek-v4-pro` 真实联调已成功
+
+## Day 11 联调结果
+
+本次真实联调验证了下面这条链路：
+
+**问题输入 -> query embedding -> TopK 检索 -> Prompt 组装 -> DeepSeek chat completion -> 返回答案**
+
+联调使用：
+
+1. 知识库：`day6-kb`
+2. 问题：`这份文档主要讲了什么？`
+3. `topK = 3`
+4. chat model：`deepseek-v4-pro`
+
+联调结果：
+
+1. `/qa/ask` 已成功返回 `chatModel = deepseek-v4-pro`
+2. 返回结果已包含 `question / answer / topK / chatModel / retrievalResults`
+3. 当前模型已基于召回内容返回可用摘要答案
+4. 问答约束“只基于检索内容回答”已生效
+
+## 当前默认配置
+
+Day 11 完成后，仓库默认 LLM 配置已经切到 DeepSeek OpenAI-compatible 接口：
+
+1. `base-url = https://api.deepseek.com`
+2. `chat-path = /chat/completions`
+3. `model = deepseek-v4-pro`
+4. `api-key` 通过环境变量 `DEEPSEEK_API_KEY` 注入

@@ -473,9 +473,29 @@ rag:
   retrieval:
     vector-store: pgvector
     default-top-k: 5
+  llm:
+    chat:
+      base-url: http://localhost:8000/v1
+      api-key: change-me
+      model: deepseek-v4-pro
+      chat-path: /chat/completions
+      temperature: 0.2
+      max-output-tokens: 1200
 ```
 
 `application-local.yml` 负责本地环境增强配置，包括更细的日志级别。
+
+如果切换到 DeepSeek，一份可用示例是：
+
+```yaml
+rag:
+  llm:
+    chat:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY}
+      model: deepseek-v4-pro
+      chat-path: /chat/completions
+```
 
 ## 当前接口
 
@@ -753,6 +773,73 @@ curl --noproxy '*' -s -X POST \
 3. 每条结果都带有 `documentCode / chunkIndex / content / score`
 4. `embeddingModel` 与当前配置一致
 
+### 18. 执行第一版问答
+
+```http
+POST /api/knowledge-bases/{kbCode}/qa/ask
+Content-Type: application/json
+```
+
+请求示例：
+
+```json
+{
+  "question": "这份文档主要讲了什么？",
+  "topK": 3
+}
+```
+
+这个接口负责：
+
+1. 对问题生成 query embedding
+2. 执行 TopK 相似度检索
+3. 将检索结果拼成 prompt
+4. 调用 OpenAI-compatible chat completion
+5. 返回最终答案和基础召回结果
+
+当前返回结果至少包含：
+
+1. `question`
+2. `answer`
+3. `topK`
+4. `chatModel`
+5. `retrievalResults`
+
+约束说明：
+
+1. 只基于检索内容回答
+2. 不做多轮对话
+3. 不做引用格式化
+
+## Day 11 联调样例
+
+如果要用 DeepSeek 做本地联调，可以通过运行时配置覆盖：
+
+```bash
+RAG_LLM_CHAT_BASE_URL=https://api.deepseek.com
+RAG_LLM_CHAT_CHAT_PATH=/chat/completions
+RAG_LLM_CHAT_API_KEY=${DEEPSEEK_API_KEY}
+RAG_LLM_CHAT_MODEL=deepseek-v4-pro
+```
+
+然后调用：
+
+```bash
+curl --noproxy '*' -s -X POST \
+  http://127.0.0.1:8080/api/knowledge-bases/day6-kb/qa/ask \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "question": "这份文档主要讲了什么？",
+    "topK": 3
+  }'
+```
+
+当前已经验证过一次真实结果：
+
+1. `chatModel = deepseek-v4-pro`
+2. 返回结果中包含 `retrievalResults`
+3. `deepseek-v4-pro` 已基于检索内容返回可用回答
+
 ## 已验证结果
 
 当前仓库已经做过实际验证：
@@ -776,6 +863,8 @@ curl --noproxy '*' -s -X POST \
 17. `document_chunk.embedding_vector` 已验证非空
 18. `mvn -q -DskipTests compile` 已通过
 19. Day 10 `/qa/retrieve` 第一版接口已落地
+20. Day 11 `/qa/ask` 第一版接口已落地
+21. DeepSeek `deepseek-v4-pro` 已完成真实联调
 
 ## 已实现的工程约束
 
@@ -816,15 +905,14 @@ curl --noproxy '*' -s -X POST \
 
 ## 下一步
 
-Week 1 已完成并完成收口，Week 2 当前已经推进到 Day 10 完成。
+Week 1 已完成并完成收口，Week 2 当前已经推进到 Day 11 完成，Day 12 已准备开始。
 
-下一步的重点已经非常明确，不再是补 embedding、向量写库或基础检索，而是进入问答组装：
+下一步的重点已经非常明确，不再是补 embedding、向量写库、基础检索或最小问答闭环，而是进入引用来源结构化返回：
 
-1. 设计 Day 11 Prompt 模板
-2. 基于 Day 10 检索结果拼装上下文
-3. 接入本地 OpenAI-compatible chat completion
-4. 返回第一版回答结果
-5. 再补引用来源结构和问答记录
+1. 设计 Day 12 引用来源返回结构
+2. 在问答结果中绑定文档、chunk、片段位置
+3. 再补问答记录
+4. 最后做评测与优化
 
 更详细的阶段记录可参考：
 

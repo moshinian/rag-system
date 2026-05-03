@@ -55,12 +55,13 @@ rag:
     embedding-path: /embeddings
     batch-size: 16
   llm:
-    base-url: http://localhost:8000/v1
-    api-key: change-me
-    chat-model: gpt-4o-mini
-    chat-completion-path: /chat/completions
-    temperature: 0.2
-    max-output-tokens: 1200
+    chat:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY:change-me}
+      model: deepseek-v4-pro
+      chat-path: /chat/completions
+      temperature: 0.2
+      max-output-tokens: 1200
   retrieval:
     vector-store: pgvector
     default-top-k: 5

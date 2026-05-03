@@ -1,9 +1,12 @@
 package com.example.rag.controller;
 
 import com.example.rag.common.ApiResponse;
+import com.example.rag.model.request.QaAskRequest;
 import com.example.rag.model.request.QuestionRetrievalRequest;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
+import com.example.rag.model.response.QaAnswerResponse;
+import com.example.rag.service.QaService;
 import com.example.rag.service.QuestionAnsweringService;
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,9 +27,12 @@ import static com.example.rag.config.RequestIdFilter.REQUEST_ID_ATTRIBUTE;
 public class QuestionAnsweringController {
 
     private final QuestionAnsweringService questionAnsweringService;
+    private final QaService qaService;
 
-    public QuestionAnsweringController(QuestionAnsweringService questionAnsweringService) {
+    public QuestionAnsweringController(QuestionAnsweringService questionAnsweringService,
+                                       QaService qaService) {
         this.questionAnsweringService = questionAnsweringService;
+        this.qaService = qaService;
     }
 
     /** 查看指定知识库的问答链路就绪状态。 */
@@ -45,6 +51,20 @@ public class QuestionAnsweringController {
                                                            HttpServletRequest request) {
         String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
         QuestionRetrievalResponse response = questionAnsweringService.retrieve(
+                kbCode,
+                body.question(),
+                body.topK()
+        );
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 对指定知识库执行第一版问答闭环。 */
+    @PostMapping("/ask")
+    public ApiResponse<QaAnswerResponse> ask(@PathVariable String kbCode,
+                                             @Valid @RequestBody QaAskRequest body,
+                                             HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        QaAnswerResponse response = qaService.ask(
                 kbCode,
                 body.question(),
                 body.topK()
