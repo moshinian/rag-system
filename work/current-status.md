@@ -9,6 +9,7 @@
 3. Day 9 的第一版 chunk 向量写库联调
 4. Day 10 的第一版 query embedding 与 TopK 检索联调
 5. Day 11 的第一版 Prompt 组装与问答联调
+6. Day 13 的第一版问答记录持久化与历史查询联调
 
 当前项目已经不再停留在“能上传、能切块”的阶段，而是：
 
@@ -73,6 +74,8 @@
 14. Java 侧已新增 `POST /api/knowledge-bases/{kbCode}/qa/ask`
 15. `QaService / PromptBuilder / ChatClient` 已落地
 16. `rag.llm.chat.*` 已支持基于 OpenAI-compatible 协议切换不同提供方
+17. `chat_session / chat_message` 已落地
+18. `GET /api/knowledge-bases/{kbCode}/qa/history` 已落地
 
 ## 已验证
 
@@ -98,6 +101,8 @@
 18. `POST /qa/retrieve` 已在 `day6-kb` 上返回真实 TopK 结果
 19. `mvn -q -Dtest=QaServiceTest,QuestionAnsweringServiceTest test` 已通过
 20. `POST /qa/ask` 已通过 DeepSeek `deepseek-v4-pro` 完成真实联调
+21. `POST /qa/ask` 已验证成功落库
+22. `GET /qa/history` 已验证可以查回真实问答记录
 
 ## 当前未完成
 
@@ -105,10 +110,6 @@
 
 1. 向量回填的重复执行策略还需要再验证
 2. 面向知识库级别或批量文档级别的 embedding 编排还未开始
-
-### 检索与问答
-
-1. 问答记录未开始
 
 ### 工程化补充
 
@@ -121,15 +122,15 @@
 
 当前阶段的真实优先级已经非常明确：
 
-1. Day 12 第一版来源结构已经接入 `/qa/ask`
-2. 下一步进入 Day 13 问答记录持久化
+1. Day 13 第一版问答记录持久化已经接入
+2. 下一步进入 Day 14 端到端联调验收
 3. 之后再补评测与优化
 
 ## 下一步建议
 
 建议按下面顺序继续：
 
-1. 设计 Day 13 问答记录结构
-2. 保存问题、答案、来源和模型信息
-3. 提供历史查询能力
+1. 进行 Day 14 端到端联调验收
+2. 检查召回质量、答案可读性和历史记录完整性
+3. 记录问题和优化项
 4. 最后补评测与优化

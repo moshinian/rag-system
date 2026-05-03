@@ -21,18 +21,22 @@ public class QaService {
     private final QuestionAnsweringService questionAnsweringService;
     private final PromptBuilder promptBuilder;
     private final ChatClient chatClient;
+    private final QaRecordService qaRecordService;
 
     public QaService(QuestionAnsweringService questionAnsweringService,
                      PromptBuilder promptBuilder,
-                     ChatClient chatClient) {
+                     ChatClient chatClient,
+                     QaRecordService qaRecordService) {
         this.questionAnsweringService = questionAnsweringService;
         this.promptBuilder = promptBuilder;
         this.chatClient = chatClient;
+        this.qaRecordService = qaRecordService;
     }
 
     /** 执行 Day 11 第一版最小问答闭环。 */
-    @Transactional(readOnly = true)
+    @Transactional
     public QaAnswerResponse ask(String kbCode, String question, Integer topK) {
+        long startedAt = System.currentTimeMillis();
         QuestionRetrievalResponse retrievalResponse = questionAnsweringService.retrieve(kbCode, question, topK);
         PromptBuilder.PromptPayload promptPayload = promptBuilder.build(
                 retrievalResponse.question(),
@@ -42,7 +46,7 @@ public class QaService {
         List<QaSourceResponse> sources = retrievalResponse.chunks().stream()
                 .map(this::toQaSourceResponse)
                 .toList();
-        return new QaAnswerResponse(
+        QaAnswerResponse answerResponse = new QaAnswerResponse(
                 retrievalResponse.question(),
                 answer,
                 retrievalResponse.topK(),
@@ -50,6 +54,8 @@ public class QaService {
                 retrievalResponse.chunks(),
                 sources
         );
+        qaRecordService.persist(kbCode, answerResponse, System.currentTimeMillis() - startedAt);
+        return answerResponse;
     }
 
     private QaSourceResponse toQaSourceResponse(RetrievedChunkResponse chunk) {

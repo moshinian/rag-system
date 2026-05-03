@@ -30,6 +30,9 @@ class QaServiceTest {
     @Mock
     private ChatClient chatClient;
 
+    @Mock
+    private QaRecordService qaRecordService;
+
     @InjectMocks
     private QaService qaService;
 
@@ -79,5 +82,6 @@ class QaServiceTest {
         assertThat(response.sources().get(0).documentCode()).isEqualTo("DOC-1");
         assertThat(response.sources().get(0).chunkId()).isEqualTo(1L);
         verify(chatClient).chat(anyString(), anyString());
+        verify(qaRecordService).persist(eq("day6-kb"), eq(response), org.mockito.ArgumentMatchers.anyLong());
     }
 }

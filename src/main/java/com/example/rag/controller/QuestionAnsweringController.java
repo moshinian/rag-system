@@ -3,9 +3,12 @@ package com.example.rag.controller;
 import com.example.rag.common.ApiResponse;
 import com.example.rag.model.request.QaAskRequest;
 import com.example.rag.model.request.QuestionRetrievalRequest;
+import com.example.rag.model.response.PageResponse;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.model.response.QaAnswerResponse;
+import com.example.rag.model.response.QaHistoryRecordResponse;
+import com.example.rag.service.QaRecordService;
 import com.example.rag.service.QaService;
 import com.example.rag.service.QuestionAnsweringService;
 import jakarta.validation.Valid;
@@ -28,11 +31,14 @@ public class QuestionAnsweringController {
 
     private final QuestionAnsweringService questionAnsweringService;
     private final QaService qaService;
+    private final QaRecordService qaRecordService;
 
     public QuestionAnsweringController(QuestionAnsweringService questionAnsweringService,
-                                       QaService qaService) {
+                                       QaService qaService,
+                                       QaRecordService qaRecordService) {
         this.questionAnsweringService = questionAnsweringService;
         this.qaService = qaService;
+        this.qaRecordService = qaRecordService;
     }
 
     /** 查看指定知识库的问答链路就绪状态。 */
@@ -69,6 +75,17 @@ public class QuestionAnsweringController {
                 body.question(),
                 body.topK()
         );
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 分页查询指定知识库的问答历史。 */
+    @GetMapping("/history")
+    public ApiResponse<PageResponse<QaHistoryRecordResponse>> history(@PathVariable String kbCode,
+                                                                      @org.springframework.web.bind.annotation.RequestParam(value = "pageNo", required = false) Long pageNo,
+                                                                      @org.springframework.web.bind.annotation.RequestParam(value = "pageSize", required = false) Long pageSize,
+                                                                      HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        PageResponse<QaHistoryRecordResponse> response = qaRecordService.listHistory(kbCode, pageNo, pageSize);
         return ApiResponse.success(response, requestId);
     }
 }

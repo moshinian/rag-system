@@ -333,6 +333,8 @@ rag-system/
 - `GET /api/knowledge-bases/{kbCode}/qa/readiness`
 - `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/embed`
 - `POST /api/knowledge-bases/{kbCode}/qa/retrieve`
+- `POST /api/knowledge-bases/{kbCode}/qa/ask`
+- `GET /api/knowledge-bases/{kbCode}/qa/history`
 
 ### `indexing_task`
 
@@ -812,6 +814,30 @@ Content-Type: application/json
 2. 不做多轮对话
 3. 不做引用格式化
 
+### 19. 查询问答历史
+
+```http
+GET /api/knowledge-bases/{kbCode}/qa/history?pageNo=1&pageSize=20
+```
+
+这个接口负责：
+
+1. 分页查询指定知识库下的问答记录
+2. 返回问题、答案、模型、来源和召回结果
+3. 支撑 Day 13 之后的历史回放和效果复盘
+
+当前返回结果至少包含：
+
+1. `sessionCode`
+2. `messageCode`
+3. `question`
+4. `answer`
+5. `chatModel`
+6. `topK`
+7. `retrievalResults`
+8. `sources`
+9. `createdAt`
+
 ## Day 11 联调样例
 
 如果要用 DeepSeek 做本地联调，可以通过运行时配置覆盖：
@@ -842,6 +868,34 @@ curl --noproxy '*' -s -X POST \
 3. 返回结果中包含 `sources`
 4. `deepseek-v4-pro` 已基于检索内容返回可用回答
 
+## Day 13 联调样例
+
+先执行一次问答：
+
+```bash
+curl --noproxy '*' -s -X POST \
+  http://127.0.0.1:8080/api/knowledge-bases/day6-kb/qa/ask \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "question": "这份文档主要讲了什么？",
+    "topK": 3
+  }'
+```
+
+再查询历史：
+
+```bash
+curl --noproxy '*' -s \
+  'http://127.0.0.1:8080/api/knowledge-bases/day6-kb/qa/history?pageNo=1&pageSize=5'
+```
+
+当前已经验证过一次真实结果：
+
+1. `/qa/ask` 成功后会写入 `chat_session / chat_message`
+2. `/qa/history` 能查回刚写入的问题和答案
+3. 历史结果里包含 `retrievalResults` 和 `sources`
+4. 历史结果里包含 `latencyMs` 和 `promptTemplate`
+
 ## 已验证结果
 
 当前仓库已经做过实际验证：
@@ -867,6 +921,8 @@ curl --noproxy '*' -s -X POST \
 19. Day 10 `/qa/retrieve` 第一版接口已落地
 20. Day 11 `/qa/ask` 第一版接口已落地
 21. DeepSeek `deepseek-v4-pro` 已完成真实联调
+22. Day 13 `/qa/history` 第一版接口已落地
+23. 问答记录持久化与历史查询已完成真实联调
 
 ## 已实现的工程约束
 
@@ -907,13 +963,13 @@ curl --noproxy '*' -s -X POST \
 
 ## 下一步
 
-Week 1 已完成并完成收口，Week 2 当前已经推进到 Day 12 第一版完成。
+Week 1 已完成并完成收口，Week 2 当前已经推进到 Day 13 第一版完成。
 
-下一步的重点已经非常明确，不再是补 embedding、向量写库、基础检索、最小问答闭环或第一版来源返回，而是进入问答记录持久化：
+下一步的重点已经非常明确，不再是补 embedding、向量写库、基础检索、最小问答闭环、第一版来源返回或第一版问答记录持久化，而是进入端到端联调验收：
 
-1. 设计 Day 13 问答记录结构
-2. 保存问题、答案、来源和模型信息
-3. 提供历史查询能力
+1. 检查问答链路端到端可用性
+2. 检查召回质量、答案可读性和历史记录完整性
+3. 记录问题和优化项
 4. 最后做评测与优化
 
 更详细的阶段记录可参考：
