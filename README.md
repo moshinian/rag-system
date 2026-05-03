@@ -2,12 +2,16 @@
 
 一个面向企业内部知识库场景的 RAG 后端服务，用来沉淀结算领域文档，并逐步演进为可检索、可引用、可追溯的问答系统。
 
-当前仓库已经完成了第 1 周核心工程骨架，并且已经落地了四段关键链路：
+当前仓库已经完成了第 1 周核心工程骨架，并且已经落地了 Week 2 第一版问答闭环：
 
 1. 知识库创建
 2. 文档上传入库
 3. 文档解析、切块与 chunk 入库
 4. 文档 chunk 向量写库
+5. query embedding 与 TopK 检索
+6. Prompt 组装与 LLM 问答
+7. `sources` 结构化来源返回
+8. 问答记录持久化与历史查询
 
 同时已经补齐了本地开发所需的基础设施底座：
 
@@ -19,7 +23,7 @@
 
 当前状态已经不再停留在 Day 3 或 Day 4。
 
-**第 1 周的目标已经完成收口，Week 2 的向量化主链路也已经打通第一版。**
+**第 1 周已经完成收口，Week 2 也已经完成第一版收口。**
 
 这份 README 只描述当前仓库已经实现的内容，以及下一步明确要做的事情，不把规划写成现状。
 
@@ -86,29 +90,22 @@
 当前还没完成的能力：
 
 1. 异步索引任务编排
-2. TopK 向量检索
-3. query embedding 与检索编排
-4. 大模型问答链路
-5. 引用来源展示
-6. 评测集与效果评测
+2. 更完善的评测集与效果评测
+3. session 复用与多轮对话
+4. 混合检索与更高质量召回
+5. 更完整的日志、观测与工程化补充
 
 ## 当前阶段
 
 当前仓库可以分成两部分理解：
 
 1. Week 1 已完成：知识库、文档上传、解析、切块、chunk 入库、联调验收都已经闭环。
-2. Week 2 已推进到 Day 9：本地 embedding 服务、`pgvector`、chunk 向量写库、真实文档联调都已经打通。
+2. Week 2 已完成：embedding、向量检索、问答、来源返回、问答记录与端到端验收都已经闭环。
 
 现在项目的真实状态已经不是“RAG 设计中”，而是：
 
 ```text
-知识库创建 -> 文档上传 -> 解析 -> 切块 -> chunk 入库 -> chunk 向量写库
-```
-
-尚未完成的是：
-
-```text
-query embedding -> TopK 检索 -> Prompt 组装 -> LLM 回答 -> 引用来源 -> 问答记录
+知识库创建 -> 文档上传 -> 解析 -> 切块 -> chunk 入库 -> chunk 向量写库 -> query embedding -> TopK 检索 -> Prompt 组装 -> LLM 回答 -> 来源返回 -> 问答记录持久化 -> 历史查询
 ```
 
 ## 第 1 周完成情况
@@ -896,6 +893,72 @@ curl --noproxy '*' -s \
 3. 历史结果里包含 `retrievalResults` 和 `sources`
 4. 历史结果里包含 `latencyMs` 和 `promptTemplate`
 
+## Day 14 联调样例
+
+本次使用新的 `day14-kb` 做了完整验收：
+
+```bash
+curl --noproxy '*' -s -X POST \
+  http://127.0.0.1:8080/api/knowledge-bases \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "kbCode": "day14-kb",
+    "name": "Day 14 Acceptance KB",
+    "description": "Week 2 end-to-end acceptance knowledge base",
+    "createdBy": "codex"
+  }'
+```
+
+```bash
+curl --noproxy '*' -s -X POST \
+  http://127.0.0.1:8080/api/knowledge-bases/day14-kb/documents/upload \
+  -F 'file=@work/plan.md' \
+  -F 'documentName=Week2 Acceptance Plan' \
+  -F 'tags=day14,acceptance,week2' \
+  -F 'source=work' \
+  -F 'operator=codex'
+```
+
+```bash
+curl --noproxy '*' -s -X POST \
+  'http://127.0.0.1:8080/api/knowledge-bases/day14-kb/documents/DOC-309162419068997632/process?operator=codex'
+
+curl --noproxy '*' -s -X POST \
+  http://127.0.0.1:8080/api/knowledge-bases/day14-kb/documents/DOC-309162419068997632/embed
+
+curl --noproxy '*' -s \
+  http://127.0.0.1:8080/api/knowledge-bases/day14-kb/qa/readiness
+```
+
+```bash
+curl --noproxy '*' -s -X POST \
+  http://127.0.0.1:8080/api/knowledge-bases/day14-kb/qa/retrieve \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "question": "第2周的目标是什么？",
+    "topK": 3
+  }'
+
+curl --noproxy '*' -s -X POST \
+  http://127.0.0.1:8080/api/knowledge-bases/day14-kb/qa/ask \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "question": "第2周的目标是什么？",
+    "topK": 3
+  }'
+
+curl --noproxy '*' -s \
+  'http://127.0.0.1:8080/api/knowledge-bases/day14-kb/qa/history?pageNo=1&pageSize=5'
+```
+
+当前已经验证过一次真实结果：
+
+1. `day14-kb` 已完成从上传到问答历史的完整闭环
+2. `/qa/retrieve` 已返回 Week 2 目标相关 chunk
+3. `/qa/ask` 已对问题“第2周的目标是什么？”返回“让项目从‘能跑’变成‘像样’”
+4. `/qa/ask` 已对无关问题返回“根据当前检索内容，无法确定答案。”
+5. `/qa/history` 已查回真实问答记录
+
 ## 已验证结果
 
 当前仓库已经做过实际验证：
@@ -923,6 +986,7 @@ curl --noproxy '*' -s \
 21. DeepSeek `deepseek-v4-pro` 已完成真实联调
 22. Day 13 `/qa/history` 第一版接口已落地
 23. 问答记录持久化与历史查询已完成真实联调
+24. Day 14 端到端验收已完成
 
 ## 已实现的工程约束
 
@@ -963,14 +1027,14 @@ curl --noproxy '*' -s \
 
 ## 下一步
 
-Week 1 已完成并完成收口，Week 2 当前已经推进到 Day 13 第一版完成。
+Week 1 已完成并完成收口，Week 2 也已经完成第一版收口。
 
-下一步的重点已经非常明确，不再是补 embedding、向量写库、基础检索、最小问答闭环、第一版来源返回或第一版问答记录持久化，而是进入端到端联调验收：
+如果后续继续推进，重点就不再是“把主链路做出来”，而是：
 
-1. 检查问答链路端到端可用性
-2. 检查召回质量、答案可读性和历史记录完整性
-3. 记录问题和优化项
-4. 最后做评测与优化
+1. 建立评测集并做效果评测
+2. 优化召回质量、答案质量和引用质量
+3. 增加 session 复用与多轮对话
+4. 继续补齐异步编排、日志和观测能力
 
 更详细的阶段记录可参考：
 
