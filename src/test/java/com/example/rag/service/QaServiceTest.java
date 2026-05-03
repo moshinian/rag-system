@@ -75,6 +75,9 @@ class QaServiceTest {
         assertThat(response.topK()).isEqualTo(3);
         assertThat(response.chatModel()).isEqualTo("deepseek-v4-flash");
         assertThat(response.retrievalResults()).hasSize(1);
+        assertThat(response.sources()).hasSize(1);
+        assertThat(response.sources().get(0).documentCode()).isEqualTo("DOC-1");
+        assertThat(response.sources().get(0).chunkId()).isEqualTo(1L);
         verify(chatClient).chat(anyString(), anyString());
     }
 }

@@ -3,8 +3,12 @@ package com.example.rag.service;
 import com.example.rag.integration.llm.ChatClient;
 import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.model.response.QaAnswerResponse;
+import com.example.rag.model.response.QaSourceResponse;
+import com.example.rag.model.response.RetrievedChunkResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 /**
  * Day 11 问答流程编排服务。
@@ -35,12 +39,29 @@ public class QaService {
                 retrievalResponse.chunks()
         );
         String answer = chatClient.chat(promptPayload.systemPrompt(), promptPayload.userPrompt());
+        List<QaSourceResponse> sources = retrievalResponse.chunks().stream()
+                .map(this::toQaSourceResponse)
+                .toList();
         return new QaAnswerResponse(
                 retrievalResponse.question(),
                 answer,
                 retrievalResponse.topK(),
                 chatClient.getChatModel(),
-                retrievalResponse.chunks()
+                retrievalResponse.chunks(),
+                sources
+        );
+    }
+
+    private QaSourceResponse toQaSourceResponse(RetrievedChunkResponse chunk) {
+        return new QaSourceResponse(
+                chunk.documentCode(),
+                chunk.documentName(),
+                chunk.chunkId(),
+                chunk.chunkIndex(),
+                chunk.content(),
+                chunk.score(),
+                chunk.startOffset(),
+                chunk.endOffset()
         );
     }
 }

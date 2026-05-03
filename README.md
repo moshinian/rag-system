@@ -804,6 +804,7 @@ Content-Type: application/json
 3. `topK`
 4. `chatModel`
 5. `retrievalResults`
+6. `sources`
 
 约束说明：
 
@@ -838,7 +839,8 @@ curl --noproxy '*' -s -X POST \
 
 1. `chatModel = deepseek-v4-pro`
 2. 返回结果中包含 `retrievalResults`
-3. `deepseek-v4-pro` 已基于检索内容返回可用回答
+3. 返回结果中包含 `sources`
+4. `deepseek-v4-pro` 已基于检索内容返回可用回答
 
 ## 已验证结果
 
@@ -905,13 +907,13 @@ curl --noproxy '*' -s -X POST \
 
 ## 下一步
 
-Week 1 已完成并完成收口，Week 2 当前已经推进到 Day 11 完成，Day 12 已准备开始。
+Week 1 已完成并完成收口，Week 2 当前已经推进到 Day 12 第一版完成。
 
-下一步的重点已经非常明确，不再是补 embedding、向量写库、基础检索或最小问答闭环，而是进入引用来源结构化返回：
+下一步的重点已经非常明确，不再是补 embedding、向量写库、基础检索、最小问答闭环或第一版来源返回，而是进入问答记录持久化：
 
-1. 设计 Day 12 引用来源返回结构
-2. 在问答结果中绑定文档、chunk、片段位置
-3. 再补问答记录
+1. 设计 Day 13 问答记录结构
+2. 保存问题、答案、来源和模型信息
+3. 提供历史查询能力
 4. 最后做评测与优化
 
 更详细的阶段记录可参考：
@@ -920,4 +922,4 @@ Week 1 已完成并完成收口，Week 2 当前已经推进到 Day 11 完成，D
 2. [work/plan.md](/root/workspace/rag-system/work/plan.md)
 3. [work/week1.md](/root/workspace/rag-system/work/week1.md)
 4. [work/week2.md](/root/workspace/rag-system/work/week2.md)
-5. [work/work day8.md](/root/workspace/rag-system/work/work%20day8.md)
+5. [work/work day12.md](/root/workspace/rag-system/work/work%20day12.md)

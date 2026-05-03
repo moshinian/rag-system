@@ -69,3 +69,25 @@ Day 12 的核心目标是：
 这意味着 Day 13 就可以直接进入：
 
 **问答记录持久化。**
+
+## Day 12 实际完成情况
+
+今天已经落地并验证：
+
+1. 新增 `QaSourceResponse`
+2. `QaAnswerResponse` 已补充 `sources`
+3. `QaService` 已从 `retrievalResults` 映射来源结构
+4. `QaServiceTest` 已补充来源断言并通过
+
+## Day 12 联调结果
+
+本次真实联调验证了下面这条链路：
+
+**问题输入 -> 检索 -> 回答 -> 返回结构化来源**
+
+联调结果至少确认：
+
+1. `/qa/ask` 继续返回 `answer`
+2. `/qa/ask` 同时返回 `sources`
+3. 每条 `sources` 可直接映射到文档和 chunk
+4. `sources` 字段与 `retrievalResults` 保持一致来源

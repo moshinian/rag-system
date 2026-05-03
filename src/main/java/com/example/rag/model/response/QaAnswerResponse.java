@@ -10,6 +10,7 @@ public record QaAnswerResponse(
         String answer,
         Integer topK,
         String chatModel,
-        List<RetrievedChunkResponse> retrievalResults
+        List<RetrievedChunkResponse> retrievalResults,
+        List<QaSourceResponse> sources
 ) {
 }
