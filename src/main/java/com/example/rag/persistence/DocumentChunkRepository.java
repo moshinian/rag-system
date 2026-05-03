@@ -2,6 +2,7 @@ package com.example.rag.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.rag.mapper.DocumentChunkMapper;
+import com.example.rag.model.dto.RetrievedChunkCandidate;
 import com.example.rag.model.enums.DocumentChunkStatus;
 import com.example.rag.model.enums.EmbeddingStatus;
 import com.example.rag.persistence.entity.DocumentChunkEntity;
@@ -109,5 +110,12 @@ public class DocumentChunkRepository {
                 embeddingVectorLiteral,
                 embeddingUpdatedAt
         );
+    }
+
+    /** 按知识库执行 TopK 向量召回。 */
+    public List<RetrievedChunkCandidate> findTopKSimilarChunks(Long knowledgeBaseId,
+                                                               String queryVectorLiteral,
+                                                               int topK) {
+        return documentChunkMapper.findTopKSimilarChunks(knowledgeBaseId, queryVectorLiteral, topK);
     }
 }

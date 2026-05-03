@@ -1,11 +1,16 @@
 package com.example.rag.controller;
 
 import com.example.rag.common.ApiResponse;
+import com.example.rag.model.request.QuestionRetrievalRequest;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
+import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.service.QuestionAnsweringService;
+import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,6 +35,20 @@ public class QuestionAnsweringController {
                                                                      HttpServletRequest request) {
         String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
         QuestionAnsweringReadinessResponse response = questionAnsweringService.getReadiness(kbCode);
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 对指定知识库执行第一版 TopK 检索。 */
+    @PostMapping("/retrieve")
+    public ApiResponse<QuestionRetrievalResponse> retrieve(@PathVariable String kbCode,
+                                                           @Valid @RequestBody QuestionRetrievalRequest body,
+                                                           HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        QuestionRetrievalResponse response = questionAnsweringService.retrieve(
+                kbCode,
+                body.question(),
+                body.topK()
+        );
         return ApiResponse.success(response, requestId);
     }
 }

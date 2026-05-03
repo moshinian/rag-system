@@ -332,6 +332,7 @@ rag-system/
 
 - `GET /api/knowledge-bases/{kbCode}/qa/readiness`
 - `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/embed`
+- `POST /api/knowledge-bases/{kbCode}/qa/retrieve`
 
 ### `indexing_task`
 
@@ -670,6 +671,88 @@ GET /api/knowledge-bases/{kbCode}/qa/readiness
 3. 当前 embedding 模型
 4. 默认 `TopK`
 
+### 17. 执行第一版基础检索
+
+```http
+POST /api/knowledge-bases/{kbCode}/qa/retrieve
+Content-Type: application/json
+```
+
+请求示例：
+
+```json
+{
+  "question": "结算异常应该怎么处理？",
+  "topK": 3
+}
+```
+
+这个接口负责：
+
+1. 将问题文本转换成 query embedding
+2. 在 `document_chunk.embedding_vector` 上执行 `pgvector` TopK 相似度检索
+3. 返回命中的 chunk、文档定位信息和相似度分数
+
+当前返回结果至少包含：
+
+1. `knowledgeBaseCode`
+2. `question`
+3. `embeddingModel`
+4. `topK`
+5. `hitCount`
+6. `chunks`
+
+每条 `chunks` 结果当前至少包含：
+
+1. `documentCode`
+2. `documentName`
+3. `chunkIndex`
+4. `content`
+5. `score`
+6. `startOffset / endOffset`
+
+## Day 10 联调样例
+
+在 Day 9 已完成 `/embed` 的前提下，可以直接验证 `/qa/retrieve`。
+
+### 1. 确认知识库已具备 embedding 数据
+
+```bash
+curl --noproxy '*' -s http://127.0.0.1:8080/api/knowledge-bases/day6-kb/qa/readiness
+```
+
+期望至少看到：
+
+1. `questionAnsweringReady = true`
+2. `embeddedChunkCount > 0`
+
+### 2. 发起第一版检索请求
+
+```bash
+curl --noproxy '*' -s -X POST \
+  http://127.0.0.1:8080/api/knowledge-bases/day6-kb/qa/retrieve \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "question": "这份文档主要讲了什么？",
+    "topK": 3
+  }'
+```
+
+如果你要沿用 Day 9 已验证过的真实文档上下文，也可以直接对 `day6-kb` 提类似问题，例如：
+
+1. `这份 Markdown 文档讲了什么？`
+2. `这个知识库里有哪些示例内容？`
+3. `文档中提到了哪些关键主题？`
+
+### 3. 检查返回结果
+
+重点确认：
+
+1. `hitCount` 大于 `0`
+2. `chunks` 按相似度降序返回
+3. 每条结果都带有 `documentCode / chunkIndex / content / score`
+4. `embeddingModel` 与当前配置一致
+
 ## 已验证结果
 
 当前仓库已经做过实际验证：
@@ -691,6 +774,8 @@ GET /api/knowledge-bases/{kbCode}/qa/readiness
 15. 本地 embedding 服务已返回真实 512 维向量
 16. `POST /embed` 已完成真实文档联调
 17. `document_chunk.embedding_vector` 已验证非空
+18. `mvn -q -DskipTests compile` 已通过
+19. Day 10 `/qa/retrieve` 第一版接口已落地
 
 ## 已实现的工程约束
 
@@ -731,15 +816,15 @@ GET /api/knowledge-bases/{kbCode}/qa/readiness
 
 ## 下一步
 
-Week 1 已完成并完成收口，Week 2 当前已经推进到 Day 9 完成。
+Week 1 已完成并完成收口，Week 2 当前已经推进到 Day 10 完成。
 
-下一步的重点已经非常明确，不再是补 embedding 和向量写库，而是进入检索与问答：
+下一步的重点已经非常明确，不再是补 embedding、向量写库或基础检索，而是进入问答组装：
 
-1. 实现 query embedding 调用
-2. 基于 `pgvector` 实现基础 TopK 相似度检索
-3. 设计检索结果返回结构，包含 chunk 内容和来源信息
-4. 接入问答接口、Prompt 组装和引用来源返回
-5. 保存问答记录，并完成 Week 2 第一版问答链路联调
+1. 设计 Day 11 Prompt 模板
+2. 基于 Day 10 检索结果拼装上下文
+3. 接入本地 OpenAI-compatible chat completion
+4. 返回第一版回答结果
+5. 再补引用来源结构和问答记录
 
 更详细的阶段记录可参考：
 

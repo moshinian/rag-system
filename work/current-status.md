@@ -7,10 +7,11 @@
 1. Week 1 文档入库主链路
 2. Day 8 的 Week 2 技术起步
 3. Day 9 的第一版 chunk 向量写库联调
+4. Day 10 的第一版 query embedding 与 TopK 检索联调
 
 当前项目已经不再停留在“能上传、能切块”的阶段，而是：
 
-**本地 embedding 服务已跑通，`pgvector` 已就绪，Java 侧第一版 chunk embedding 写库链路已经完成真实端到端验证。**
+**本地 embedding 服务已跑通，`pgvector` 已就绪，Java 侧第一版检索链路已经完成真实端到端验证。**
 
 ## 已完成
 
@@ -64,6 +65,10 @@
 7. Java 侧已新增第一版 `DocumentEmbeddingService`
 8. Java 侧已新增 `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/embed`
 9. 真实文档 chunk 已完成 embedding 写库并更新为 `EMBEDDED`
+10. Java 侧已新增 `POST /api/knowledge-bases/{kbCode}/qa/retrieve`
+11. Java 侧已完成 query embedding 调用
+12. `document_chunk` 已支持按知识库执行 TopK 相似度查询
+13. 检索结果已返回 `documentCode / chunkIndex / content / score`
 
 ## 已验证
 
@@ -83,6 +88,10 @@
 12. `QuestionAnsweringServiceTest / KnowledgeBaseServiceTest / DocumentServiceTest` 已通过
 13. `POST /embed` 已完成真实文档联调
 14. `document_chunk.embedding_vector` 已验证非空
+15. `mvn -q -DskipTests compile` 已通过
+16. `mvn -q -Dtest=QuestionAnsweringServiceTest test` 已通过
+17. `GET /qa/readiness` 已验证 `day6-kb` 的 Day 10 前置条件已满足
+18. `POST /qa/retrieve` 已在 `day6-kb` 上返回真实 TopK 结果
 
 ## 当前未完成
 
@@ -93,10 +102,9 @@
 
 ### 检索与问答
 
-1. TopK 向量检索未开始
-2. 大模型问答未开始
-3. 引用来源展示未开始
-4. 问答记录未开始
+1. 大模型问答未开始
+2. 引用来源展示未开始
+3. 问答记录未开始
 
 ### 工程化补充
 
@@ -109,16 +117,16 @@
 
 当前阶段的真实优先级已经非常明确：
 
-1. 进入 Day 10 TopK 检索
-2. 设计相似度查询接口和返回结构
-3. 再进入问答链路
-4. 之后再进入评测和优化
+1. 进入 Day 11 Prompt 组装与回答链路
+2. 复用 Day 10 检索结果拼接上下文
+3. 接入 chat completion
+4. 之后再进入引用来源和问答记录
 
 ## 下一步建议
 
 建议按下面顺序继续：
 
-1. 实现基础 TopK 相似度检索
-2. 设计 query embedding 调用和检索 service
-3. 再接问答接口和引用来源结构
-4. 最后补评测与优化
+1. 设计 Day 11 Prompt 模板
+2. 基于 Day 10 的召回结果拼装上下文
+3. 接入本地 OpenAI-compatible chat completion
+4. 再补引用来源结构与问答记录
