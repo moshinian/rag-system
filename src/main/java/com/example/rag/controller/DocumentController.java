@@ -4,11 +4,13 @@ import com.example.rag.common.ApiResponse;
 import com.example.rag.model.response.DocumentChunkResponse;
 import com.example.rag.model.response.DocumentDetailResponse;
 import com.example.rag.model.response.DocumentEmbeddingResponse;
+import com.example.rag.model.response.DocumentIndexingTaskResponse;
 import com.example.rag.model.response.DocumentProcessResponse;
 import com.example.rag.model.response.DocumentSummaryResponse;
 import com.example.rag.model.response.DocumentUploadResponse;
 import com.example.rag.model.response.PageResponse;
 import com.example.rag.service.DocumentEmbeddingService;
+import com.example.rag.service.DocumentIndexingService;
 import com.example.rag.service.DocumentProcessingService;
 import com.example.rag.service.DocumentService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,13 +37,16 @@ public class DocumentController {
     private final DocumentService documentService;
     private final DocumentProcessingService documentProcessingService;
     private final DocumentEmbeddingService documentEmbeddingService;
+    private final DocumentIndexingService documentIndexingService;
 
     public DocumentController(DocumentService documentService,
                               DocumentProcessingService documentProcessingService,
-                              DocumentEmbeddingService documentEmbeddingService) {
+                              DocumentEmbeddingService documentEmbeddingService,
+                              DocumentIndexingService documentIndexingService) {
         this.documentService = documentService;
         this.documentProcessingService = documentProcessingService;
         this.documentEmbeddingService = documentEmbeddingService;
+        this.documentIndexingService = documentIndexingService;
     }
 
     /** 分页查询知识库下的文档。 */
@@ -129,6 +134,27 @@ public class DocumentController {
                                                         HttpServletRequest request) {
         String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
         DocumentEmbeddingResponse response = documentEmbeddingService.embed(kbCode, documentCode);
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 提交一条异步索引任务，后台串行执行 process + embed。 */
+    @PostMapping("/{documentCode}/index")
+    public ApiResponse<DocumentIndexingTaskResponse> index(@PathVariable String kbCode,
+                                                           @PathVariable String documentCode,
+                                                           @RequestParam(value = "operator", required = false) String operator,
+                                                           HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        DocumentIndexingTaskResponse response = documentIndexingService.submit(kbCode, documentCode, operator);
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 查询文档的索引任务历史。 */
+    @GetMapping("/{documentCode}/indexing-tasks")
+    public ApiResponse<java.util.List<DocumentIndexingTaskResponse>> listIndexingTasks(@PathVariable String kbCode,
+                                                                                        @PathVariable String documentCode,
+                                                                                        HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        java.util.List<DocumentIndexingTaskResponse> response = documentIndexingService.listTasks(kbCode, documentCode);
         return ApiResponse.success(response, requestId);
     }
 }

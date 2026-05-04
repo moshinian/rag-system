@@ -11,10 +11,11 @@
 5. Day 11 的第一版 Prompt 组装与问答联调
 6. Day 13 的第一版问答记录持久化与历史查询联调
 7. Day 14 的 Week 2 端到端验收
+8. Day 15 的异步索引与任务状态追踪起步
 
 当前项目已经不再停留在“能上传、能切块”的阶段，而是：
 
-**本地 embedding 服务已跑通，`pgvector` 已就绪，Java 侧第一版问答链路已经完成真实端到端验收，Week 2 已完成第一版收口。**
+**本地 embedding 服务已跑通，`pgvector` 已就绪，Java 侧第一版问答链路已经完成真实端到端验收，Week 2 已完成第一版收口，Week 3 已开始补异步索引工程能力。**
 
 ## 已完成
 
@@ -77,6 +78,12 @@
 16. `rag.llm.chat.*` 已支持基于 OpenAI-compatible 协议切换不同提供方
 17. `chat_session / chat_message` 已落地
 18. `GET /api/knowledge-bases/{kbCode}/qa/history` 已落地
+19. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/index` 已落地
+20. `GET /api/knowledge-bases/{kbCode}/documents/{documentCode}/indexing-tasks` 已落地
+21. `indexing_task` 已支持 `QUEUED / RUNNING / SUCCEEDED / FAILED`
+22. `indexing_task` 已支持 `task_stage / embedded_chunk_count`
+23. 后台 `DOCUMENT_INDEXING` 任务已串起 `process + embed`
+24. `DocumentEmbeddingService` 已支持循环处理整篇文档的多批次 chunk
 
 ## 已验证
 
@@ -106,6 +113,7 @@
 22. `GET /qa/history` 已验证可以查回真实问答记录
 23. `day14-kb` 已完成从上传到问答历史的完整端到端验收
 24. 无关问题场景已验证返回“根据当前检索内容，无法确定答案。”
+25. `DocumentIndexingServiceTest / DocumentEmbeddingServiceTest / DocumentProcessingServiceTest` 已覆盖 Day 15 关键分支
 
 ## 当前未完成
 
@@ -116,7 +124,7 @@
 
 ### 工程化补充
 
-1. 异步索引任务编排未开始
+1. 异步索引任务编排已完成第一版起步，但自动重试、取消和批量编排仍未开始
 2. OpenAPI / Swagger 未开始
 3. 更完整的结构化日志未开始
 4. 评测集未开始
@@ -127,7 +135,8 @@
 
 1. Week 1 已完成
 2. Week 2 已完成第一版收口
-3. 当前系统已经具备最小可用的 RAG 问答闭环
+3. Week 3 已开始，Day 15 已完成第一版异步索引能力
+4. 当前系统已经具备最小可用的 RAG 问答闭环，并开始补工程化能力
 
 ## 后续方向
 

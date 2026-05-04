@@ -80,11 +80,14 @@ class DocumentEmbeddingServiceTest {
 
         DocumentChunkEntity chunk1 = createChunk(1L, 200L, 0, "第一段");
         DocumentChunkEntity chunk2 = createChunk(2L, 200L, 1, "第二段");
+        DocumentChunkEntity chunk3 = createChunk(3L, 200L, 2, "第三段");
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
         when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
         when(documentChunkRepository.findEmbeddableChunksByDocumentId(eq(200L), any(), eq(16)))
-                .thenReturn(List.of(chunk1, chunk2));
+                .thenReturn(List.of(chunk1, chunk2))
+                .thenReturn(List.of(chunk3))
+                .thenReturn(List.of());
         when(openAiCompatibleClient.createEmbeddings(
                 eq("http://localhost:8001/v1"),
                 eq(""),
@@ -95,15 +98,25 @@ class DocumentEmbeddingServiceTest {
                 List.of(0.1D, 0.2D),
                 List.of(0.3D, 0.4D)
         ));
-        when(documentChunkRepository.countByDocumentIdAndEmbeddingStatus(200L, EmbeddingStatus.EMBEDDED)).thenReturn(2L);
+        when(openAiCompatibleClient.createEmbeddings(
+                eq("http://localhost:8001/v1"),
+                eq(""),
+                eq("/embeddings"),
+                eq("bge-small-zh-v1.5"),
+                eq(List.of("第三段"))
+        )).thenReturn(List.of(
+                List.of(0.5D, 0.6D)
+        ));
+        when(documentChunkRepository.countByDocumentIdAndEmbeddingStatus(200L, EmbeddingStatus.EMBEDDED)).thenReturn(3L);
 
         DocumentEmbeddingResponse response = documentEmbeddingService.embed("settlement-kb", "DOC-1");
 
-        assertThat(response.embeddedChunkCount()).isEqualTo(2);
+        assertThat(response.embeddedChunkCount()).isEqualTo(3);
         assertThat(response.failedChunkCount()).isZero();
-        assertThat(response.totalEmbeddedChunkCount()).isEqualTo(2L);
+        assertThat(response.totalEmbeddedChunkCount()).isEqualTo(3L);
         verify(documentChunkRepository).updateEmbeddingVector(eq(1L), eq(EmbeddingStatus.EMBEDDED), eq("bge-small-zh-v1.5"), eq("[0.100000000000,0.200000000000]"), any());
         verify(documentChunkRepository).updateEmbeddingVector(eq(2L), eq(EmbeddingStatus.EMBEDDED), eq("bge-small-zh-v1.5"), eq("[0.300000000000,0.400000000000]"), any());
+        verify(documentChunkRepository).updateEmbeddingVector(eq(3L), eq(EmbeddingStatus.EMBEDDED), eq("bge-small-zh-v1.5"), eq("[0.500000000000,0.600000000000]"), any());
     }
 
     @Test

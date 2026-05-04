@@ -62,78 +62,70 @@ public class DocumentEmbeddingService {
         }
 
         int batchSize = normalizeBatchSize(ragEmbeddingProperties.getBatchSize());
-        List<DocumentChunkEntity> chunks = documentChunkRepository.findEmbeddableChunksByDocumentId(
-                document.getId(),
-                List.of(EmbeddingStatus.PENDING, EmbeddingStatus.FAILED),
-                batchSize
-        );
-        if (chunks.isEmpty()) {
-            return new DocumentEmbeddingResponse(
-                    document.getId(),
-                    document.getDocumentCode(),
-                    kbCode,
-                    ragEmbeddingProperties.getModel(),
-                    ragEmbeddingProperties.getVectorDimensions(),
-                    batchSize,
-                    0,
-                    0,
-                    documentChunkRepository.countByDocumentIdAndEmbeddingStatus(document.getId(), EmbeddingStatus.EMBEDDED),
-                    OffsetDateTime.now()
-            );
-        }
-
-        OffsetDateTime startedAt = OffsetDateTime.now();
-        for (DocumentChunkEntity chunk : chunks) {
-            documentChunkRepository.updateEmbeddingState(
-                    chunk.getId(),
-                    EmbeddingStatus.EMBEDDING,
-                    ragEmbeddingProperties.getModel(),
-                    null,
-                    startedAt
-            );
-        }
-
         int embeddedCount = 0;
         int failedCount = 0;
-        try {
-            List<List<Double>> embeddings = openAiCompatibleClient.createEmbeddings(
-                    ragEmbeddingProperties.getBaseUrl(),
-                    ragEmbeddingProperties.getApiKey(),
-                    ragEmbeddingProperties.getEmbeddingPath(),
-                    ragEmbeddingProperties.getModel(),
-                    chunks.stream().map(DocumentChunkEntity::getContent).toList()
+
+        while (true) {
+            List<DocumentChunkEntity> chunks = documentChunkRepository.findEmbeddableChunksByDocumentId(
+                    document.getId(),
+                    List.of(EmbeddingStatus.PENDING, EmbeddingStatus.FAILED),
+                    batchSize
             );
-            if (embeddings.size() != chunks.size()) {
-                throw new BusinessException("Embedding result size does not match chunk count");
+            if (chunks.isEmpty()) {
+                break;
             }
 
-            OffsetDateTime updatedAt = OffsetDateTime.now();
-            for (int index = 0; index < chunks.size(); index++) {
-                DocumentChunkEntity chunk = chunks.get(index);
-                String vectorLiteral = toVectorLiteral(embeddings.get(index));
-                documentChunkRepository.updateEmbeddingVector(
-                        chunk.getId(),
-                        EmbeddingStatus.EMBEDDED,
-                        ragEmbeddingProperties.getModel(),
-                        vectorLiteral,
-                        updatedAt
-                );
-                embeddedCount++;
-            }
-        } catch (RuntimeException ex) {
-            OffsetDateTime failedAt = OffsetDateTime.now();
-            String errorMessage = truncate(ex.getMessage());
+            OffsetDateTime startedAt = OffsetDateTime.now();
             for (DocumentChunkEntity chunk : chunks) {
                 documentChunkRepository.updateEmbeddingState(
                         chunk.getId(),
-                        EmbeddingStatus.FAILED,
+                        EmbeddingStatus.EMBEDDING,
                         ragEmbeddingProperties.getModel(),
-                        errorMessage,
-                        failedAt
+                        null,
+                        startedAt
                 );
-                failedCount++;
             }
-            throw ex;
+
+            try {
+                List<List<Double>> embeddings = openAiCompatibleClient.createEmbeddings(
+                        ragEmbeddingProperties.getBaseUrl(),
+                        ragEmbeddingProperties.getApiKey(),
+                        ragEmbeddingProperties.getEmbeddingPath(),
+                        ragEmbeddingProperties.getModel(),
+                        chunks.stream().map(DocumentChunkEntity::getContent).toList()
+                );
+                if (embeddings.size() != chunks.size()) {
+                    throw new BusinessException("Embedding result size does not match chunk count");
+                }
+
+                OffsetDateTime updatedAt = OffsetDateTime.now();
+                for (int index = 0; index < chunks.size(); index++) {
+                    DocumentChunkEntity chunk = chunks.get(index);
+                    String vectorLiteral = toVectorLiteral(embeddings.get(index));
+                    documentChunkRepository.updateEmbeddingVector(
+                            chunk.getId(),
+                            EmbeddingStatus.EMBEDDED,
+                            ragEmbeddingProperties.getModel(),
+                            vectorLiteral,
+                            updatedAt
+                    );
+                    embeddedCount++;
+                }
+            } catch (RuntimeException ex) {
+                OffsetDateTime failedAt = OffsetDateTime.now();
+                String errorMessage = truncate(ex.getMessage());
+                for (DocumentChunkEntity chunk : chunks) {
+                    documentChunkRepository.updateEmbeddingState(
+                            chunk.getId(),
+                            EmbeddingStatus.FAILED,
+                            ragEmbeddingProperties.getModel(),
+                            errorMessage,
+                            failedAt
+                    );
+                    failedCount++;
+                }
+                throw ex;
+            }
         }
 
         long totalEmbeddedChunkCount = documentChunkRepository.countByDocumentIdAndEmbeddingStatus(

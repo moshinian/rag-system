@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.example.rag.model.enums.IndexingTaskStage;
 import com.example.rag.model.enums.IndexingTaskStatus;
 import lombok.Getter;
 import lombok.Setter;
@@ -33,13 +34,19 @@ public class IndexingTaskEntity {
     @TableField("task_type")
     private String taskType;
 
-    private IndexingTaskStatus status = IndexingTaskStatus.RUNNING;
+    private IndexingTaskStatus status = IndexingTaskStatus.QUEUED;
+
+    @TableField("task_stage")
+    private IndexingTaskStage taskStage = IndexingTaskStage.QUEUED;
 
     @TableField("parser_name")
     private String parserName;
 
     @TableField("chunk_count")
     private Integer chunkCount;
+
+    @TableField("embedded_chunk_count")
+    private Integer embeddedChunkCount = 0;
 
     @TableField("error_message")
     private String errorMessage;
