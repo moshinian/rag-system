@@ -1,0 +1,61 @@
+{
+  "kbCode": "day20-cn-kb",
+  "language": "zh-CN",
+  "topK": 3,
+  "cases": [
+    {
+      "caseCode": "DAY20-FACT-001",
+      "category": "FACT",
+      "question": "结算请求积压时，第一步不应该直接做什么？",
+      "expectedDocument": "结算异常处理指南",
+      "expectedKeywords": ["不要直接重启服务", "重启服务"],
+      "expectationType": "SHOULD_ANSWER",
+      "notes": "验证事实型问答是否命中明确禁忌动作"
+    },
+    {
+      "caseCode": "DAY20-FACT-002",
+      "category": "FACT",
+      "question": "人工复核差异时至少要记录哪五项信息？",
+      "expectedDocument": "对账常见问题",
+      "expectedKeywords": ["订单号", "租户标识", "差异金额", "首次发现时间", "处理结论"],
+      "expectationType": "SHOULD_ANSWER",
+      "notes": "验证列表型事实回答是否完整"
+    },
+    {
+      "caseCode": "DAY20-SUMMARY-001",
+      "category": "SUMMARY",
+      "question": "值班巡检清单主要关注哪些指标和记录项？",
+      "expectedDocument": "值班巡检清单",
+      "expectedKeywords": ["队列长度", "成功率", "平均延迟", "差异笔数", "巡检时间"],
+      "expectationType": "SHOULD_ANSWER",
+      "notes": "验证摘要型问题是否能覆盖主要巡检维度"
+    },
+    {
+      "caseCode": "DAY20-PROCESS-001",
+      "category": "PROCESS",
+      "question": "结算积压恢复动作建议分哪几个阶段执行？",
+      "expectedDocument": "结算异常处理指南",
+      "expectedKeywords": ["第一阶段", "第二阶段", "第三阶段"],
+      "expectationType": "SHOULD_ANSWER",
+      "notes": "验证流程型问题是否能按阶段组织答案"
+    },
+    {
+      "caseCode": "DAY20-PROCESS-002",
+      "category": "PROCESS",
+      "question": "什么情况下必须暂停自动补偿？",
+      "expectedDocument": "对账常见问题",
+      "expectedKeywords": ["连续两次回放仍然失败", "状态不一致", "暂停自动补偿"],
+      "expectationType": "SHOULD_ANSWER",
+      "notes": "验证条件触发型流程回答"
+    },
+    {
+      "caseCode": "DAY20-NOANSWER-001",
+      "category": "NO_ANSWER",
+      "question": "这个知识库里有没有关于北美税务申报的处理说明？",
+      "expectedDocument": "",
+      "expectedKeywords": ["无法确定", "没有相关信息"],
+      "expectationType": "SHOULD_REJECT",
+      "notes": "验证无答案场景是否避免胡乱编造"
+    }
+  ]
+}
