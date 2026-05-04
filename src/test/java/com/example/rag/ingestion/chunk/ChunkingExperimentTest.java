@@ -110,7 +110,9 @@ class ChunkingExperimentTest {
     private Map<String, Integer> aggregateChunkCount(List<ExperimentResult> results) {
         Map<String, Integer> totals = new LinkedHashMap<>();
         for (ExperimentResult result : results) {
-            totals.merge(result.profile().name(), result.metrics().chunkCount(), Integer::sum);
+            String profileName = result.profile().name();
+            int currentCount = totals.getOrDefault(profileName, 0);
+            totals.put(profileName, currentCount + result.metrics().chunkCount());
         }
         return totals;
     }
