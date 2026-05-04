@@ -45,3 +45,14 @@ services:
       --maxmemory-policy allkeys-lru
     volumes:
       - ./data/redis:/data
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: rag-redisinsight
+    restart: always
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis
+    volumes:
+      - ./data/redisinsight:/data

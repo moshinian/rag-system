@@ -280,6 +280,37 @@ curl --noproxy '*' -s http://127.0.0.1:8001/health
 3. 结果：`5/5` 可回答问题命中预期文档
 4. 无答案问题返回“根据当前检索内容，无法确定答案。”
 
+### 2026-05-04 RAG 与 Redis 联调
+
+知识库 `e2e-20260504` 已完成一次新的真实端到端联调：
+
+1. 创建知识库 `e2e-20260504`
+2. 上传文档 `DOC-309712409680023552`
+3. `POST /process` 成功生成 `1` 个 chunk
+4. `POST /embed` 成功写入 `1` 个向量
+5. `GET /qa/readiness` 返回 `questionAnsweringReady=true`
+6. `POST /qa/retrieve` 成功命中包含 Week 3 能力描述的真实 chunk
+7. `POST /qa/ask` 返回答案：
+   `根据检索内容，Week 3交付了异步索引、任务重试、过期任务恢复、结构化日志、外部化配置以及Redis业务缓存。`
+
+本次联调同时验证了 Redis 业务缓存的真实写入：
+
+1. 知识库详情缓存：`rag:knowledgeBaseDetail::e2e-20260504`
+2. 知识库分页缓存：`rag:knowledgeBasePage::null:1:10`
+3. `qa/readiness` 缓存：`rag:qaReadiness::e2e-20260504`
+4. 检索结果缓存：`rag:qaRetrieval::e2e-20260504:What did Week 3 deliver?:3`
+
+联调中的两个缓存现象已经确认原因：
+
+1. `qaReadiness` 在最终快照里消失，是因为它的 TTL 配置本来就是 `60s`，在最后一轮观测时已经自然过期，不是写入失败。
+2. `documentChunks` 键前后观测不一致，是因为联调时把“读接口请求”和“Redis 扫描”并行执行了，属于观测时序交叉，不是缓存未生效。
+
+这次联调还顺手修正了 Redis 缓存序列化配置：
+
+1. `RedisCacheConfig` 已注册 `JavaTimeModule`
+2. `OffsetDateTime` 现在可以稳定写入和回读 Redis
+3. 知识库详情、分页等命中缓存后的 JSON 返回已恢复正常
+
 ## 后续方向
 
 下一阶段更适合继续推进这些事情：
@@ -296,5 +327,6 @@ curl --noproxy '*' -s http://127.0.0.1:8001/health
 2. [Week 1](/root/workspace/rag-system/work/week1.md)
 3. [Week 2](/root/workspace/rag-system/work/week2.md)
 4. [Week 3](/root/workspace/rag-system/work/week3.md)
-5. [Day 20 评测记录](/root/workspace/rag-system/work/work%20day20.md)
-6. [Day 21 收口说明](/root/workspace/rag-system/work/work%20day21.md)
+5. [Week 3 难点与优化](/root/workspace/rag-system/work/week3-review.md)
+6. [Day 20 评测记录](/root/workspace/rag-system/work/work%20day20.md)
+7. [Day 21 收口说明](/root/workspace/rag-system/work/work%20day21.md)
