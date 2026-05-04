@@ -3,6 +3,7 @@ package com.example.rag.service;
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.config.RagIndexingProperties;
 import com.example.rag.common.id.SnowflakeIdGenerator;
+import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.IndexingTaskStage;
 import com.example.rag.model.enums.IndexingTaskStatus;
@@ -17,6 +18,9 @@ import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.DocumentEntity;
 import com.example.rag.persistence.entity.IndexingTaskEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -33,6 +37,7 @@ import java.util.concurrent.Executor;
 public class DocumentIndexingService {
 
     private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
+    private static final Logger log = LoggerFactory.getLogger(DocumentIndexingService.class);
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentRepository documentRepository;
@@ -78,6 +83,13 @@ public class DocumentIndexingService {
 
         IndexingTaskEntity task = createTask(document, null, IndexingTaskTriggerSource.SUBMIT, normalizeOperator(operator));
         dispatch(task.getId());
+        log.info(StructuredLogMessage.of("indexing.task.submitted")
+                .field("taskId", task.getId())
+                .field("kbCode", kbCode)
+                .field("documentCode", documentCode)
+                .field("triggerSource", task.getTriggerSource())
+                .field("operator", task.getCreatedBy())
+                .build());
         return toResponse(task, document, kbCode);
     }
 
@@ -113,6 +125,14 @@ public class DocumentIndexingService {
         IndexingTaskEntity retryTask = createRetryTask(document, task, IndexingTaskTriggerSource.MANUAL_RETRY, normalizeOperator(operator));
         markRecovered(task, "Manually retried by task " + retryTask.getId());
         dispatch(retryTask.getId());
+        log.info(StructuredLogMessage.of("indexing.task.retried")
+                .field("taskId", retryTask.getId())
+                .field("parentTaskId", task.getId())
+                .field("kbCode", kbCode)
+                .field("documentCode", documentCode)
+                .field("retryCount", retryTask.getRetryCount())
+                .field("operator", retryTask.getCreatedBy())
+                .build());
         return toResponse(retryTask, document, kbCode);
     }
 
@@ -133,17 +153,33 @@ public class DocumentIndexingService {
                 cutoff,
                 limit
         );
+        if (!staleTasks.isEmpty()) {
+            log.info(StructuredLogMessage.of("indexing.recovery.scan_found")
+                    .field("taskCount", staleTasks.size())
+                    .field("cutoff", cutoff)
+                    .build());
+        }
         for (IndexingTaskEntity staleTask : staleTasks) {
             try {
                 recoverStaleTask(staleTask);
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException ex) {
                 // 恢复扫描不因为单条坏任务中断整轮调度。
+                log.warn(StructuredLogMessage.of("indexing.recovery.scan_failed")
+                        .field("taskId", staleTask.getId())
+                        .field("documentId", staleTask.getDocumentId())
+                        .field("message", ex.getMessage())
+                        .build());
             }
         }
     }
 
     private void recoverStaleTask(IndexingTaskEntity staleTask) {
         if (indexingTaskRepository.existsOtherActiveTask(staleTask.getDocumentId(), TASK_TYPE_DOCUMENT_INDEXING, staleTask.getId())) {
+            log.info(StructuredLogMessage.of("indexing.recovery.skipped")
+                    .field("taskId", staleTask.getId())
+                    .field("documentId", staleTask.getDocumentId())
+                    .field("reason", "other_active_task_exists")
+                    .build());
             return;
         }
         DocumentEntity document = documentRepository.findById(staleTask.getDocumentId())
@@ -155,12 +191,23 @@ public class DocumentIndexingService {
             staleTask.setFinishedAt(OffsetDateTime.now());
             staleTask.setLastHeartbeatAt(OffsetDateTime.now());
             indexingTaskRepository.updateById(staleTask);
+            log.warn(StructuredLogMessage.of("indexing.recovery.failed")
+                    .field("taskId", staleTask.getId())
+                    .field("documentId", staleTask.getDocumentId())
+                    .field("reason", "max_retry_exceeded")
+                    .build());
             return;
         }
 
         IndexingTaskEntity retryTask = createRetryTask(document, staleTask, IndexingTaskTriggerSource.RECOVERY, staleTask.getCreatedBy());
         markRecovered(staleTask, "Recovered by task " + retryTask.getId());
         dispatch(retryTask.getId());
+        log.info(StructuredLogMessage.of("indexing.recovery.dispatched")
+                .field("taskId", staleTask.getId())
+                .field("recoveryTaskId", retryTask.getId())
+                .field("documentId", staleTask.getDocumentId())
+                .field("retryCount", retryTask.getRetryCount())
+                .build());
     }
 
     private void runAsync(Long taskId) {
@@ -171,7 +218,17 @@ public class DocumentIndexingService {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findById(task.getKnowledgeBaseId())
                 .orElseThrow(() -> new BusinessException("Knowledge base not found for indexing task: " + taskId));
         String operator = task.getCreatedBy();
+        MDC.put("taskId", String.valueOf(task.getId()));
+        MDC.put("kbCode", knowledgeBase.getKbCode());
+        MDC.put("documentCode", document.getDocumentCode());
         try {
+            log.info(StructuredLogMessage.of("indexing.task.started")
+                    .field("taskId", task.getId())
+                    .field("kbCode", knowledgeBase.getKbCode())
+                    .field("documentCode", document.getDocumentCode())
+                    .field("triggerSource", task.getTriggerSource())
+                    .field("retryCount", task.getRetryCount())
+                    .build());
             task.setStatus(IndexingTaskStatus.RUNNING);
             task.setTaskStage(IndexingTaskStage.DOCUMENT_PROCESSING);
             task.setErrorMessage(null);
@@ -196,10 +253,28 @@ public class DocumentIndexingService {
             task.setTaskStage(IndexingTaskStage.COMPLETED);
             task.setFinishedAt(OffsetDateTime.now());
             touchHeartbeat(task, null);
+            log.info(StructuredLogMessage.of("indexing.task.succeeded")
+                    .field("taskId", task.getId())
+                    .field("kbCode", knowledgeBase.getKbCode())
+                    .field("documentCode", document.getDocumentCode())
+                    .field("chunkCount", task.getChunkCount())
+                    .field("embeddedChunkCount", task.getEmbeddedChunkCount())
+                    .build());
         } catch (RuntimeException ex) {
             task.setStatus(IndexingTaskStatus.FAILED);
             task.setFinishedAt(OffsetDateTime.now());
             touchHeartbeat(task, truncate(ex.getMessage()));
+            log.warn(StructuredLogMessage.of("indexing.task.failed")
+                    .field("taskId", task.getId())
+                    .field("kbCode", knowledgeBase.getKbCode())
+                    .field("documentCode", document.getDocumentCode())
+                    .field("taskStage", task.getTaskStage())
+                    .field("message", ex.getMessage())
+                    .build());
+        } finally {
+            MDC.remove("documentCode");
+            MDC.remove("kbCode");
+            MDC.remove("taskId");
         }
     }
 

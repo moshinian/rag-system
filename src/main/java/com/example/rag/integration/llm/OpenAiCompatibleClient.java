@@ -1,6 +1,7 @@
 package com.example.rag.integration.llm;
 
 import com.example.rag.common.exception.BusinessException;
+import com.example.rag.common.logging.StructuredLogMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -63,7 +64,12 @@ public class OpenAiCompatibleClient {
                     .map(EmbeddingData::embedding)
                     .toList();
         } catch (IOException ex) {
-            log.warn("Embedding request failed: {}", ex.getMessage());
+            log.warn(StructuredLogMessage.of("llm.embedding.failed")
+                    .field("url", normalizeUrl(baseUrl, path))
+                    .field("model", model)
+                    .field("inputCount", inputs == null ? 0 : inputs.size())
+                    .field("message", ex.getMessage())
+                    .build());
             throw new BusinessException("Failed to call embedding model: " + ex.getMessage());
         }
     }
@@ -101,7 +107,11 @@ public class OpenAiCompatibleClient {
             }
             return message.content();
         } catch (IOException ex) {
-            log.warn("Chat completion request failed: {}", ex.getMessage());
+            log.warn(StructuredLogMessage.of("llm.chat.failed")
+                    .field("url", normalizeUrl(baseUrl, path))
+                    .field("model", model)
+                    .field("message", ex.getMessage())
+                    .build());
             throw new BusinessException("Failed to call chat model: " + ex.getMessage());
         }
     }

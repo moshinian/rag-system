@@ -2,6 +2,7 @@ package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.config.RagEmbeddingProperties;
+import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.integration.llm.OpenAiCompatibleClient;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.EmbeddingStatus;
@@ -13,6 +14,8 @@ import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.DocumentChunkEntity;
 import com.example.rag.persistence.entity.DocumentEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +32,7 @@ import java.util.Locale;
 public class DocumentEmbeddingService {
 
     private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
+    private static final Logger log = LoggerFactory.getLogger(DocumentEmbeddingService.class);
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentRepository documentRepository;
@@ -64,6 +68,12 @@ public class DocumentEmbeddingService {
         int batchSize = normalizeBatchSize(ragEmbeddingProperties.getBatchSize());
         int embeddedCount = 0;
         int failedCount = 0;
+        log.info(StructuredLogMessage.of("document.embedding.started")
+                .field("kbCode", kbCode)
+                .field("documentCode", documentCode)
+                .field("embeddingModel", ragEmbeddingProperties.getModel())
+                .field("batchSize", batchSize)
+                .build());
 
         while (true) {
             List<DocumentChunkEntity> chunks = documentChunkRepository.findEmbeddableChunksByDocumentId(
@@ -76,6 +86,11 @@ public class DocumentEmbeddingService {
             }
 
             OffsetDateTime startedAt = OffsetDateTime.now();
+            log.info(StructuredLogMessage.of("document.embedding.batch_started")
+                    .field("kbCode", kbCode)
+                    .field("documentCode", documentCode)
+                    .field("batchChunkCount", chunks.size())
+                    .build());
             for (DocumentChunkEntity chunk : chunks) {
                 documentChunkRepository.updateEmbeddingState(
                         chunk.getId(),
@@ -111,6 +126,12 @@ public class DocumentEmbeddingService {
                     );
                     embeddedCount++;
                 }
+                log.info(StructuredLogMessage.of("document.embedding.batch_succeeded")
+                        .field("kbCode", kbCode)
+                        .field("documentCode", documentCode)
+                        .field("batchChunkCount", chunks.size())
+                        .field("embeddedCount", embeddedCount)
+                        .build());
             } catch (RuntimeException ex) {
                 OffsetDateTime failedAt = OffsetDateTime.now();
                 String errorMessage = truncate(ex.getMessage());
@@ -124,6 +145,12 @@ public class DocumentEmbeddingService {
                     );
                     failedCount++;
                 }
+                log.warn(StructuredLogMessage.of("document.embedding.batch_failed")
+                        .field("kbCode", kbCode)
+                        .field("documentCode", documentCode)
+                        .field("batchChunkCount", chunks.size())
+                        .field("message", errorMessage)
+                        .build());
                 throw ex;
             }
         }
@@ -132,7 +159,7 @@ public class DocumentEmbeddingService {
                 document.getId(),
                 EmbeddingStatus.EMBEDDED
         );
-        return new DocumentEmbeddingResponse(
+        DocumentEmbeddingResponse response = new DocumentEmbeddingResponse(
                 document.getId(),
                 document.getDocumentCode(),
                 kbCode,
@@ -144,6 +171,14 @@ public class DocumentEmbeddingService {
                 totalEmbeddedChunkCount,
                 OffsetDateTime.now()
         );
+        log.info(StructuredLogMessage.of("document.embedding.completed")
+                .field("kbCode", kbCode)
+                .field("documentCode", documentCode)
+                .field("embeddedChunkCount", response.embeddedChunkCount())
+                .field("failedChunkCount", response.failedChunkCount())
+                .field("totalEmbeddedChunkCount", response.totalEmbeddedChunkCount())
+                .build());
+        return response;
     }
 
     private void ensureKnowledgeBaseActive(KnowledgeBaseEntity knowledgeBase) {

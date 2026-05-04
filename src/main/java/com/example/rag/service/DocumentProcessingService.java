@@ -2,6 +2,7 @@ package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
+import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.ingestion.chunk.ChunkDraft;
 import com.example.rag.ingestion.chunk.FixedWindowChunker;
 import com.example.rag.ingestion.parser.DocumentTextParser;
@@ -22,6 +23,8 @@ import com.example.rag.persistence.entity.IndexingTaskEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -40,6 +43,8 @@ import java.util.Map;
  */
 @Service
 public class DocumentProcessingService {
+
+    private static final Logger log = LoggerFactory.getLogger(DocumentProcessingService.class);
 
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
@@ -89,6 +94,12 @@ public class DocumentProcessingService {
 
         IndexingTaskEntity task = createRunningTask(document, operator);
         try {
+            log.info(StructuredLogMessage.of("document.processing.started")
+                    .field("taskId", task.getId())
+                    .field("kbCode", kbCode)
+                    .field("documentCode", documentCode)
+                    .field("fileType", document.getFileType())
+                    .build());
             // 先进入 PARSING，便于观察当前处理阶段。
             updateStatus(document, DocumentStatus.PARSING, null);
             ParsedDocument parsedDocument = parse(document);
@@ -112,6 +123,13 @@ public class DocumentProcessingService {
 
             updateStatus(document, DocumentStatus.INDEXED, null);
             markTaskSucceeded(task, parsedDocument.parserName(), chunks.size());
+            log.info(StructuredLogMessage.of("document.processing.succeeded")
+                    .field("taskId", task.getId())
+                    .field("kbCode", kbCode)
+                    .field("documentCode", documentCode)
+                    .field("parserName", parsedDocument.parserName())
+                    .field("chunkCount", chunks.size())
+                    .build());
             return new DocumentProcessResponse(
                     document.getId(),
                     document.getDocumentCode(),
@@ -126,6 +144,12 @@ public class DocumentProcessingService {
             // 任一阶段失败都统一落到 FAILED，方便后续排障和重试。
             markFailed(document, ex.getMessage());
             markTaskFailed(task, ex.getMessage());
+            log.warn(StructuredLogMessage.of("document.processing.failed")
+                    .field("taskId", task.getId())
+                    .field("kbCode", kbCode)
+                    .field("documentCode", documentCode)
+                    .field("message", ex.getMessage())
+                    .build());
             throw ex;
         }
     }

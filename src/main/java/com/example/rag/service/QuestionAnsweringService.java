@@ -3,6 +3,7 @@ package com.example.rag.service;
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.config.RagEmbeddingProperties;
 import com.example.rag.config.RagRetrievalProperties;
+import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.integration.llm.OpenAiCompatibleClient;
 import com.example.rag.model.dto.RetrievedChunkCandidate;
 import com.example.rag.model.enums.EmbeddingStatus;
@@ -12,6 +13,8 @@ import com.example.rag.model.response.RetrievedChunkResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +29,8 @@ import java.util.Locale;
  */
 @Service
 public class QuestionAnsweringService {
+
+    private static final Logger log = LoggerFactory.getLogger(QuestionAnsweringService.class);
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentChunkRepository documentChunkRepository;
@@ -87,6 +92,11 @@ public class QuestionAnsweringService {
         KnowledgeBaseEntity knowledgeBase = getKnowledgeBase(kbCode);
         String normalizedQuestion = normalizeQuestion(question);
         int resolvedTopK = resolveTopK(topK);
+        log.info(StructuredLogMessage.of("qa.retrieve.started")
+                .field("kbCode", kbCode)
+                .field("topK", resolvedTopK)
+                .field("questionLength", normalizedQuestion.length())
+                .build());
 
         List<Double> queryVector = openAiCompatibleClient.createEmbedding(
                 ragEmbeddingProperties.getBaseUrl(),
@@ -104,6 +114,13 @@ public class QuestionAnsweringService {
                 ).stream()
                 .map(this::toRetrievedChunkResponse)
                 .toList();
+
+        log.info(StructuredLogMessage.of("qa.retrieve.completed")
+                .field("kbCode", kbCode)
+                .field("topK", resolvedTopK)
+                .field("retrievedChunkCount", chunks.size())
+                .field("embeddingModel", ragEmbeddingProperties.getModel())
+                .build());
 
         return new QuestionRetrievalResponse(
                 knowledgeBase.getKbCode(),

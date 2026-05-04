@@ -13,6 +13,7 @@
 7. Day 14 的 Week 2 端到端验收
 8. Day 15 的异步索引与任务状态追踪起步
 9. Day 16 的失败重试与任务恢复
+10. Day 17 的结构化日志
 
 当前项目已经不再停留在“能上传、能切块”的阶段，而是：
 
@@ -90,6 +91,8 @@
 27. 失败任务会生成子任务执行手动重试
 28. 卡住的 `QUEUED / RUNNING` 任务已支持定时恢复扫描
 29. 当前索引恢复已具备最大重试次数边界
+30. 请求开始/结束、异常、异步索引、问答链路已接入第一版结构化日志
+31. `requestId` 已通过 `MDC` 进入异步索引线程
 
 ## 已验证
 
@@ -121,6 +124,7 @@
 24. 无关问题场景已验证返回“根据当前检索内容，无法确定答案。”
 25. `DocumentIndexingServiceTest / DocumentEmbeddingServiceTest / DocumentProcessingServiceTest` 已覆盖 Day 15 关键分支
 26. `mvn -q -Dtest=DocumentIndexingServiceTest,DocumentEmbeddingServiceTest,DocumentProcessingServiceTest test` 已通过 Day 16 改动验证
+27. `StructuredLogMessageTest` 已覆盖结构化日志消息格式
 
 ## 当前未完成
 
@@ -133,7 +137,7 @@
 
 1. 异步索引任务编排已完成第一版起步，失败重试与恢复已落地，但任务取消和批量编排仍未开始
 2. OpenAPI / Swagger 未开始
-3. 更完整的结构化日志未开始
+3. 更完整的日志采集、指标和 tracing 仍未开始
 4. 评测集未开始
 
 ## 当前判断
@@ -144,7 +148,8 @@
 2. Week 2 已完成第一版收口
 3. Week 3 已开始，Day 15 已完成第一版异步索引能力
 4. Day 16 已完成第一版失败重试与恢复能力
-5. 当前系统已经具备最小可用的 RAG 问答闭环，并开始补工程化能力
+5. Day 17 已完成第一版结构化日志能力
+6. 当前系统已经具备最小可用的 RAG 问答闭环，并开始补工程化能力
 
 ## 后续方向
 
