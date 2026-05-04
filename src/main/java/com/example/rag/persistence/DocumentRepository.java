@@ -30,6 +30,11 @@ public class DocumentRepository {
         return Optional.ofNullable(documentMapper.selectOne(query));
     }
 
+    /** 按主键查询文档。 */
+    public Optional<DocumentEntity> findById(Long id) {
+        return Optional.ofNullable(documentMapper.selectById(id));
+    }
+
     /** 同时按知识库编码和文档编码查询，避免跨知识库误命中。 */
     public Optional<DocumentEntity> findByCodeInKnowledgeBase(String documentCode, String kbCode) {
         return Optional.ofNullable(documentMapper.selectByCodeInKnowledgeBase(documentCode, kbCode));

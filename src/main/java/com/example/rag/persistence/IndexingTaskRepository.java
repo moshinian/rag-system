@@ -6,6 +6,7 @@ import com.example.rag.mapper.IndexingTaskMapper;
 import com.example.rag.persistence.entity.IndexingTaskEntity;
 import org.springframework.stereotype.Repository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -54,5 +55,30 @@ public class IndexingTaskRepository {
                 .eq(IndexingTaskEntity::getTaskType, taskType)
                 .in(IndexingTaskEntity::getStatus, List.of(IndexingTaskStatus.QUEUED, IndexingTaskStatus.RUNNING));
         return indexingTaskMapper.selectCount(query) > 0;
+    }
+
+    /** 判断文档下是否存在除指定任务外的未结束任务。 */
+    public boolean existsOtherActiveTask(Long documentId, String taskType, Long excludedTaskId) {
+        LambdaQueryWrapper<IndexingTaskEntity> query = new LambdaQueryWrapper<IndexingTaskEntity>()
+                .eq(IndexingTaskEntity::getDocumentId, documentId)
+                .eq(IndexingTaskEntity::getTaskType, taskType)
+                .in(IndexingTaskEntity::getStatus, List.of(IndexingTaskStatus.QUEUED, IndexingTaskStatus.RUNNING))
+                .ne(IndexingTaskEntity::getId, excludedTaskId);
+        return indexingTaskMapper.selectCount(query) > 0;
+    }
+
+    /** 读取可恢复的卡住任务。 */
+    public List<IndexingTaskEntity> findRecoverableTasks(String taskType, OffsetDateTime cutoff, int limit) {
+        LambdaQueryWrapper<IndexingTaskEntity> query = new LambdaQueryWrapper<IndexingTaskEntity>()
+                .eq(IndexingTaskEntity::getTaskType, taskType)
+                .in(IndexingTaskEntity::getStatus, List.of(IndexingTaskStatus.QUEUED, IndexingTaskStatus.RUNNING))
+                .and(wrapper -> wrapper
+                        .lt(IndexingTaskEntity::getLastHeartbeatAt, cutoff)
+                        .or(inner -> inner.isNull(IndexingTaskEntity::getLastHeartbeatAt)
+                                .lt(IndexingTaskEntity::getStartedAt, cutoff)))
+                .orderByAsc(IndexingTaskEntity::getStartedAt)
+                .orderByAsc(IndexingTaskEntity::getId)
+                .last("LIMIT " + limit);
+        return indexingTaskMapper.selectList(query);
     }
 }

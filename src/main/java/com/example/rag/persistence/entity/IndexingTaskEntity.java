@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.example.rag.model.enums.IndexingTaskStage;
 import com.example.rag.model.enums.IndexingTaskStatus;
+import com.example.rag.model.enums.IndexingTaskTriggerSource;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -31,6 +32,9 @@ public class IndexingTaskEntity {
     @TableField("document_id")
     private Long documentId;
 
+    @TableField("parent_task_id")
+    private Long parentTaskId;
+
     @TableField("task_type")
     private String taskType;
 
@@ -48,6 +52,15 @@ public class IndexingTaskEntity {
     @TableField("embedded_chunk_count")
     private Integer embeddedChunkCount = 0;
 
+    @TableField("trigger_source")
+    private IndexingTaskTriggerSource triggerSource = IndexingTaskTriggerSource.SUBMIT;
+
+    @TableField("retry_count")
+    private Integer retryCount = 0;
+
+    @TableField("max_retry_count")
+    private Integer maxRetryCount = 3;
+
     @TableField("error_message")
     private String errorMessage;
 
@@ -56,6 +69,12 @@ public class IndexingTaskEntity {
 
     @TableField("finished_at")
     private OffsetDateTime finishedAt;
+
+    @TableField("last_heartbeat_at")
+    private OffsetDateTime lastHeartbeatAt;
+
+    @TableField("recovered_at")
+    private OffsetDateTime recoveredAt;
 
     @TableField("created_by")
     private String createdBy = "system";

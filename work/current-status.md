@@ -12,6 +12,7 @@
 6. Day 13 的第一版问答记录持久化与历史查询联调
 7. Day 14 的 Week 2 端到端验收
 8. Day 15 的异步索引与任务状态追踪起步
+9. Day 16 的失败重试与任务恢复
 
 当前项目已经不再停留在“能上传、能切块”的阶段，而是：
 
@@ -84,6 +85,11 @@
 22. `indexing_task` 已支持 `task_stage / embedded_chunk_count`
 23. 后台 `DOCUMENT_INDEXING` 任务已串起 `process + embed`
 24. `DocumentEmbeddingService` 已支持循环处理整篇文档的多批次 chunk
+25. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/indexing-tasks/{taskId}/retry` 已落地
+26. `indexing_task` 已支持 `parent_task_id / trigger_source / retry_count / max_retry_count / last_heartbeat_at / recovered_at`
+27. 失败任务会生成子任务执行手动重试
+28. 卡住的 `QUEUED / RUNNING` 任务已支持定时恢复扫描
+29. 当前索引恢复已具备最大重试次数边界
 
 ## 已验证
 
@@ -114,6 +120,7 @@
 23. `day14-kb` 已完成从上传到问答历史的完整端到端验收
 24. 无关问题场景已验证返回“根据当前检索内容，无法确定答案。”
 25. `DocumentIndexingServiceTest / DocumentEmbeddingServiceTest / DocumentProcessingServiceTest` 已覆盖 Day 15 关键分支
+26. `mvn -q -Dtest=DocumentIndexingServiceTest,DocumentEmbeddingServiceTest,DocumentProcessingServiceTest test` 已通过 Day 16 改动验证
 
 ## 当前未完成
 
@@ -124,7 +131,7 @@
 
 ### 工程化补充
 
-1. 异步索引任务编排已完成第一版起步，但自动重试、取消和批量编排仍未开始
+1. 异步索引任务编排已完成第一版起步，失败重试与恢复已落地，但任务取消和批量编排仍未开始
 2. OpenAPI / Swagger 未开始
 3. 更完整的结构化日志未开始
 4. 评测集未开始
@@ -136,7 +143,8 @@
 1. Week 1 已完成
 2. Week 2 已完成第一版收口
 3. Week 3 已开始，Day 15 已完成第一版异步索引能力
-4. 当前系统已经具备最小可用的 RAG 问答闭环，并开始补工程化能力
+4. Day 16 已完成第一版失败重试与恢复能力
+5. 当前系统已经具备最小可用的 RAG 问答闭环，并开始补工程化能力
 
 ## 后续方向
 

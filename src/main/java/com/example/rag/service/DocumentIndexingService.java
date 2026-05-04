@@ -1,10 +1,12 @@
 package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
+import com.example.rag.config.RagIndexingProperties;
 import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.IndexingTaskStage;
 import com.example.rag.model.enums.IndexingTaskStatus;
+import com.example.rag.model.enums.IndexingTaskTriggerSource;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.DocumentEmbeddingResponse;
 import com.example.rag.model.response.DocumentIndexingTaskResponse;
@@ -16,6 +18,7 @@ import com.example.rag.persistence.entity.DocumentEntity;
 import com.example.rag.persistence.entity.IndexingTaskEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
@@ -37,6 +40,7 @@ public class DocumentIndexingService {
     private final DocumentProcessingService documentProcessingService;
     private final DocumentEmbeddingService documentEmbeddingService;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
+    private final RagIndexingProperties ragIndexingProperties;
     private final Executor indexingExecutor;
 
     public DocumentIndexingService(KnowledgeBaseRepository knowledgeBaseRepository,
@@ -45,6 +49,7 @@ public class DocumentIndexingService {
                                    DocumentProcessingService documentProcessingService,
                                    DocumentEmbeddingService documentEmbeddingService,
                                    SnowflakeIdGenerator snowflakeIdGenerator,
+                                   RagIndexingProperties ragIndexingProperties,
                                    @Qualifier("indexingExecutor") Executor indexingExecutor) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentRepository = documentRepository;
@@ -52,6 +57,7 @@ public class DocumentIndexingService {
         this.documentProcessingService = documentProcessingService;
         this.documentEmbeddingService = documentEmbeddingService;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
+        this.ragIndexingProperties = ragIndexingProperties;
         this.indexingExecutor = indexingExecutor;
     }
 
@@ -70,18 +76,8 @@ public class DocumentIndexingService {
             throw new BusinessException("An active indexing task already exists for document: " + documentCode);
         }
 
-        IndexingTaskEntity task = new IndexingTaskEntity();
-        task.setId(snowflakeIdGenerator.nextId());
-        task.setKnowledgeBaseId(document.getKnowledgeBaseId());
-        task.setDocumentId(document.getId());
-        task.setTaskType(TASK_TYPE_DOCUMENT_INDEXING);
-        task.setStatus(IndexingTaskStatus.QUEUED);
-        task.setTaskStage(IndexingTaskStage.QUEUED);
-        task.setStartedAt(OffsetDateTime.now());
-        task.setCreatedBy(normalizeOperator(operator));
-        indexingTaskRepository.insert(task);
-
-        indexingExecutor.execute(() -> runAsync(task.getId(), kbCode, documentCode, operator));
+        IndexingTaskEntity task = createTask(document, null, IndexingTaskTriggerSource.SUBMIT, normalizeOperator(operator));
+        dispatch(task.getId());
         return toResponse(task, document, kbCode);
     }
 
@@ -94,34 +90,116 @@ public class DocumentIndexingService {
                 .toList();
     }
 
-    private void runAsync(Long taskId, String kbCode, String documentCode, String operator) {
-        IndexingTaskEntity task = indexingTaskRepository.findById(taskId)
-                .orElseThrow(() -> new BusinessException("Indexing task not found: " + taskId));
+    /** 手动重试失败任务。 */
+    public DocumentIndexingTaskResponse retry(String kbCode, String documentCode, Long taskId, String operator) {
         DocumentEntity document = documentRepository.findByCodeInKnowledgeBase(documentCode, kbCode)
                 .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
+        IndexingTaskEntity task = indexingTaskRepository.findById(taskId)
+                .orElseThrow(() -> new BusinessException("Indexing task not found: " + taskId));
+        if (!Objects.equals(task.getDocumentId(), document.getId())) {
+            throw new BusinessException("Indexing task does not belong to document: " + taskId);
+        }
+        if (task.getStatus() != IndexingTaskStatus.FAILED) {
+            throw new BusinessException("Only FAILED indexing tasks can be retried: " + taskId);
+        }
+        if (indexingTaskRepository.existsActiveTask(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
+            throw new BusinessException("An active indexing task already exists for document: " + documentCode);
+        }
+        if (task.getRetryCount() != null && task.getMaxRetryCount() != null
+                && task.getRetryCount() >= task.getMaxRetryCount()) {
+            throw new BusinessException("Indexing task exceeded max retry count: " + taskId);
+        }
+
+        IndexingTaskEntity retryTask = createRetryTask(document, task, IndexingTaskTriggerSource.MANUAL_RETRY, normalizeOperator(operator));
+        markRecovered(task, "Manually retried by task " + retryTask.getId());
+        dispatch(retryTask.getId());
+        return toResponse(retryTask, document, kbCode);
+    }
+
+    /** 定时扫描卡住的队列中/运行中任务，并重新投递。 */
+    @Scheduled(
+            fixedDelayString = "${rag.indexing.recovery.scan-interval-ms:60000}",
+            initialDelayString = "${rag.indexing.recovery.initial-delay-ms:30000}"
+    )
+    public void recoverStaleTasks() {
+        if (!ragIndexingProperties.getRecovery().isEnabled()) {
+            return;
+        }
+        OffsetDateTime cutoff = OffsetDateTime.now()
+                .minusSeconds(Math.max(30, ragIndexingProperties.getRecovery().getStaleAfterSeconds()));
+        int limit = Math.max(1, ragIndexingProperties.getRecovery().getScanLimit());
+        List<IndexingTaskEntity> staleTasks = indexingTaskRepository.findRecoverableTasks(
+                TASK_TYPE_DOCUMENT_INDEXING,
+                cutoff,
+                limit
+        );
+        for (IndexingTaskEntity staleTask : staleTasks) {
+            try {
+                recoverStaleTask(staleTask);
+            } catch (RuntimeException ignored) {
+                // 恢复扫描不因为单条坏任务中断整轮调度。
+            }
+        }
+    }
+
+    private void recoverStaleTask(IndexingTaskEntity staleTask) {
+        if (indexingTaskRepository.existsOtherActiveTask(staleTask.getDocumentId(), TASK_TYPE_DOCUMENT_INDEXING, staleTask.getId())) {
+            return;
+        }
+        DocumentEntity document = documentRepository.findById(staleTask.getDocumentId())
+                .orElseThrow(() -> new BusinessException("Document not found for indexing task: " + staleTask.getId()));
+        if (staleTask.getRetryCount() != null && staleTask.getMaxRetryCount() != null
+                && staleTask.getRetryCount() >= staleTask.getMaxRetryCount()) {
+            staleTask.setStatus(IndexingTaskStatus.FAILED);
+            staleTask.setErrorMessage(truncate("Task exceeded max retry count during recovery"));
+            staleTask.setFinishedAt(OffsetDateTime.now());
+            staleTask.setLastHeartbeatAt(OffsetDateTime.now());
+            indexingTaskRepository.updateById(staleTask);
+            return;
+        }
+
+        IndexingTaskEntity retryTask = createRetryTask(document, staleTask, IndexingTaskTriggerSource.RECOVERY, staleTask.getCreatedBy());
+        markRecovered(staleTask, "Recovered by task " + retryTask.getId());
+        dispatch(retryTask.getId());
+    }
+
+    private void runAsync(Long taskId) {
+        IndexingTaskEntity task = indexingTaskRepository.findById(taskId)
+                .orElseThrow(() -> new BusinessException("Indexing task not found: " + taskId));
+        DocumentEntity document = documentRepository.findById(task.getDocumentId())
+                .orElseThrow(() -> new BusinessException("Document not found for indexing task: " + taskId));
+        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findById(task.getKnowledgeBaseId())
+                .orElseThrow(() -> new BusinessException("Knowledge base not found for indexing task: " + taskId));
+        String operator = task.getCreatedBy();
         try {
             task.setStatus(IndexingTaskStatus.RUNNING);
             task.setTaskStage(IndexingTaskStage.DOCUMENT_PROCESSING);
             task.setErrorMessage(null);
-            indexingTaskRepository.updateById(task);
+            touchHeartbeat(task, null);
 
-            DocumentProcessResponse processResponse = documentProcessingService.process(kbCode, documentCode, operator);
+            DocumentProcessResponse processResponse = documentProcessingService.process(
+                    knowledgeBase.getKbCode(),
+                    document.getDocumentCode(),
+                    operator
+            );
             task.setParserName(processResponse.parserName());
             task.setChunkCount(processResponse.chunkCount());
             task.setTaskStage(IndexingTaskStage.DOCUMENT_EMBEDDING);
-            indexingTaskRepository.updateById(task);
+            touchHeartbeat(task, null);
 
-            DocumentEmbeddingResponse embeddingResponse = documentEmbeddingService.embed(kbCode, documentCode);
+            DocumentEmbeddingResponse embeddingResponse = documentEmbeddingService.embed(
+                    knowledgeBase.getKbCode(),
+                    document.getDocumentCode()
+            );
             task.setEmbeddedChunkCount(Math.toIntExact(embeddingResponse.totalEmbeddedChunkCount()));
             task.setStatus(IndexingTaskStatus.SUCCEEDED);
             task.setTaskStage(IndexingTaskStage.COMPLETED);
             task.setFinishedAt(OffsetDateTime.now());
-            indexingTaskRepository.updateById(task);
+            touchHeartbeat(task, null);
         } catch (RuntimeException ex) {
             task.setStatus(IndexingTaskStatus.FAILED);
-            task.setErrorMessage(truncate(ex.getMessage()));
             task.setFinishedAt(OffsetDateTime.now());
-            indexingTaskRepository.updateById(task);
+            touchHeartbeat(task, truncate(ex.getMessage()));
         }
     }
 
@@ -131,19 +209,84 @@ public class DocumentIndexingService {
                 task.getTaskType(),
                 task.getStatus() == null ? IndexingTaskStatus.QUEUED.name() : task.getStatus().name(),
                 task.getTaskStage() == null ? IndexingTaskStage.QUEUED.name() : task.getTaskStage().name(),
+                task.getTriggerSource() == null ? IndexingTaskTriggerSource.SUBMIT.name() : task.getTriggerSource().name(),
                 document.getId(),
                 document.getDocumentCode(),
                 kbCode,
+                task.getParentTaskId(),
                 task.getParserName(),
                 task.getChunkCount(),
                 task.getEmbeddedChunkCount(),
+                task.getRetryCount(),
+                task.getMaxRetryCount(),
                 task.getErrorMessage(),
                 task.getCreatedBy(),
                 task.getStartedAt(),
                 task.getFinishedAt(),
+                task.getLastHeartbeatAt(),
+                task.getRecoveredAt(),
                 task.getCreatedAt(),
                 task.getUpdatedAt()
         );
+    }
+
+    private IndexingTaskEntity createTask(DocumentEntity document,
+                                          Long parentTaskId,
+                                          IndexingTaskTriggerSource triggerSource,
+                                          String operator) {
+        IndexingTaskEntity task = new IndexingTaskEntity();
+        OffsetDateTime now = OffsetDateTime.now();
+        task.setId(snowflakeIdGenerator.nextId());
+        task.setKnowledgeBaseId(document.getKnowledgeBaseId());
+        task.setDocumentId(document.getId());
+        task.setParentTaskId(parentTaskId);
+        task.setTaskType(TASK_TYPE_DOCUMENT_INDEXING);
+        task.setStatus(IndexingTaskStatus.QUEUED);
+        task.setTaskStage(IndexingTaskStage.QUEUED);
+        task.setTriggerSource(triggerSource);
+        task.setRetryCount(0);
+        task.setMaxRetryCount(Math.max(1, ragIndexingProperties.getMaxRetryCount()));
+        task.setStartedAt(now);
+        task.setLastHeartbeatAt(now);
+        task.setCreatedBy(operator);
+        indexingTaskRepository.insert(task);
+        return task;
+    }
+
+    private IndexingTaskEntity createRetryTask(DocumentEntity document,
+                                               IndexingTaskEntity sourceTask,
+                                               IndexingTaskTriggerSource triggerSource,
+                                               String operator) {
+        IndexingTaskEntity retryTask = createTask(document, sourceTask.getId(), triggerSource, operator);
+        retryTask.setRetryCount((sourceTask.getRetryCount() == null ? 0 : sourceTask.getRetryCount()) + 1);
+        retryTask.setMaxRetryCount(sourceTask.getMaxRetryCount() == null
+                ? Math.max(1, ragIndexingProperties.getMaxRetryCount())
+                : sourceTask.getMaxRetryCount());
+        retryTask.setParserName(sourceTask.getParserName());
+        retryTask.setChunkCount(sourceTask.getChunkCount());
+        retryTask.setEmbeddedChunkCount(sourceTask.getEmbeddedChunkCount());
+        indexingTaskRepository.updateById(retryTask);
+        return retryTask;
+    }
+
+    private void markRecovered(IndexingTaskEntity sourceTask, String message) {
+        OffsetDateTime now = OffsetDateTime.now();
+        sourceTask.setRecoveredAt(now);
+        sourceTask.setFinishedAt(now);
+        sourceTask.setLastHeartbeatAt(now);
+        sourceTask.setStatus(IndexingTaskStatus.FAILED);
+        sourceTask.setErrorMessage(truncate(message));
+        indexingTaskRepository.updateById(sourceTask);
+    }
+
+    private void touchHeartbeat(IndexingTaskEntity task, String errorMessage) {
+        task.setErrorMessage(errorMessage);
+        task.setLastHeartbeatAt(OffsetDateTime.now());
+        indexingTaskRepository.updateById(task);
+    }
+
+    private void dispatch(Long taskId) {
+        indexingExecutor.execute(() -> runAsync(taskId));
     }
 
     private void ensureKnowledgeBaseActive(KnowledgeBaseEntity knowledgeBase) {

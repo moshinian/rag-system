@@ -157,4 +157,16 @@ public class DocumentController {
         java.util.List<DocumentIndexingTaskResponse> response = documentIndexingService.listTasks(kbCode, documentCode);
         return ApiResponse.success(response, requestId);
     }
+
+    /** 手动重试指定索引任务。 */
+    @PostMapping("/{documentCode}/indexing-tasks/{taskId}/retry")
+    public ApiResponse<DocumentIndexingTaskResponse> retryIndexingTask(@PathVariable String kbCode,
+                                                                       @PathVariable String documentCode,
+                                                                       @PathVariable Long taskId,
+                                                                       @RequestParam(value = "operator", required = false) String operator,
+                                                                       HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        DocumentIndexingTaskResponse response = documentIndexingService.retry(kbCode, documentCode, taskId, operator);
+        return ApiResponse.success(response, requestId);
+    }
 }

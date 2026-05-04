@@ -67,3 +67,9 @@ rag:
     default-top-k: 5
     max-top-k: 10
     max-context-chars: 6000
+  indexing:
+    max-retry-count: 3
+    recovery:
+      enabled: true
+      stale-after-seconds: 600
+      scan-limit: 20
