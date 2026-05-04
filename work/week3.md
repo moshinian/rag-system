@@ -98,8 +98,44 @@ Week 2 已完成第一版收口，当前已经具备：
 
 1. Day 16：失败重试机制已完成，当前已支持手动 retry 与卡住任务恢复
 2. Day 17：结构化日志已完成，当前已支持 requestId + 异步任务上下文日志
-3. Day 18：配置梳理与参数外置
-4. Day 19：切块参数对比实验
+3. Day 18：配置梳理与参数外置已完成，当前已把切块、线程池、问答记录参数迁移到 `application.yml`
+4. Day 19：切块参数对比实验已完成，当前已形成第一版参数对比结论
 5. Day 20：问答评测集
 6. Day 21：Week 3 验收与文档收口
    这一天预留给 README、current-status、week3 文档、验收样例和 Week 3 总结统一收口，不再大幅扩功能
+
+## Day 18：配置梳理与参数外置
+
+今天完成：
+
+1. 把切块参数从代码常量迁移到配置
+2. 把异步索引线程池参数迁移到配置
+3. 把问答记录的默认值迁移到配置
+4. 保持默认值兼容，避免因为缺配置导致启动失败
+5. 用单测验证配置已真实影响业务行为
+
+当前结果：
+
+1. 新增 `rag.executor.*`，当前控制索引线程池大小、队列容量、线程名前缀和关闭等待时间
+2. 新增 `rag.chunking.*`，当前控制 `FixedWindowChunker` 的策略名、chunk 长度、overlap 和自然断点搜索范围
+3. 新增 `rag.qa.*`，当前控制问答记录的 `createdBy / messageType / promptTemplate / sessionNameMaxLength`
+4. `DocumentProcessingService` 生成的 chunk 元数据已改为读取切块配置，而不是写死常量
+5. `QaRecordService` 已改为读取问答记录配置，而不是写死 `qa-service / QA / qa-default-v1 / 80`
+
+## Day 19：切块参数对比实验
+
+今天完成：
+
+1. 新增可重复执行的切块参数实验测试
+2. 增加一份更长的 Markdown 样本，避免 Day 4 样本过短导致实验没有区分度
+3. 对 `compact / balanced / wide` 三组参数跑同一批样本文档
+4. 比较 chunk 数、平均长度、最短/最长 chunk 和过长 chunk 分布
+5. 输出第一版参数结论，供 Day 20 问答评测继续使用
+
+当前结果：
+
+1. `compact(480/60/180)` 总 chunk 数最多，为 `15`
+2. `balanced(600/80/240)` 总 chunk 数为 `14`，比 `compact` 少 1 个
+3. `wide(720/120/300)` 总 chunk 数降到 `10`，平均 chunk 长度显著上升
+4. 在长 Markdown 样本上，`balanced` 已出现 `4` 个 `>500` 字符 chunk，`wide` 出现 `5` 个
+5. 当前样本规模下，`balanced` 仍是更适合作为默认值的折中方案

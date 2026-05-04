@@ -224,8 +224,8 @@ public class DocumentProcessingService {
         metadata.put("fileType", document.getFileType());
         metadata.put("mediaType", document.getMediaType());
         metadata.put("documentCode", document.getDocumentCode());
-        metadata.put("chunkStrategy", "fixed-window");
-        metadata.put("overlapChars", 80);
+        metadata.put("chunkStrategy", fixedWindowChunker.strategyName());
+        metadata.put("overlapChars", fixedWindowChunker.overlapChars());
         metadata.put("sectionTitle", normalizeTitle(draft.title(), document));
         metadata.put("contentHash", document.getContentHash());
         try {

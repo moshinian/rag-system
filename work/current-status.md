@@ -14,6 +14,8 @@
 8. Day 15 的异步索引与任务状态追踪起步
 9. Day 16 的失败重试与任务恢复
 10. Day 17 的结构化日志
+11. Day 18 的配置梳理与参数外置
+12. Day 19 的切块参数对比实验
 
 当前项目已经不再停留在“能上传、能切块”的阶段，而是：
 
@@ -93,6 +95,8 @@
 29. 当前索引恢复已具备最大重试次数边界
 30. 请求开始/结束、异常、异步索引、问答链路已接入第一版结构化日志
 31. `requestId` 已通过 `MDC` 进入异步索引线程
+32. `rag.executor / rag.chunking / rag.qa` 已开始接管线程池、切块与问答记录默认参数
+33. 已具备第一版可重复执行的切块参数实验测试与长样本数据
 
 ## 已验证
 
@@ -125,6 +129,8 @@
 25. `DocumentIndexingServiceTest / DocumentEmbeddingServiceTest / DocumentProcessingServiceTest` 已覆盖 Day 15 关键分支
 26. `mvn -q -Dtest=DocumentIndexingServiceTest,DocumentEmbeddingServiceTest,DocumentProcessingServiceTest test` 已通过 Day 16 改动验证
 27. `StructuredLogMessageTest` 已覆盖结构化日志消息格式
+28. `QaRecordServiceTest` 已验证问答记录配置外置后的实际生效行为
+29. `ChunkingExperimentTest` 已完成 `compact / balanced / wide` 三组切块参数对比
 
 ## 当前未完成
 
@@ -138,7 +144,7 @@
 1. 异步索引任务编排已完成第一版起步，失败重试与恢复已落地，但任务取消和批量编排仍未开始
 2. OpenAPI / Swagger 未开始
 3. 更完整的日志采集、指标和 tracing 仍未开始
-4. 评测集未开始
+4. Day 20 的问答评测集仍未开始
 
 ## 当前判断
 
@@ -149,7 +155,9 @@
 3. Week 3 已开始，Day 15 已完成第一版异步索引能力
 4. Day 16 已完成第一版失败重试与恢复能力
 5. Day 17 已完成第一版结构化日志能力
-6. 当前系统已经具备最小可用的 RAG 问答闭环，并开始补工程化能力
+6. Day 18 已完成第一版配置梳理与参数外置
+7. Day 19 已完成第一版切块参数对比实验
+8. 当前系统已经具备最小可用的 RAG 问答闭环，并开始补工程化能力
 
 ## 后续方向
 

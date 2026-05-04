@@ -2,6 +2,7 @@ package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
+import com.example.rag.config.RagQaProperties;
 import com.example.rag.model.dto.QaHistoryRecordView;
 import com.example.rag.model.response.PageResponse;
 import com.example.rag.model.response.QaAnswerResponse;
@@ -33,26 +34,26 @@ public class QaRecordService {
     private static final long DEFAULT_PAGE_NO = 1;
     private static final long DEFAULT_PAGE_SIZE = 20;
     private static final long MAX_PAGE_SIZE = 100;
-    private static final String DEFAULT_CREATED_BY = "qa-service";
-    private static final String MESSAGE_TYPE_QA = "QA";
-    private static final String PROMPT_TEMPLATE_V1 = "qa-default-v1";
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final ObjectMapper objectMapper;
+    private final RagQaProperties ragQaProperties;
 
     public QaRecordService(KnowledgeBaseRepository knowledgeBaseRepository,
                            ChatSessionRepository chatSessionRepository,
                            ChatMessageRepository chatMessageRepository,
                            SnowflakeIdGenerator snowflakeIdGenerator,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           RagQaProperties ragQaProperties) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.chatSessionRepository = chatSessionRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
         this.objectMapper = objectMapper;
+        this.ragQaProperties = ragQaProperties;
     }
 
     /** 保存一次问答记录。 */
@@ -68,7 +69,7 @@ public class QaRecordService {
         session.setSessionCode(sessionCode);
         session.setKnowledgeBaseId(knowledgeBase.getId());
         session.setSessionName(buildSessionName(answerResponse.question()));
-        session.setCreatedBy(DEFAULT_CREATED_BY);
+        session.setCreatedBy(defaultCreatedBy());
         chatSessionRepository.insert(session);
 
         long messageId = snowflakeIdGenerator.nextId();
@@ -77,12 +78,12 @@ public class QaRecordService {
         message.setId(messageId);
         message.setMessageCode(messageCode);
         message.setSessionId(sessionId);
-        message.setMessageType(MESSAGE_TYPE_QA);
+        message.setMessageType(messageType());
         message.setQuestion(answerResponse.question());
         message.setAnswer(answerResponse.answer());
         message.setRetrievedChunks(toJson(answerResponse.retrievalResults()));
         message.setSources(toJson(answerResponse.sources()));
-        message.setPromptTemplate(PROMPT_TEMPLATE_V1);
+        message.setPromptTemplate(promptTemplate());
         message.setModelName(answerResponse.chatModel());
         message.setTopK(answerResponse.topK());
         message.setLatencyMs(latencyMs);
@@ -131,10 +132,10 @@ public class QaRecordService {
 
     private String buildSessionName(String question) {
         String normalized = question == null ? "" : question.trim();
-        if (normalized.length() <= 80) {
+        if (normalized.length() <= sessionNameMaxLength()) {
             return normalized;
         }
-        return normalized.substring(0, 80);
+        return normalized.substring(0, sessionNameMaxLength());
     }
 
     private String toJson(Object value) {
@@ -193,5 +194,25 @@ public class QaRecordService {
             String sessionCode,
             String messageCode
     ) {
+    }
+
+    private String defaultCreatedBy() {
+        String configured = ragQaProperties.getDefaultCreatedBy();
+        return configured == null || configured.isBlank() ? "qa-service" : configured.trim();
+    }
+
+    private String messageType() {
+        String configured = ragQaProperties.getMessageType();
+        return configured == null || configured.isBlank() ? "QA" : configured.trim();
+    }
+
+    private String promptTemplate() {
+        String configured = ragQaProperties.getPromptTemplate();
+        return configured == null || configured.isBlank() ? "qa-default-v1" : configured.trim();
+    }
+
+    private int sessionNameMaxLength() {
+        Integer configured = ragQaProperties.getSessionNameMaxLength();
+        return configured == null || configured < 10 ? 80 : configured;
     }
 }

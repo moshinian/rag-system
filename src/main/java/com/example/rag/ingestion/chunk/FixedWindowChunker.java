@@ -1,5 +1,6 @@
 package com.example.rag.ingestion.chunk;
 
+import com.example.rag.config.RagChunkingProperties;
 import com.example.rag.ingestion.parser.ParsedDocument;
 import com.example.rag.ingestion.parser.ParsedSection;
 import org.springframework.stereotype.Component;
@@ -15,9 +16,11 @@ import java.util.List;
 @Component
 public class FixedWindowChunker {
 
-    private static final int MAX_CHUNK_CHARS = 600;
-    private static final int OVERLAP_CHARS = 80;
-    private static final int MIN_BREAK_SEARCH_OFFSET = 240;
+    private final RagChunkingProperties ragChunkingProperties;
+
+    public FixedWindowChunker(RagChunkingProperties ragChunkingProperties) {
+        this.ragChunkingProperties = ragChunkingProperties;
+    }
 
     /**
      * 把解析结果切成多个 chunk。
@@ -40,11 +43,11 @@ public class FixedWindowChunker {
                     break;
                 }
 
-                int end = Math.min(start + MAX_CHUNK_CHARS, content.length());
+                int end = Math.min(start + maxChunkChars(), content.length());
                 if (end < content.length()) {
                     // 优先把 chunk 截在更自然的边界，例如句号或换行。
                     int breakPoint = findBreakPoint(content, start, end);
-                    if (breakPoint > start + MIN_BREAK_SEARCH_OFFSET) {
+                    if (breakPoint > start + minBreakSearchOffset()) {
                         end = breakPoint;
                     }
                 }
@@ -68,7 +71,7 @@ public class FixedWindowChunker {
                 }
 
                 // overlap 用来减少边界截断带来的上下文损失。
-                cursor = Math.max(trimmedEnd - OVERLAP_CHARS, start + 1);
+                cursor = Math.max(trimmedEnd - overlapChars(), start + 1);
             }
 
             // section 之间粗略增加偏移量，形成全局位置感。
@@ -123,5 +126,25 @@ public class FixedWindowChunker {
             }
         }
         return end;
+    }
+
+    public String strategyName() {
+        String configured = ragChunkingProperties.getStrategy();
+        return configured == null || configured.isBlank() ? "fixed-window" : configured.trim();
+    }
+
+    public int overlapChars() {
+        Integer configured = ragChunkingProperties.getOverlapChars();
+        return configured == null || configured < 0 ? 80 : configured;
+    }
+
+    private int maxChunkChars() {
+        Integer configured = ragChunkingProperties.getMaxChunkChars();
+        return configured == null || configured < 100 ? 600 : configured;
+    }
+
+    private int minBreakSearchOffset() {
+        Integer configured = ragChunkingProperties.getMinBreakSearchOffset();
+        return configured == null || configured < 50 ? 240 : configured;
     }
 }

@@ -46,6 +46,17 @@ rag:
   storage:
     base-dir: ./data/uploads
     max-file-size-mb: 20
+  executor:
+    core-pool-size: 4
+    max-pool-size: 8
+    queue-capacity: 100
+    await-termination-seconds: 30
+    thread-name-prefix: rag-indexing-
+  chunking:
+    strategy: fixed-window
+    max-chunk-chars: 600
+    overlap-chars: 80
+    min-break-search-offset: 240
   embedding:
     provider: local-openai-compatible
     base-url: http://localhost:8001/v1
@@ -67,6 +78,11 @@ rag:
     default-top-k: 5
     max-top-k: 10
     max-context-chars: 6000
+  qa:
+    default-created-by: qa-service
+    message-type: QA
+    prompt-template: qa-default-v1
+    session-name-max-length: 80
   indexing:
     max-retry-count: 3
     recovery:

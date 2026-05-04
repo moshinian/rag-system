@@ -2,6 +2,7 @@ package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
+import com.example.rag.config.RagChunkingProperties;
 import com.example.rag.ingestion.chunk.FixedWindowChunker;
 import com.example.rag.ingestion.parser.MarkdownDocumentTextParser;
 import com.example.rag.ingestion.parser.PlainTextDocumentTextParser;
@@ -105,7 +106,7 @@ class DocumentProcessingServiceTest {
                 indexingTaskRepository,
                 knowledgeBaseRepository,
                 List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
-                new FixedWindowChunker(),
+                new FixedWindowChunker(defaultChunkingProperties()),
                 snowflakeIdGenerator,
                 new ObjectMapper()
         );
@@ -153,7 +154,7 @@ class DocumentProcessingServiceTest {
                 indexingTaskRepository,
                 knowledgeBaseRepository,
                 List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser(), new PdfDocumentTextParser()),
-                new FixedWindowChunker(),
+                new FixedWindowChunker(defaultChunkingProperties()),
                 snowflakeIdGenerator,
                 new ObjectMapper()
         );
@@ -178,7 +179,7 @@ class DocumentProcessingServiceTest {
                 indexingTaskRepository,
                 knowledgeBaseRepository,
                 List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
-                new FixedWindowChunker(),
+                new FixedWindowChunker(defaultChunkingProperties()),
                 snowflakeIdGenerator,
                 new ObjectMapper()
         );
@@ -217,5 +218,9 @@ class DocumentProcessingServiceTest {
     private void mockSnowflakeSequence(long startValue) {
         AtomicLong sequence = new AtomicLong(startValue);
         when(snowflakeIdGenerator.nextId()).thenAnswer(invocation -> sequence.getAndIncrement());
+    }
+
+    private RagChunkingProperties defaultChunkingProperties() {
+        return new RagChunkingProperties();
     }
 }
