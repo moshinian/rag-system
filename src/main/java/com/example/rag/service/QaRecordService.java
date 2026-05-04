@@ -26,7 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * Day 13 问答记录持久化服务。
+ * 问答记录持久化服务。
+ *
+ * 负责保存问答会话和消息，并提供历史查询能力。
  */
 @Service
 public class QaRecordService {
@@ -62,6 +64,7 @@ public class QaRecordService {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
 
+        // 当前实现按单次问答创建独立 session，便于后续演进为会话复用。
         long sessionId = snowflakeIdGenerator.nextId();
         String sessionCode = snowflakeIdGenerator.nextId("SES-");
         ChatSessionEntity session = new ChatSessionEntity();
@@ -113,6 +116,7 @@ public class QaRecordService {
         );
     }
 
+    /** 把历史查询视图对象映射成接口返回结构。 */
     private QaHistoryRecordResponse toHistoryResponse(QaHistoryRecordView view) {
         return new QaHistoryRecordResponse(
                 view.getSessionCode(),
@@ -130,6 +134,7 @@ public class QaRecordService {
         );
     }
 
+    /** 用问题前缀构造会话名，并限制最大长度。 */
     private String buildSessionName(String question) {
         String normalized = question == null ? "" : question.trim();
         if (normalized.length() <= sessionNameMaxLength()) {
@@ -138,6 +143,7 @@ public class QaRecordService {
         return normalized.substring(0, sessionNameMaxLength());
     }
 
+    /** 序列化扩展字段，避免持久层直接依赖复杂对象结构。 */
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -146,6 +152,7 @@ public class QaRecordService {
         }
     }
 
+    /** 反序列化历史记录中的召回结果。 */
     private List<RetrievedChunkResponse> fromRetrievedChunksJson(String json) {
         try {
             if (json == null || json.isBlank()) {
@@ -158,6 +165,7 @@ public class QaRecordService {
         }
     }
 
+    /** 反序列化历史记录中的来源列表。 */
     private List<QaSourceResponse> fromSourcesJson(String json) {
         try {
             if (json == null || json.isBlank()) {
@@ -170,6 +178,7 @@ public class QaRecordService {
         }
     }
 
+    /** 归一化页码并执行边界校验。 */
     private long normalizePageNo(Long pageNo) {
         if (pageNo == null) {
             return DEFAULT_PAGE_NO;
@@ -180,6 +189,7 @@ public class QaRecordService {
         return pageNo;
     }
 
+    /** 归一化分页大小并执行边界校验。 */
     private long normalizePageSize(Long pageSize) {
         if (pageSize == null) {
             return DEFAULT_PAGE_SIZE;
@@ -190,27 +200,32 @@ public class QaRecordService {
         return pageSize;
     }
 
+    /** 持久化后的最小定位信息，供调用方关联刚写入的记录。 */
     public record QaPersistenceResult(
             String sessionCode,
             String messageCode
     ) {
     }
 
+    /** 读取默认创建人配置，没有配置时回退到安全默认值。 */
     private String defaultCreatedBy() {
         String configured = ragQaProperties.getDefaultCreatedBy();
         return configured == null || configured.isBlank() ? "qa-service" : configured.trim();
     }
 
+    /** 读取消息类型配置，没有配置时回退到安全默认值。 */
     private String messageType() {
         String configured = ragQaProperties.getMessageType();
         return configured == null || configured.isBlank() ? "QA" : configured.trim();
     }
 
+    /** 读取提示词模板标识，没有配置时回退到安全默认值。 */
     private String promptTemplate() {
         String configured = ragQaProperties.getPromptTemplate();
         return configured == null || configured.isBlank() ? "qa-default-v1" : configured.trim();
     }
 
+    /** 读取会话名最大长度，并兜底到合理的最小阈值。 */
     private int sessionNameMaxLength() {
         Integer configured = ragQaProperties.getSessionNameMaxLength();
         return configured == null || configured < 10 ? 80 : configured;

@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+/** 问答检索服务测试。 */
 @ExtendWith(MockitoExtension.class)
 class QuestionAnsweringServiceTest {
 
@@ -60,7 +61,7 @@ class QuestionAnsweringServiceTest {
     }
 
     @Test
-    void getReadinessShouldRequireChunksBeforeWeek2CanProceed() {
+    void getReadinessShouldRequireProcessedChunksBeforeRetrievalCanRun() {
         KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
         knowledgeBase.setId(100L);
         knowledgeBase.setKbCode("settlement-kb");
@@ -95,7 +96,7 @@ class QuestionAnsweringServiceTest {
         assertThat(response.questionAnsweringReady()).isTrue();
         assertThat(response.embeddedChunkCount()).isEqualTo(12L);
         assertThat(response.vectorStore()).isEqualTo("pgvector");
-        assertThat(response.nextStep()).contains("Proceed to Day 10 retrieval");
+        assertThat(response.nextStep()).contains("Retrieval prerequisites are ready");
     }
 
     @Test

@@ -17,6 +17,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** 切块参数对比实验测试。 */
 class ChunkingExperimentTest {
 
     private static final int SHORT_CHUNK_THRESHOLD = 120;
@@ -28,6 +29,7 @@ class ChunkingExperimentTest {
 
     @Test
     void shouldCompareChunkingProfilesAcrossSampleDocuments() throws Exception {
+        // 这里固定三组配置，确保后续调整默认切块参数时有一个稳定对照物。
         List<ChunkingProfile> profiles = List.of(
                 new ChunkingProfile("compact", 480, 60, 180),
                 new ChunkingProfile("balanced", 600, 80, 240),
@@ -73,7 +75,7 @@ class ChunkingExperimentTest {
     private DocumentEntity createDocument(SampleDocumentSpec sample) {
         DocumentEntity document = new DocumentEntity();
         document.setFileName(sample.path().getFileName().toString());
-        document.setDisplayName("Day19 " + sample.name() + " Sample");
+        document.setDisplayName("Chunking " + sample.name() + " Sample");
         document.setFileType(sample.fileType());
         return document;
     }
@@ -119,7 +121,7 @@ class ChunkingExperimentTest {
 
     private String renderMarkdownReport(List<ExperimentResult> results, Map<String, Integer> totalChunkCountByProfile) {
         StringBuilder builder = new StringBuilder();
-        builder.append("Day19 Chunking Experiment Report\n");
+        builder.append("Chunking Experiment Report\n");
         builder.append("| profile | sample | chunks | avgChars | minChars | maxChars | short<120 | long>500 |\n");
         builder.append("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |\n");
         for (ExperimentResult result : results) {

@@ -1,8 +1,6 @@
 package com.example.rag.model.response;
 
-/**
- * Week 2 问答链路就绪度返回对象。
- */
+/** 问答链路就绪度返回对象。 */
 public record QuestionAnsweringReadinessResponse(
         String knowledgeBaseCode,
         String knowledgeBaseStatus,

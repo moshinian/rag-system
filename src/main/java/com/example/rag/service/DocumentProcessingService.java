@@ -3,6 +3,7 @@ package com.example.rag.service;
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.common.logging.StructuredLogMessage;
+import com.example.rag.config.CacheNames;
 import com.example.rag.ingestion.chunk.ChunkDraft;
 import com.example.rag.ingestion.chunk.FixedWindowChunker;
 import com.example.rag.ingestion.parser.DocumentTextParser;
@@ -23,6 +24,8 @@ import com.example.rag.persistence.entity.IndexingTaskEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -79,6 +82,13 @@ public class DocumentProcessingService {
      * 流程包括读取文档记录、推进处理状态、解析文本、执行切块、
      * 写入 document_chunk，并在结束时更新最终状态。
      */
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DOCUMENT_DETAIL, key = "#kbCode + ':' + #documentCode"),
+            @CacheEvict(cacheNames = CacheNames.DOCUMENT_PAGE, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DOCUMENT_CHUNKS, key = "#kbCode + ':' + #documentCode"),
+            @CacheEvict(cacheNames = CacheNames.QA_READINESS, key = "#kbCode"),
+            @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
+    })
     public DocumentProcessResponse process(String kbCode, String documentCode, String operator) {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));

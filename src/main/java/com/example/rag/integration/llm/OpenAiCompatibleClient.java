@@ -20,8 +20,7 @@ import java.util.List;
 /**
  * OpenAI 兼容接口客户端。
  *
- * Day 8 先把 embedding / chat 所需的最小调用封装好，
- * 后续检索和问答服务直接复用这里的接口能力。
+ * 统一封装 embeddings 和 chat completions 的 HTTP 调用细节，供检索和问答服务复用。
  */
 @Component
 public class OpenAiCompatibleClient {
@@ -116,6 +115,7 @@ public class OpenAiCompatibleClient {
         }
     }
 
+    /** 发送 JSON POST 请求，并把响应反序列化成指定类型。 */
     private <T> T postJson(String url,
                            String apiKey,
                            Object payload,
@@ -144,6 +144,7 @@ public class OpenAiCompatibleClient {
         return objectMapper.readValue(responseBody, responseType);
     }
 
+    /** 兼容成功流和错误流，统一读取 HTTP 返回体。 */
     private String readResponseBody(HttpURLConnection connection, int statusCode) throws IOException {
         InputStream stream = statusCode >= 200 && statusCode < 300
                 ? connection.getInputStream()
@@ -156,6 +157,7 @@ public class OpenAiCompatibleClient {
         }
     }
 
+    /** 规范化 baseUrl 和 path 之间的斜杠，避免拼接出重复或缺失分隔符。 */
     private String normalizeUrl(String baseUrl, String path) {
         String normalizedBaseUrl = baseUrl == null ? "" : baseUrl.trim();
         String normalizedPath = path == null ? "" : path.trim();
@@ -168,14 +170,17 @@ public class OpenAiCompatibleClient {
         return normalizedBaseUrl + normalizedPath;
     }
 
+    /** 组装 Bearer Token 请求头。 */
     private String bearerToken(String apiKey) {
         return "Bearer " + (apiKey == null ? "" : apiKey.trim());
     }
 
+    /** 判断字符串是否包含非空白内容。 */
     private boolean hasText(String value) {
         return value != null && !value.trim().isBlank();
     }
 
+    /** 把请求对象序列化成 JSON 字符串。 */
     private String toJson(Object payload) {
         try {
             return objectMapper.writeValueAsString(payload);
@@ -184,23 +189,27 @@ public class OpenAiCompatibleClient {
         }
     }
 
+    /** Embeddings 接口请求体。 */
     private record EmbeddingRequest(
             String model,
             Object input
     ) {
     }
 
+    /** Embeddings 接口返回体中的最小字段集合。 */
     private record EmbeddingResponse(
             List<EmbeddingData> data
     ) {
     }
 
+    /** 单条 embedding 结果。 */
     private record EmbeddingData(
             Integer index,
             List<Double> embedding
     ) {
     }
 
+    /** Chat Completions 接口请求体。 */
     private record ChatCompletionRequest(
             String model,
             List<ChatMessage> messages,
@@ -209,16 +218,19 @@ public class OpenAiCompatibleClient {
     ) {
     }
 
+    /** Chat Completions 接口返回体中的最小字段集合。 */
     private record ChatCompletionResponse(
             List<ChatChoice> choices
     ) {
     }
 
+    /** 单条候选回答。 */
     private record ChatChoice(
             ChatMessage message
     ) {
     }
 
+    /** Chat 消息结构，兼容 system/user 角色。 */
     private record ChatMessage(
             String role,
             String content

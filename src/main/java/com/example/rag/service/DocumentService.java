@@ -2,6 +2,7 @@ package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
+import com.example.rag.config.CacheNames;
 import com.example.rag.ingestion.storage.LocalFileStorageService;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.response.DocumentChunkResponse;
@@ -18,6 +19,9 @@ import com.example.rag.persistence.entity.DocumentEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import com.example.rag.persistence.query.DocumentPageQuery;
 import com.example.rag.persistence.query.PageResult;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -78,6 +82,10 @@ public class DocumentService {
 
     /** 上传原始文档并保存元数据。 */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DOCUMENT_PAGE, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
+    })
     public DocumentUploadResponse upload(String kbCode,
                                          MultipartFile file,
                                          String documentName,
@@ -142,6 +150,10 @@ public class DocumentService {
 
     /** 分页查询知识库下的文档。 */
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = CacheNames.DOCUMENT_PAGE,
+            key = "#kbCode + ':' + #status + ':' + (#pageNo == null ? 'null' : #pageNo) + ':' + (#pageSize == null ? 'null' : #pageSize)"
+    )
     public PageResponse<DocumentSummaryResponse> listDocuments(String kbCode,
                                                                String status,
                                                                Long pageNo,
@@ -167,6 +179,7 @@ public class DocumentService {
 
     /** 查询文档详情。 */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.DOCUMENT_DETAIL, key = "#kbCode + ':' + #documentCode")
     public DocumentDetailResponse getDocument(String kbCode, String documentCode) {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
@@ -177,6 +190,13 @@ public class DocumentService {
 
     /** 禁用文档。 */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DOCUMENT_DETAIL, key = "#kbCode + ':' + #documentCode"),
+            @CacheEvict(cacheNames = CacheNames.DOCUMENT_PAGE, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DOCUMENT_CHUNKS, key = "#kbCode + ':' + #documentCode"),
+            @CacheEvict(cacheNames = CacheNames.QA_READINESS, key = "#kbCode"),
+            @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
+    })
     public DocumentDetailResponse disableDocument(String kbCode, String documentCode) {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
@@ -189,6 +209,7 @@ public class DocumentService {
 
     /** 查询文档的全部 chunk。 */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.DOCUMENT_CHUNKS, key = "#kbCode + ':' + #documentCode")
     public List<DocumentChunkResponse> listDocumentChunks(String kbCode, String documentCode) {
         knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));

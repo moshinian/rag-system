@@ -14,9 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * Day 11 问答流程编排服务。
+ * 问答流程编排服务。
  *
- * 只负责问题输入、检索、prompt 组装和 chat completion 调用。
+ * 串联检索、Prompt 构造、模型调用和问答记录持久化，不直接处理底层向量检索细节。
  */
 @Service
 public class QaService {
@@ -38,7 +38,7 @@ public class QaService {
         this.qaRecordService = qaRecordService;
     }
 
-    /** 执行 Day 11 第一版最小问答闭环。 */
+    /** 执行一次完整的问答闭环。 */
     @Transactional
     public QaAnswerResponse ask(String kbCode, String question, Integer topK) {
         long startedAt = System.currentTimeMillis();
@@ -53,6 +53,7 @@ public class QaService {
                 retrievalResponse.chunks()
         );
         String answer = chatClient.chat(promptPayload.systemPrompt(), promptPayload.userPrompt());
+        // sources 只保留回答展示和追溯所需字段，避免直接暴露完整检索对象。
         List<QaSourceResponse> sources = retrievalResponse.chunks().stream()
                 .map(this::toQaSourceResponse)
                 .toList();
@@ -76,6 +77,7 @@ public class QaService {
         return answerResponse;
     }
 
+    /** 将检索结果映射为更适合前端展示的来源结构。 */
     private QaSourceResponse toQaSourceResponse(RetrievedChunkResponse chunk) {
         return new QaSourceResponse(
                 chunk.documentCode(),

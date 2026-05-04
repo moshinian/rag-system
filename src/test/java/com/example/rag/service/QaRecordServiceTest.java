@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/** 问答记录持久化服务测试。 */
 @ExtendWith(MockitoExtension.class)
 class QaRecordServiceTest {
 

@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/** 问答编排服务测试。 */
 @ExtendWith(MockitoExtension.class)
 class QaServiceTest {
 

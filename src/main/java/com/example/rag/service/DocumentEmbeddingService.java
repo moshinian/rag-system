@@ -1,8 +1,9 @@
 package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
-import com.example.rag.config.RagEmbeddingProperties;
 import com.example.rag.common.logging.StructuredLogMessage;
+import com.example.rag.config.CacheNames;
+import com.example.rag.config.RagEmbeddingProperties;
 import com.example.rag.integration.llm.OpenAiCompatibleClient;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.EmbeddingStatus;
@@ -14,6 +15,8 @@ import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.DocumentChunkEntity;
 import com.example.rag.persistence.entity.DocumentEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -24,9 +27,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 文档 chunk 向量化服务。
+ * 文档向量化服务。
  *
- * Day 9 在已有 chunk 数据基础上补齐 embedding 写库链路。
+ * 负责读取已切块的文档内容，调用 embedding 服务生成向量，并把结果写回 `document_chunk`。
  */
 @Service
 public class DocumentEmbeddingService {
@@ -54,6 +57,11 @@ public class DocumentEmbeddingService {
 
     /** 对指定文档的 chunk 执行向量化并写入 pgvector。 */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DOCUMENT_CHUNKS, key = "#kbCode + ':' + #documentCode"),
+            @CacheEvict(cacheNames = CacheNames.QA_READINESS, key = "#kbCode"),
+            @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
+    })
     public DocumentEmbeddingResponse embed(String kbCode, String documentCode) {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
@@ -91,6 +99,7 @@ public class DocumentEmbeddingService {
                     .field("documentCode", documentCode)
                     .field("batchChunkCount", chunks.size())
                     .build());
+            // 先把整批 chunk 标记为 EMBEDDING，便于外部观察当前进度。
             for (DocumentChunkEntity chunk : chunks) {
                 documentChunkRepository.updateEmbeddingState(
                         chunk.getId(),
@@ -114,6 +123,7 @@ public class DocumentEmbeddingService {
                 }
 
                 OffsetDateTime updatedAt = OffsetDateTime.now();
+                // 接口返回顺序和输入顺序一一对应，逐条回写到原始 chunk 即可。
                 for (int index = 0; index < chunks.size(); index++) {
                     DocumentChunkEntity chunk = chunks.get(index);
                     String vectorLiteral = toVectorLiteral(embeddings.get(index));
@@ -181,12 +191,14 @@ public class DocumentEmbeddingService {
         return response;
     }
 
+    /** 向量化前要求知识库仍然处于启用状态。 */
     private void ensureKnowledgeBaseActive(KnowledgeBaseEntity knowledgeBase) {
         if (knowledgeBase.getStatus() != KnowledgeBaseStatus.ACTIVE) {
             throw new BusinessException("Knowledge base is inactive: " + knowledgeBase.getKbCode());
         }
     }
 
+    /** 对批大小做兜底，避免缺配置或非法配置导致整条链路不可用。 */
     private int normalizeBatchSize(Integer batchSize) {
         if (batchSize == null || batchSize < 1) {
             return 16;
@@ -194,6 +206,7 @@ public class DocumentEmbeddingService {
         return batchSize;
     }
 
+    /** 把 embedding 结果转换成 pgvector 可写入的文本字面量。 */
     private String toVectorLiteral(List<Double> vector) {
         if (vector == null || vector.isEmpty()) {
             throw new BusinessException("Embedding vector must not be empty");
@@ -204,6 +217,7 @@ public class DocumentEmbeddingService {
                 .orElseThrow() + "]";
     }
 
+    /** 截断错误信息，避免数据库字段被异常长消息撑爆。 */
     private String truncate(String message) {
         if (message == null || message.isBlank()) {
             return "Unknown embedding error";

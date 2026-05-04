@@ -173,6 +173,7 @@ public class DocumentIndexingService {
         }
     }
 
+    /** 对单条卡住任务执行恢复判断，并在必要时创建新的恢复任务。 */
     private void recoverStaleTask(IndexingTaskEntity staleTask) {
         if (indexingTaskRepository.existsOtherActiveTask(staleTask.getDocumentId(), TASK_TYPE_DOCUMENT_INDEXING, staleTask.getId())) {
             log.info(StructuredLogMessage.of("indexing.recovery.skipped")
@@ -210,6 +211,7 @@ public class DocumentIndexingService {
                 .build());
     }
 
+    /** 在线程池中执行实际索引流程，并持续更新任务状态。 */
     private void runAsync(Long taskId) {
         IndexingTaskEntity task = indexingTaskRepository.findById(taskId)
                 .orElseThrow(() -> new BusinessException("Indexing task not found: " + taskId));
@@ -229,6 +231,7 @@ public class DocumentIndexingService {
                     .field("triggerSource", task.getTriggerSource())
                     .field("retryCount", task.getRetryCount())
                     .build());
+            // 任务状态和阶段分开维护，便于外部区分“正在跑”和“跑到哪一步”。
             task.setStatus(IndexingTaskStatus.RUNNING);
             task.setTaskStage(IndexingTaskStage.DOCUMENT_PROCESSING);
             task.setErrorMessage(null);
@@ -278,6 +281,7 @@ public class DocumentIndexingService {
         }
     }
 
+    /** 把任务实体转换成接口返回结构。 */
     private DocumentIndexingTaskResponse toResponse(IndexingTaskEntity task, DocumentEntity document, String kbCode) {
         return new DocumentIndexingTaskResponse(
                 task.getId(),
@@ -305,6 +309,7 @@ public class DocumentIndexingService {
         );
     }
 
+    /** 创建新的索引任务记录，并初始化为排队状态。 */
     private IndexingTaskEntity createTask(DocumentEntity document,
                                           Long parentTaskId,
                                           IndexingTaskTriggerSource triggerSource,
@@ -328,6 +333,7 @@ public class DocumentIndexingService {
         return task;
     }
 
+    /** 基于原任务创建新的重试任务，并继承必要的上下文信息。 */
     private IndexingTaskEntity createRetryTask(DocumentEntity document,
                                                IndexingTaskEntity sourceTask,
                                                IndexingTaskTriggerSource triggerSource,
@@ -344,6 +350,7 @@ public class DocumentIndexingService {
         return retryTask;
     }
 
+    /** 把原任务标记为已被新的恢复任务接管。 */
     private void markRecovered(IndexingTaskEntity sourceTask, String message) {
         OffsetDateTime now = OffsetDateTime.now();
         sourceTask.setRecoveredAt(now);
@@ -354,22 +361,26 @@ public class DocumentIndexingService {
         indexingTaskRepository.updateById(sourceTask);
     }
 
+    /** 刷新任务心跳，并按需更新错误信息。 */
     private void touchHeartbeat(IndexingTaskEntity task, String errorMessage) {
         task.setErrorMessage(errorMessage);
         task.setLastHeartbeatAt(OffsetDateTime.now());
         indexingTaskRepository.updateById(task);
     }
 
+    /** 把任务投递到异步执行器。 */
     private void dispatch(Long taskId) {
         indexingExecutor.execute(() -> runAsync(taskId));
     }
 
+    /** 只有启用状态的知识库才允许继续索引。 */
     private void ensureKnowledgeBaseActive(KnowledgeBaseEntity knowledgeBase) {
         if (knowledgeBase.getStatus() != KnowledgeBaseStatus.ACTIVE) {
             throw new BusinessException("Knowledge base is inactive: " + knowledgeBase.getKbCode());
         }
     }
 
+    /** 统一规范操作人字段，避免出现空字符串。 */
     private String normalizeOperator(String operator) {
         if (operator == null) {
             return "system";
@@ -378,6 +389,7 @@ public class DocumentIndexingService {
         return normalized.isEmpty() ? "system" : normalized;
     }
 
+    /** 截断错误信息，避免超出数据库字段长度。 */
     private String truncate(String message) {
         String normalized = Objects.requireNonNullElse(message, "Unknown indexing error");
         if (normalized.length() <= 1024) {

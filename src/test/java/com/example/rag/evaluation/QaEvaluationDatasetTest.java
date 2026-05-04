@@ -13,6 +13,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** 中文问答评测数据集完整性测试。 */
 class QaEvaluationDatasetTest {
 
     private static final Path DATASET_PATH = Path.of("work/evaluation/day20-qa-eval-cases.json");
@@ -27,7 +28,8 @@ class QaEvaluationDatasetTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    void day20DatasetShouldBeCompleteAndChineseFocused() throws IOException {
+    void evaluationDatasetShouldBeCompleteAndChineseFocused() throws IOException {
+        // 这组校验用来保证评测数据仍然满足当前中文问答基线的假设。
         assertThat(Files.exists(DATASET_PATH)).isTrue();
         SAMPLE_FILES.forEach(sample -> assertThat(Files.exists(Path.of(sample))).isTrue());
 
@@ -80,11 +82,13 @@ class QaEvaluationDatasetTest {
         assertThat(containsNoAnswerCase).isTrue();
     }
 
+    /** 判断文本中是否至少包含一个汉字。 */
     private boolean containsHanText(String value) {
         return value != null && value.codePoints().anyMatch(codePoint ->
                 Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN);
     }
 
+    /** 判断文本中是否包含英文字母，用于限制问题集语言漂移。 */
     private boolean containsAsciiLetters(String value) {
         return value != null && value.chars().anyMatch(ch -> (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'));
     }

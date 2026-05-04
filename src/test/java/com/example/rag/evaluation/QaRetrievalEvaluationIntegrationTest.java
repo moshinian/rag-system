@@ -29,6 +29,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** 真实中文检索评测集成测试。 */
 @SpringBootTest
 @Transactional
 @Disabled("Requires unrestricted socket access to PostgreSQL and embedding service for real retrieval evaluation")
@@ -71,7 +72,7 @@ class QaRetrievalEvaluationIntegrationTest {
         processAndEmbedAll(kbCode, documentCodes);
 
         List<String> reportLines = new ArrayList<>();
-        reportLines.add("Day20 Chinese Retrieval Evaluation Report");
+        reportLines.add("Chinese Retrieval Evaluation Report");
         reportLines.add("| caseCode | category | retrievalHit | keywordMatches | topDocuments |");
         reportLines.add("| --- | --- | --- | ---: | --- |");
 
@@ -111,8 +112,8 @@ class QaRetrievalEvaluationIntegrationTest {
         KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
         knowledgeBase.setId(knowledgeBaseId);
         knowledgeBase.setKbCode(kbCode);
-        knowledgeBase.setName("Day20 中文评测知识库");
-        knowledgeBase.setDescription("Day20 中文检索评测专用");
+        knowledgeBase.setName("中文评测知识库");
+        knowledgeBase.setDescription("中文检索评测专用");
         knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
         knowledgeBase.setCreatedBy("itest");
         knowledgeBaseRepository.insert(knowledgeBase);

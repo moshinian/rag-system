@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+/** 知识库管理服务测试。 */
 @ExtendWith(MockitoExtension.class)
 class KnowledgeBaseServiceTest {
 

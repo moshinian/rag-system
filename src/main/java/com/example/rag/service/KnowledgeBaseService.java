@@ -2,6 +2,7 @@ package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
+import com.example.rag.config.CacheNames;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.request.CreateKnowledgeBaseRequest;
 import com.example.rag.model.response.KnowledgeBaseResponse;
@@ -10,6 +11,9 @@ import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import com.example.rag.persistence.query.KnowledgeBasePageQuery;
 import com.example.rag.persistence.query.PageResult;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +40,10 @@ public class KnowledgeBaseService {
 
     /** 创建知识库。 */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.KNOWLEDGE_BASE_PAGE, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
+    })
     public KnowledgeBaseResponse create(CreateKnowledgeBaseRequest request) {
         // 同一 kbCode 不允许重复创建。
         knowledgeBaseRepository.findByCode(request.kbCode())
@@ -57,6 +65,10 @@ public class KnowledgeBaseService {
 
     /** 分页查询知识库。 */
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = CacheNames.KNOWLEDGE_BASE_PAGE,
+            key = "#status + ':' + (#pageNo == null ? 'null' : #pageNo) + ':' + (#pageSize == null ? 'null' : #pageSize)"
+    )
     public PageResponse<KnowledgeBaseResponse> list(String status, Long pageNo, Long pageSize) {
         KnowledgeBaseStatus knowledgeBaseStatus = parseStatus(status);
         long normalizedPageNo = normalizePageNo(pageNo);
@@ -74,6 +86,7 @@ public class KnowledgeBaseService {
 
     /** 查询知识库详情。 */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.KNOWLEDGE_BASE_DETAIL, key = "#kbCode")
     public KnowledgeBaseResponse get(String kbCode) {
         KnowledgeBaseEntity entity = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
@@ -82,12 +95,24 @@ public class KnowledgeBaseService {
 
     /** 禁用知识库。 */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.KNOWLEDGE_BASE_DETAIL, key = "#kbCode"),
+            @CacheEvict(cacheNames = CacheNames.KNOWLEDGE_BASE_PAGE, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.QA_READINESS, key = "#kbCode"),
+            @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
+    })
     public KnowledgeBaseResponse disable(String kbCode) {
         return updateStatus(kbCode, KnowledgeBaseStatus.INACTIVE);
     }
 
     /** 启用知识库。 */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.KNOWLEDGE_BASE_DETAIL, key = "#kbCode"),
+            @CacheEvict(cacheNames = CacheNames.KNOWLEDGE_BASE_PAGE, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.QA_READINESS, key = "#kbCode"),
+            @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
+    })
     public KnowledgeBaseResponse enable(String kbCode) {
         return updateStatus(kbCode, KnowledgeBaseStatus.ACTIVE);
     }

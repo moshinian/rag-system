@@ -4,6 +4,7 @@ import com.example.rag.common.exception.BusinessException;
 import com.example.rag.config.RagEmbeddingProperties;
 import com.example.rag.config.RagRetrievalProperties;
 import com.example.rag.common.logging.StructuredLogMessage;
+import com.example.rag.config.CacheNames;
 import com.example.rag.integration.llm.OpenAiCompatibleClient;
 import com.example.rag.model.dto.RetrievedChunkCandidate;
 import com.example.rag.model.enums.EmbeddingStatus;
@@ -13,6 +14,7 @@ import com.example.rag.model.response.RetrievedChunkResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
+import org.springframework.cache.annotation.Cacheable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -22,10 +24,9 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 问答链路服务。
+ * 问答检索服务。
  *
- * Day 8 先提供“链路是否就绪”的可观测入口，
- * 为 Day 9/10 的向量化和检索实现提供清晰起点。
+ * 负责提供问答链路就绪度检查，以及基于向量的 TopK 检索能力。
  */
 @Service
 public class QuestionAnsweringService {
@@ -50,8 +51,9 @@ public class QuestionAnsweringService {
         this.openAiCompatibleClient = openAiCompatibleClient;
     }
 
-    /** 返回指定知识库的 Week 2 问答链路就绪度。 */
+    /** 返回指定知识库当前是否具备进入检索和问答阶段的前置条件。 */
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = CacheNames.QA_READINESS, key = "#kbCode")
     public QuestionAnsweringReadinessResponse getReadiness(String kbCode) {
         KnowledgeBaseEntity knowledgeBase = getKnowledgeBase(kbCode);
 
@@ -76,18 +78,23 @@ public class QuestionAnsweringService {
         );
     }
 
+    /** 给调用方返回下一步建议，便于排查当前卡在哪个前置条件上。 */
     private String resolveNextStep(long indexedChunkCount, long embeddedChunkCount) {
         if (indexedChunkCount <= 0) {
-            return "Process at least one document into chunks before starting the Week 2 pipeline.";
+            return "Process at least one document into chunks before running retrieval.";
         }
         if (embeddedChunkCount <= 0) {
-            return "Run the Day 9 embedding pipeline to generate vectors for the existing chunks.";
+            return "Generate embeddings for existing chunks before running retrieval.";
         }
-        return "Embedding prerequisites are ready. Proceed to Day 10 retrieval implementation.";
+        return "Retrieval prerequisites are ready.";
     }
 
-    /** 对指定知识库执行 Day 10 基础检索。 */
+    /** 对指定知识库执行向量检索，并返回命中的 chunk 列表。 */
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = CacheNames.QA_RETRIEVAL,
+            key = "#kbCode + ':' + #question + ':' + (#topK == null ? 'null' : #topK)"
+    )
     public QuestionRetrievalResponse retrieve(String kbCode, String question, Integer topK) {
         KnowledgeBaseEntity knowledgeBase = getKnowledgeBase(kbCode);
         String normalizedQuestion = normalizeQuestion(question);
@@ -105,6 +112,7 @@ public class QuestionAnsweringService {
                 ragEmbeddingProperties.getModel(),
                 normalizedQuestion
         );
+        // pgvector 查询当前使用文本字面量格式，因此这里先把向量转换成 SQL 可识别的字符串。
         String queryVectorLiteral = toVectorLiteral(queryVector);
 
         List<RetrievedChunkResponse> chunks = documentChunkRepository.findTopKSimilarChunks(
@@ -132,11 +140,13 @@ public class QuestionAnsweringService {
         );
     }
 
+    /** 读取知识库，不存在时统一抛业务异常。 */
     private KnowledgeBaseEntity getKnowledgeBase(String kbCode) {
         return knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
     }
 
+    /** 统一校验并清理问题文本。 */
     private String normalizeQuestion(String question) {
         if (question == null || question.trim().isBlank()) {
             throw new BusinessException("Question must not be blank");
@@ -144,6 +154,7 @@ public class QuestionAnsweringService {
         return question.trim();
     }
 
+    /** 结合默认值和最大值限制，解析最终的检索条数。 */
     private int resolveTopK(Integer topK) {
         int fallbackTopK = ragRetrievalProperties.getDefaultTopK() == null ? 5 : ragRetrievalProperties.getDefaultTopK();
         int maxTopK = ragRetrievalProperties.getMaxTopK() == null ? 10 : ragRetrievalProperties.getMaxTopK();
@@ -157,6 +168,7 @@ public class QuestionAnsweringService {
         return resolvedTopK;
     }
 
+    /** 把向量转换成 pgvector 可消费的字面量格式。 */
     private String toVectorLiteral(List<Double> vector) {
         if (vector == null || vector.isEmpty()) {
             throw new BusinessException("Query embedding vector must not be empty");
@@ -167,6 +179,7 @@ public class QuestionAnsweringService {
                 .orElseThrow() + "]";
     }
 
+    /** 把持久层候选结果转换成接口返回对象。 */
     private RetrievedChunkResponse toRetrievedChunkResponse(RetrievedChunkCandidate chunk) {
         return new RetrievedChunkResponse(
                 chunk.getId(),

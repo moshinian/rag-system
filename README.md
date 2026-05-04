@@ -1,147 +1,99 @@
 # RAG Service
 
-一个面向企业内部知识库场景的 RAG 后端服务，用来沉淀结算领域文档，并逐步演进为可检索、可引用、可追溯的问答系统。
+一个面向企业内部知识库场景的 RAG 后端服务，当前聚焦结算领域文档的沉淀、检索、问答、来源返回和问答记录。
 
-当前仓库已经完成了第 1 周核心工程骨架，并且已经落地了 Week 2 第一版问答闭环：
+当前仓库的真实阶段不是“设计中”，而是已经完成了前 3 周的第一版实现：
 
-1. 知识库创建
-2. 文档上传入库
-3. 文档解析、切块与 chunk 入库
-4. 文档 chunk 向量写库
-5. query embedding 与 TopK 检索
-6. Prompt 组装与 LLM 问答
-7. `sources` 结构化来源返回
-8. 问答记录持久化与历史查询
-
-同时已经补齐了本地开发所需的基础设施底座：
-
-1. PostgreSQL 容器化运行与持久化
-2. Redis 容器化运行与持久化
-3. Flyway 迁移恢复能力
-4. 线程池基础配置
-5. Redis 最小读写验证接口
-
-当前状态已经不再停留在 Day 3 或 Day 4。
-
-**第 1 周已经完成收口，Week 2 也已经完成第一版收口，Week 3 已进入异步索引、日志、配置整理和切块实验阶段。**
-
-这份 README 只描述当前仓库已经实现的内容，以及下一步明确要做的事情，不把规划写成现状。
+1. Week 1：文档入库主链路完成
+2. Week 2：检索与问答主链路完成
+3. Week 3：异步索引、恢复、日志、配置和评测完成第一版收口
 
 ## 项目目标
 
-这个项目面向产品、开发、测试、运维等内部团队，解决以下问题：
+这个项目解决的是企业内部知识分散、检索成本高、经验难沉淀的问题，不做泛化聊天机器人，优先把最小可用 RAG 服务做完整。
 
-1. 业务文档分散，检索成本高
-2. 关键知识依赖资深同事经验，难沉淀
-3. 排查问题时难以快速定位相关设计文档和操作手册
-4. 新成员熟悉业务周期长
-
-项目的目标不是做泛化聊天机器人，而是先把企业知识库 RAG 的主链路做完整：
+当前主链路：
 
 ```text
-知识库创建 -> 文档上传 -> 原始文件存储 -> 元数据入库 -> 文档解析 -> 文本切块 -> 检索 -> 回答 -> 引用来源展示
+知识库创建 -> 文档上传 -> 异步索引 -> 解析 -> 切块 -> 向量写库 -> 检索 -> 问答 -> 来源返回 -> 问答记录
 ```
 
-## 当前已实现
+## 当前完成情况
 
-当前仓库已经落地的能力：
+### 已实现能力
 
-1. Spring Boot 3 + Java 17 服务骨架
-2. PostgreSQL 真连通
-3. Redis 真连通
-4. Flyway 迁移可执行
-5. MyBatis-Plus 持久层已替换 JPA
-6. `mapper + persistence + persistence/entity` 分层已收口
-7. MyBatis-Plus 自动填充 `created_at / updated_at`
-8. MyBatis-Plus 分页查询能力已接入
-9. 统一响应结构 `ApiResponse`
-10. 全局异常处理
-11. 请求级 `X-Request-Id` 透传与生成
-12. 健康检查接口 `/api/health`
-13. Redis 探针接口 `/api/health/redis-probe`
-14. 知识库创建、列表、详情、启用/禁用接口
-15. 文档上传、列表、详情、chunk 查询、禁用、处理、重处理接口
-16. 本地文件落盘
-17. 文档去重校验
-18. 知识库禁用后上传/处理保护
-19. 文档状态枚举已预留到 `INDEXED / FAILED / DISABLED`
-20. 文档 `media_type` 元数据已落库
-21. Day 4 样本文档已补齐 `md / txt / pdf`
-22. `document_chunk` 表、实体与 Repository 已落地
-23. `md / txt` 第一版解析已落地
-24. `pdf` 第一版基础解析已落地
-25. 第一版固定长度切块已落地
-26. 文档处理接口 `/process` 已接入
-27. `indexing_task` 独立处理记录已落地
-28. 基础线程池 `indexingExecutor`
-29. Actuator 基础接入
-30. `md / txt / pdf` 三类样本文档已完成 Day 6 真实联调验证
-31. Markdown `media_type` 联调问题已发现并修正
-32. `document_chunk` 已补齐 embedding 状态元数据
-33. `qa/readiness` 观察接口已补入
-34. 本地 embedding 与 `pgvector` 配置入口已明确
-35. 本地 `bge-small-zh-v1.5` embedding 服务已接入并可返回真实向量
-36. PostgreSQL 已切到 `pgvector`
-37. `document_chunk.embedding_vector` 已在当前数据库中可用
-38. 文档 chunk 向量写库第一版接口与服务已完成真实联调
-39. 真实文档 `/embed` 已写入 `pgvector`
-40. 本地 `bge-small-zh-v1.5` 模型加载与 512 维向量返回已验证
-41. 文档异步索引接口 `/index` 已落地
-42. 文档索引任务查询接口 `/indexing-tasks` 已落地
-43. `indexing_task` 已支持 `task_stage / embedded_chunk_count`
-44. 后台 `DOCUMENT_INDEXING` 任务已串起 `process + embed`
-45. 单文档重复并发索引已增加基础保护
-46. `DocumentEmbeddingService` 已支持循环处理整篇文档的多批次 chunk
-47. 文档索引任务手动重试接口已落地
-48. `indexing_task` 已支持任务来源、父任务、重试次数与心跳字段
-49. 卡住的索引任务已支持定时恢复扫描
-50. 当前单服务版本已具备最小失败重试与恢复能力
-51. 请求、异常、异步索引、问答链路已接入第一版结构化日志
-52. `requestId` 已通过 `MDC` 透传到异步索引线程
-53. `rag.executor / rag.chunking / rag.qa` 已开始接管线程池、切块与问答记录默认参数
-54. 已新增第一版切块参数实验测试与长 Markdown 样本，可重复对比不同 chunk 参数组合
-55. 已新增第一版中文问答评测样本、评测问题集与结果模板，后续评测默认优先使用中文语料
-56. `day20-cn-kb` 已完成第一版中文真实问答评测，5 条可回答问题命中预期文档，1 条无答案问题返回兜底话术
+1. 知识库创建、列表、详情、启用、禁用
+2. 文档上传、列表、详情、chunk 查询、禁用、处理、重处理
+3. `md / txt / pdf` 第一版解析
+4. 第一版固定窗口切块与 chunk 入库
+5. 本地文件存储与内容去重
+6. `pgvector` 向量写库
+7. query embedding 与 TopK 检索
+8. 基于 OpenAI-compatible 协议的 LLM 问答
+9. `sources` 结构化来源返回
+10. 问答记录持久化与历史查询
+11. 文档异步索引、任务状态追踪、手动重试
+12. 卡住索引任务的定时恢复扫描
+13. 基于 Redis 的第一版业务缓存，已覆盖知识库、文档读取、chunk 列表、`qa/readiness` 和检索结果短 TTL 缓存
+14. 请求、异常、异步索引、问答链路的第一版结构化日志
+15. `rag.executor / rag.chunking / rag.qa / rag.embedding / rag.llm / rag.retrieval / rag.indexing / rag.cache` 配置外置
+16. 第一版切块参数实验
+17. 第一版中文问答评测样本、问题集、结果模板和真实评测记录
 
-当前还没完成的能力：
+### 已完成验证
 
-1. 更稳健的多实例任务协调、任务取消和批量索引编排
-2. 更完善的评测集与效果评测
-3. session 复用与多轮对话
-4. 混合检索与更高质量召回
-5. 更完整的日志采集、指标、tracing 与工程化补充
+1. PostgreSQL、Redis、Flyway 可正常工作
+2. `md / txt / pdf` 三类样本文档已完成真实联调
+3. 本地 `bge-small-zh-v1.5` embedding 服务已返回真实 512 维向量
+4. `POST /embed` 已完成真实文档向量写库
+5. `POST /qa/retrieve` 已返回真实 TopK 结果
+6. `POST /qa/ask` 已完成真实联调
+7. `GET /qa/history` 已查回真实问答记录
+8. `day14-kb` 已完成从上传到问答历史的端到端验收
+9. Redis 业务缓存已接入知识库、文档、chunk、`qa/readiness` 和检索结果读路径
+10. `day20-cn-kb` 已完成 6 条中文问题的真实评测，其中 5 条可回答问题命中预期文档，1 条无答案问题返回兜底话术
 
-## 当前阶段
+### 当前边界
 
-当前仓库可以分成两部分理解：
+1. 还没有做多实例任务协调、任务取消和批量索引编排
+2. 还没有做混合检索、重排序和更细的召回抑制
+3. 还没有做 session 复用与多轮对话
+4. 还没有补齐完整监控、指标和 tracing
+5. 评测集还处在第一版，规模和覆盖度都需要继续扩展
 
-1. Week 1 已完成：知识库、文档上传、解析、切块、chunk 入库、联调验收都已经闭环。
-2. Week 2 已完成：embedding、向量检索、问答、来源返回、问答记录与端到端验收都已经闭环。
-3. Week 3 已开始：异步索引、任务追踪、配置整理和切块参数实验已进入实现阶段。
+## 周进度
 
-现在项目的真实状态已经不是“RAG 设计中”，而是：
+### Week 1
 
-```text
-知识库创建 -> 文档上传 -> 异步索引提交 -> 解析 -> 切块 -> chunk 入库 -> chunk 向量写库 -> query embedding -> TopK 检索 -> Prompt 组装 -> LLM 回答 -> 来源返回 -> 问答记录持久化 -> 历史查询
-```
+1. 项目边界、目录结构和 README 大纲完成
+2. 核心表与状态模型落地到 Flyway
+3. Spring Boot、PostgreSQL、Redis、统一响应、异常处理完成
+4. 文档上传、本地落盘、去重、元数据入库完成
+5. `md / txt / pdf` 第一版解析、切块、chunk 入库完成
+6. Day 6 真实联调和问题修正完成
+7. Day 7 文档与架构口径收口完成
 
-## 第 1 周完成情况
+### Week 2
 
-结合 [work/week1.md](/root/workspace/rag-system/work/week1.md) 的拆分目标，当前第 1 周已经覆盖并落实的内容包括：
+1. 本地 embedding 服务接入
+2. `pgvector` 落地
+3. `POST /qa/retrieve` 检索接口完成
+4. `POST /qa/ask` 问答接口完成
+5. `sources` 来源返回完成
+6. `chat_session / chat_message` 与 `/qa/history` 完成
+7. Day 14 端到端验收完成
 
-1. Day 1：项目边界、目标和 README 大纲已明确
-2. Day 2：核心表与状态模型已设计并落地到 Flyway
-3. Day 3：Spring Boot、PostgreSQL、Redis、统一响应、异常处理、健康检查已完成
-4. Day 4：文档上传、本地落盘、去重、元数据入库已完成
-5. Day 5：`md / txt / pdf` 第一版解析、固定窗口切块、chunk 入库、`indexing_task` 记录已完成
-6. Day 6：真实接口联调、字段校验、样本文档验证、问题修正已完成
-7. Day 7：README、阶段文档和架构图收口
+### Week 3
 
-这意味着第 1 周的主线目标已经达成：
-
-```text
-项目骨架 -> 数据模型 -> 上传 -> 解析 -> 切块 -> chunk 入库 -> 联调验收 -> 文档沉淀
-```
+1. `POST /documents/{documentCode}/index` 异步索引入口完成
+2. `GET /documents/{documentCode}/indexing-tasks` 任务查询完成
+3. `POST /indexing-tasks/{taskId}/retry` 手动重试完成
+4. 卡住任务自动恢复扫描完成
+5. Redis 业务缓存完成第一版接入
+6. 结构化日志完成第一版接入
+7. 线程池、切块、问答记录与缓存参数完成配置外置
+8. `compact / balanced / wide` 切块参数实验完成
+9. 中文问答评测样本、问题集、夹具与首轮真实评测完成
 
 ## 技术选型
 
@@ -150,913 +102,199 @@
 - Spring Web
 - Spring Validation
 - MyBatis-Plus
-- Spring Data Redis
-- Spring Boot Actuator
-- PostgreSQL
+- PostgreSQL + `pgvector`
 - Redis
 - Flyway
-- Lombok
+- Spring Boot Actuator
+- PDFBox
+- OpenAI-compatible HTTP 集成
 
-当前配置里已经预留但尚未真正接入主链路的外围能力：
+当前设计取舍很明确：
 
-- `rag.embedding.*`
-- `rag.llm.*`
-- `rag.retrieval.*`
-- 检索与生成模块第一版骨架
+1. 第一阶段优先用 PostgreSQL 统一承载主数据、任务数据和向量数据
+2. embedding 单独做本地 HTTP 服务，降低 Java 主服务耦合
+3. 先把单服务版本做完整，再考虑更复杂的编排和检索优化
 
-当前第 2 周采用的最小技术路线是：
-
-- 本地 embedding 服务，模型为 `bge-small-zh-v1.5`
-- 本地服务默认按 OpenAI-compatible `/v1/embeddings` 协议接入
-- PostgreSQL 使用 `pgvector`
-- 本地 embedding 服务代码位于 `embedding-service/`
-- Java 侧通过 `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/embed` 触发向量写库
-- 真实文档已经完成一次端到端 `/embed` 写库验证
-
-## 架构图
-
-```mermaid
-flowchart LR
-    Client[Client / cURL / Future UI] --> KB[KnowledgeBaseController]
-    Client --> DOC[DocumentController]
-    Client --> HEALTH[HealthController]
-
-    KB --> KBSVC[KnowledgeBaseService]
-    DOC --> DSVC[DocumentService]
-    DOC --> PSVC[DocumentProcessingService]
-    HEALTH --> HSVC[SystemHealthService]
-
-    DSVC --> STORAGE[LocalFileStorageService]
-    DSVC --> KBREPO[KnowledgeBaseRepository]
-    DSVC --> DREPO[DocumentRepository]
-
-    PSVC --> PARSER[DocumentTextParser<br/>Markdown / Text / PDF]
-    PSVC --> CHUNKER[FixedWindowChunker]
-    PSVC --> DREPO
-    PSVC --> CHREPO[DocumentChunkRepository]
-    PSVC --> ITREPO[IndexingTaskRepository]
-    PSVC --> KBREPO
-
-    KBREPO --> KBM[KnowledgeBaseMapper]
-    DREPO --> DM[DocumentMapper]
-    CHREPO --> CHM[DocumentChunkMapper]
-    ITREPO --> ITM[IndexingTaskMapper]
-
-    KBM --> PG[(PostgreSQL)]
-    DM --> PG
-    CHM --> PG
-    ITM --> PG
-    STORAGE --> FS[(Local File Storage)]
-    HSVC --> REDIS[(Redis)]
-```
-
-## 当前架构
-
-当前代码结构已经按“接口层 / 业务层 / 持久层 / 解析层”拆开：
-
-- `controller`
-  - 对外暴露 HTTP 接口，只负责参数接入和统一响应包装
-- `service`
-  - 编排业务流程、状态流转、异常语义
-- `mapper`
-  - MyBatis-Plus 原子数据库访问入口
-- `persistence`
-  - 面向业务的持久化访问封装
-- `persistence/entity`
-  - 数据库存储对象
-- `persistence/query`
-  - 分页与查询条件对象
-- `model/request|response`
-  - HTTP 请求/响应模型
-- `ingestion/parser|chunk|storage`
-  - 文档解析、切块、本地存储
-
-## 目录结构
+## 项目结构
 
 ```text
 rag-system/
 ├── docker-compose.yml
 ├── pom.xml
+├── embedding-service/              # 本地 embedding 服务
 ├── src/main/java/com/example/rag/
-│   ├── RagApplication.java
-│   ├── common/                # 统一返回、错误码、异常
-│   ├── config/                # 配置属性、线程池、请求 ID 过滤器
-│   ├── controller/            # HTTP 接口
-│   │   ├── HealthController.java
-│   │   ├── KnowledgeBaseController.java
-│   │   ├── DocumentController.java
-│   │   └── QuestionAnsweringController.java
-│   ├── generation/            # 生成链路占位
+│   ├── common/
+│   ├── config/
+│   ├── controller/
+│   ├── generation/
 │   ├── ingestion/
-│   │   ├── chunk/             # 文本切块
-│   │   ├── parser/            # 文档解析
-│   │   └── storage/           # 本地文件存储
-│   ├── integration/
-│   │   └── llm/               # 本地 OpenAI-compatible 客户端骨架
-│   ├── mapper/                # MyBatis-Plus Mapper
+│   │   ├── chunk/
+│   │   ├── parser/
+│   │   └── storage/
+│   ├── integration/llm/
+│   ├── mapper/
 │   ├── model/
-│   │   ├── dto/
-│   │   ├── enums/
-│   │   ├── request/
-│   │   └── response/
-│   ├── persistence/          # 持久化访问封装
-│   │   └── entity/           # 数据库存储对象
-│   │   └── query/            # 分页与查询条件
-│   ├── retrieval/             # 检索链路占位
+│   ├── persistence/
+│   ├── repository/
+│   ├── retrieval/
 │   └── service/
 ├── src/main/resources/
 │   ├── application.yml
 │   ├── application-local.yml
 │   └── db/migration/
-│       ├── V1__init_schema.sql
-│       ├── V2__drop_serial_defaults.sql
-│       ├── V3__add_document_media_type.sql
-│       ├── V4__create_document_chunk_table.sql
-│       ├── V5__create_indexing_task_table.sql
-│       ├── V6__add_chunk_embedding_metadata.sql
-│       └── V7__enable_pgvector_and_add_chunk_vector.sql
-├── data/                      # 本地持久化目录（已被 .gitignore 忽略）
-└── work/                      # 过程文档与阶段记录
+├── src/test/java/com/example/rag/
+│   ├── evaluation/
+│   ├── ingestion/chunk/
+│   └── service/
+└── work/                           # 周计划、阶段记录、评测文档
 ```
 
-## 数据模型
+## 核心数据
 
-当前 Flyway 脚本已落地四张表：
+### 主要表
 
-### `knowledge_base`
+1. `knowledge_base`
+2. `document`
+3. `document_chunk`
+4. `indexing_task`
+5. `chat_session`
+6. `chat_message`
 
-用于管理知识库本身。
+### 已落地迁移
 
-核心字段：
+1. `V1__init_schema.sql`
+2. `V4__create_document_chunk_table.sql`
+3. `V5__create_indexing_task_table.sql`
+4. `V6__add_chunk_embedding_metadata.sql`
+5. `V7__enable_pgvector_and_add_chunk_vector.sql`
+6. `V8__create_chat_tables.sql`
+7. `V9__add_async_indexing_task_fields.sql`
+8. `V10__add_indexing_retry_and_recovery_fields.sql`
 
-- `kb_code`
-- `name`
-- `description`
-- `status`
-- `created_by`
-- `created_at`
-- `updated_at`
+## 运行方式
 
-### `document`
-
-用于保存原始文档元数据。
-
-核心字段：
-
-- `knowledge_base_id`
-- `document_code`
-- `file_name`
-- `display_name`
-- `file_type`
-- `media_type`
-- `storage_path`
-- `file_size`
-- `content_hash`
-- `status`
-- `version`
-- `source`
-- `tags`
-- `error_message`
-
-### `document_chunk`
-
-用于保存解析和切块后的检索基础数据。
-
-核心字段：
-
-- `knowledge_base_id`
-- `document_id`
-- `chunk_index`
-- `chunk_type`
-- `title`
-- `content`
-- `content_length`
-- `token_count`
-- `start_offset`
-- `end_offset`
-- `metadata_json`
-- `embedding_status`
-- `embedding_model`
-- `embedding_error_message`
-- `embedding_updated_at`
-- `embedding_vector`
-- `status`
-
-当前第 2 周第一版新增接口：
-
-- `GET /api/knowledge-bases/{kbCode}/qa/readiness`
-- `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/embed`
-- `POST /api/knowledge-bases/{kbCode}/qa/retrieve`
-- `POST /api/knowledge-bases/{kbCode}/qa/ask`
-- `GET /api/knowledge-bases/{kbCode}/qa/history`
-
-### `indexing_task`
-
-用于独立记录一次文档处理任务的执行结果。
-
-核心字段：
-
-- `knowledge_base_id`
-- `document_id`
-- `task_type`
-- `status`
-- `parser_name`
-- `chunk_count`
-- `error_message`
-- `started_at`
-- `finished_at`
-
-当前索引：
-
-- `knowledge_base.kb_code` 唯一约束
-- `document.document_code` 唯一约束
-- `idx_document_kb_status`
-- `idx_document_content_hash`
-- `uk_document_chunk_document_index`
-- `idx_document_chunk_kb_document`
-- `idx_document_chunk_document_status`
-- `idx_indexing_task_document_created`
-- `idx_indexing_task_status`
-
-当前文档状态枚举：
-
-- `UPLOADED`
-- `PARSING`
-- `PARSED`
-- `CHUNKING`
-- `INDEXED`
-- `FAILED`
-- `DISABLED`
-
-当前知识库状态枚举：
-
-- `ACTIVE`
-- `INACTIVE`
-
-当前 chunk 状态枚举：
-
-- `ACTIVE`
-- `DISABLED`
-
-## 联调记录
-
-当前已经完成过一轮面向 `day6-kb` 的真实接口联调，覆盖 `md / txt / pdf` 三类样本：
-
-1. Markdown 样本处理成功，`status = INDEXED`，`chunkCount = 2`
-2. txt 样本处理成功，`status = INDEXED`，`chunkCount = 1`
-3. PDF 样本处理成功，`status = INDEXED`，`chunkCount = 1`
-4. `document_chunk` 与 `indexing_task` 都已在 PostgreSQL 中完成真实落库
-
-这轮联调中还发现并修正了一个真实问题：
-
-1. Markdown 经 `curl -F` 上传时，客户端可能上送通用 `application/octet-stream`
-2. 服务现在会把这类通用二进制类型回退到扩展名判断
-3. 因此 `.md` 文件现在能正确落成 `text/markdown`
-
-## 本地运行
-
-### 1. 启动基础设施
-
-项目根目录已经提供 [docker-compose.yml](/root/workspace/rag-system/docker-compose.yml:1)：
+### 1. 启动依赖
 
 ```bash
-docker compose up -d
+docker compose up -d postgres redis embedding-service
 ```
 
-当前会启动：
+默认端口：
 
-1. `rag-postgres`
-2. `rag-redis`
-3. `rag-embedding-service`
-
-其中：
-
-- PostgreSQL：`localhost:5432`
-- Redis：`localhost:6379`
-- Embedding Service：`localhost:8001`
-- Redis 已启用密码：`rag_password`
-- 模型目录挂载：`./data/models -> /models`
-- 数据持久化目录：`./data/postgres`、`./data/redis`
-
-本地 embedding 服务默认读取：
-
-- 模型：`BAAI/bge-small-zh-v1.5`
-- 路径：`/models/bge-small-zh-v1.5`
-- 向量维度：`512`
+1. PostgreSQL：`5432`
+2. Redis：`6379`
+3. Embedding Service：`8001`
 
 ### 2. 启动应用
 
 ```bash
-mvn -s maven-settings.xml spring-boot:run
+mvn spring-boot:run
 ```
 
-或者执行测试做一次完整启动校验：
+### 3. 健康检查
 
 ```bash
-mvn -s maven-settings.xml test
+curl --noproxy '*' -s http://127.0.0.1:8080/api/health
+curl --noproxy '*' -s http://127.0.0.1:8080/api/health/redis-probe
+curl --noproxy '*' -s http://127.0.0.1:8001/health
 ```
 
-## 配置说明
+## 关键配置
 
-主配置文件见 [src/main/resources/application.yml](/root/workspace/rag-system/src/main/resources/application.yml:1)。
+`src/main/resources/application.yml` 当前已经整理出这些主配置域：
 
-当前关键配置包括：
+1. `rag.storage.*`
+2. `rag.executor.*`
+3. `rag.chunking.*`
+4. `rag.embedding.*`
+5. `rag.llm.chat.*`
+6. `rag.retrieval.*`
+7. `rag.qa.*`
+8. `rag.indexing.*`
+9. `rag.cache.*`
 
-```yaml
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/rag_db
-    username: rag_user
-    password: rag_password
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      password: rag_password
-  flyway:
-    enabled: true
+默认值里当前最重要的几项：
 
-rag:
-  storage:
-    base-dir: ./data/uploads
-  embedding:
-    provider: local-openai-compatible
-    base-url: http://localhost:8001/v1
-    model: bge-small-zh-v1.5
-    vector-dimensions: 512
-    embedding-path: /embeddings
-    batch-size: 16
-  retrieval:
-    vector-store: pgvector
-    default-top-k: 5
-  llm:
-    chat:
-      base-url: http://localhost:8000/v1
-      api-key: change-me
-      model: deepseek-v4-pro
-      chat-path: /chat/completions
-      temperature: 0.2
-      max-output-tokens: 1200
-```
-
-`application-local.yml` 负责本地环境增强配置，包括更细的日志级别。
-
-如果切换到 DeepSeek，一份可用示例是：
-
-```yaml
-rag:
-  llm:
-    chat:
-      base-url: https://api.deepseek.com
-      api-key: ${DEEPSEEK_API_KEY}
-      model: deepseek-v4-pro
-      chat-path: /chat/completions
-```
+1. embedding 模型：`bge-small-zh-v1.5`
+2. 向量维度：`512`
+3. 默认切块：`600/80/240`
+4. 默认检索 `topK`：`5`
+5. 最大索引重试次数：`3`
+6. 检索结果短 TTL 缓存：`60s`
 
 ## 当前接口
 
-### 1. 健康检查
+### 健康与观察
 
-```http
-GET /api/health
-```
+1. `GET /api/health`
+2. `GET /api/health/redis-probe`
+3. `GET /api/knowledge-bases/{kbCode}/qa/readiness`
 
-当前返回除了服务状态，还会附带组件状态：
+### 知识库
 
-1. `postgres`
-2. `redis`
+1. `POST /api/knowledge-bases`
+2. `GET /api/knowledge-bases`
+3. `GET /api/knowledge-bases/{kbCode}`
+4. `POST /api/knowledge-bases/{kbCode}/disable`
+5. `POST /api/knowledge-bases/{kbCode}/enable`
 
-### 2. Redis 连通探针
+### 文档
 
-```http
-POST /api/health/redis-probe
-```
+1. `POST /api/knowledge-bases/{kbCode}/documents/upload`
+2. `GET /api/knowledge-bases/{kbCode}/documents`
+3. `GET /api/knowledge-bases/{kbCode}/documents/{documentCode}`
+4. `GET /api/knowledge-bases/{kbCode}/documents/{documentCode}/chunks`
+5. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/process`
+6. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/reprocess`
+7. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/embed`
+8. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/index`
+9. `GET /api/knowledge-bases/{kbCode}/documents/{documentCode}/indexing-tasks`
+10. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/indexing-tasks/{taskId}/retry`
 
-这个接口会执行一次最小 `set/get`，返回：
+### 问答
 
-1. 写入 key
-2. 写入值
-3. 读出值
-4. 是否一致
+1. `POST /api/knowledge-bases/{kbCode}/qa/retrieve`
+2. `POST /api/knowledge-bases/{kbCode}/qa/ask`
+3. `GET /api/knowledge-bases/{kbCode}/qa/history`
 
-### 3. 创建知识库
+## 验收样例
 
-```http
-POST /api/knowledge-bases
-Content-Type: application/json
-```
+### Day 14 端到端验收
 
-请求示例：
+`day14-kb` 已完成：
 
-```json
-{
-  "kbCode": "settlement-kb",
-  "name": "Settlement Knowledge Base",
-  "description": "Knowledge base for settlement documents",
-  "createdBy": "codex"
-}
-```
+1. 创建知识库
+2. 上传文档
+3. 文档处理
+4. 文档向量化
+5. 检索
+6. 问答
+7. 历史查询
 
-### 4. 查询知识库列表
+### Day 20 中文评测
 
-```http
-GET /api/knowledge-bases?status=ACTIVE&pageNo=1&pageSize=20
-```
+`day20-cn-kb` 已完成第一版中文真实问答评测：
 
-支持参数：
+1. 固定口径：`zh-CN`、`topK=3`
+2. 覆盖类型：`FACT / SUMMARY / PROCESS / NO_ANSWER`
+3. 结果：`5/5` 可回答问题命中预期文档
+4. 无答案问题返回“根据当前检索内容，无法确定答案。”
 
-- `status`，可选，当前支持 `ACTIVE / INACTIVE`
-- `pageNo`，可选，默认 `1`
-- `pageSize`，可选，默认 `20`，最大 `100`
+## 后续方向
 
-### 5. 查询知识库详情
+下一阶段更适合继续推进这些事情：
 
-```http
-GET /api/knowledge-bases/{kbCode}
-```
+1. 扩大评测集并沉淀稳定评分口径
+2. 做无答案场景的召回抑制
+3. 增加混合检索与重排序
+4. 增加 session 复用与多轮对话
+5. 补齐任务取消、批量编排和更完整观测能力
 
-### 6. 禁用知识库
+## 相关文档
 
-```http
-POST /api/knowledge-bases/{kbCode}/disable
-```
-
-### 7. 启用知识库
-
-```http
-POST /api/knowledge-bases/{kbCode}/enable
-```
-
-### 8. 上传文档
-
-```http
-POST /api/knowledge-bases/{kbCode}/documents/upload
-Content-Type: multipart/form-data
-```
-
-表单字段：
-
-- `file`
-- `documentName`，可选
-- `tags`，可选
-- `source`，可选
-- `operator`，可选
-
-支持文件类型：
-
-- `md`
-- `txt`
-- `pdf`
-
-补充约束：
-
-- 知识库状态为 `INACTIVE` 时不允许上传新文档
-- 同一知识库下内容哈希重复的文档会被拦截
-
-### 9. 查询文档列表
-
-```http
-GET /api/knowledge-bases/{kbCode}/documents?status=UPLOADED&pageNo=1&pageSize=20
-```
-
-支持参数：
-
-- `status`，可选，当前支持 `UPLOADED / PARSING / PARSED / CHUNKING / INDEXED / FAILED / DISABLED`
-- `pageNo`，可选，默认 `1`
-- `pageSize`，可选，默认 `20`，最大 `100`
-
-### 10. 查询文档详情
-
-```http
-GET /api/knowledge-bases/{kbCode}/documents/{documentCode}
-```
-
-### 11. 查询文档 chunk 列表
-
-```http
-GET /api/knowledge-bases/{kbCode}/documents/{documentCode}/chunks
-```
-
-这个接口会按 `chunk_index` 升序返回该文档全部 chunk，适合排查：
-
-1. 解析结果是否完整
-2. 切块边界是否合理
-3. `metadata_json` 是否符合预期
-
-### 12. 禁用文档
-
-```http
-POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/disable
-```
-
-### 13. 处理文档
-
-```http
-POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/process
-```
-
-这个接口负责：
-
-1. 根据文件类型选择解析器
-2. 执行第一版切块
-3. 写入 `document_chunk`
-4. 推进文档状态到 `INDEXED` 或 `FAILED`
-
-补充约束：
-
-- 知识库状态为 `INACTIVE` 时不允许处理文档
-- 文档状态为 `DISABLED` 时不允许处理
-
-### 14. 重处理文档
-
-```http
-POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/reprocess
-```
-
-当前实现与 `/process` 复用同一条处理链路；重新处理时会先删除旧 chunk，再重新生成。
-
-### 15. 执行文档向量化
-
-```http
-POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/embed
-```
-
-这个接口负责：
-
-1. 读取指定文档下可向量化的 chunk
-2. 批量调用本地 embedding 服务
-3. 将向量写入 `document_chunk.embedding_vector`
-4. 更新 `embedding_status`
-
-当前联调验证过的成功结果包括：
-
-1. `embedding_status = EMBEDDED`
-2. `embedding_model = bge-small-zh-v1.5`
-3. `embedding_vector is not null`
-
-### 16. 查询问答准备状态
-
-```http
-GET /api/knowledge-bases/{kbCode}/qa/readiness
-```
-
-这个接口用于观察当前知识库是否具备进入检索与问答阶段的前置条件，例如：
-
-1. chunk 总数
-2. 已完成 embedding 的 chunk 数
-3. 当前 embedding 模型
-4. 默认 `TopK`
-
-### 17. 执行第一版基础检索
-
-```http
-POST /api/knowledge-bases/{kbCode}/qa/retrieve
-Content-Type: application/json
-```
-
-请求示例：
-
-```json
-{
-  "question": "结算异常应该怎么处理？",
-  "topK": 3
-}
-```
-
-这个接口负责：
-
-1. 将问题文本转换成 query embedding
-2. 在 `document_chunk.embedding_vector` 上执行 `pgvector` TopK 相似度检索
-3. 返回命中的 chunk、文档定位信息和相似度分数
-
-当前返回结果至少包含：
-
-1. `knowledgeBaseCode`
-2. `question`
-3. `embeddingModel`
-4. `topK`
-5. `hitCount`
-6. `chunks`
-
-每条 `chunks` 结果当前至少包含：
-
-1. `documentCode`
-2. `documentName`
-3. `chunkIndex`
-4. `content`
-5. `score`
-6. `startOffset / endOffset`
-
-## Day 10 联调样例
-
-在 Day 9 已完成 `/embed` 的前提下，可以直接验证 `/qa/retrieve`。
-
-### 1. 确认知识库已具备 embedding 数据
-
-```bash
-curl --noproxy '*' -s http://127.0.0.1:8080/api/knowledge-bases/day6-kb/qa/readiness
-```
-
-期望至少看到：
-
-1. `questionAnsweringReady = true`
-2. `embeddedChunkCount > 0`
-
-### 2. 发起第一版检索请求
-
-```bash
-curl --noproxy '*' -s -X POST \
-  http://127.0.0.1:8080/api/knowledge-bases/day6-kb/qa/retrieve \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "question": "这份文档主要讲了什么？",
-    "topK": 3
-  }'
-```
-
-如果你要沿用 Day 9 已验证过的真实文档上下文，也可以直接对 `day6-kb` 提类似问题，例如：
-
-1. `这份 Markdown 文档讲了什么？`
-2. `这个知识库里有哪些示例内容？`
-3. `文档中提到了哪些关键主题？`
-
-### 3. 检查返回结果
-
-重点确认：
-
-1. `hitCount` 大于 `0`
-2. `chunks` 按相似度降序返回
-3. 每条结果都带有 `documentCode / chunkIndex / content / score`
-4. `embeddingModel` 与当前配置一致
-
-### 18. 执行第一版问答
-
-```http
-POST /api/knowledge-bases/{kbCode}/qa/ask
-Content-Type: application/json
-```
-
-请求示例：
-
-```json
-{
-  "question": "这份文档主要讲了什么？",
-  "topK": 3
-}
-```
-
-这个接口负责：
-
-1. 对问题生成 query embedding
-2. 执行 TopK 相似度检索
-3. 将检索结果拼成 prompt
-4. 调用 OpenAI-compatible chat completion
-5. 返回最终答案和基础召回结果
-
-当前返回结果至少包含：
-
-1. `question`
-2. `answer`
-3. `topK`
-4. `chatModel`
-5. `retrievalResults`
-6. `sources`
-
-约束说明：
-
-1. 只基于检索内容回答
-2. 不做多轮对话
-3. 不做引用格式化
-
-### 19. 查询问答历史
-
-```http
-GET /api/knowledge-bases/{kbCode}/qa/history?pageNo=1&pageSize=20
-```
-
-这个接口负责：
-
-1. 分页查询指定知识库下的问答记录
-2. 返回问题、答案、模型、来源和召回结果
-3. 支撑 Day 13 之后的历史回放和效果复盘
-
-当前返回结果至少包含：
-
-1. `sessionCode`
-2. `messageCode`
-3. `question`
-4. `answer`
-5. `chatModel`
-6. `topK`
-7. `retrievalResults`
-8. `sources`
-9. `createdAt`
-
-## Day 11 联调样例
-
-如果要用 DeepSeek 做本地联调，可以通过运行时配置覆盖：
-
-```bash
-RAG_LLM_CHAT_BASE_URL=https://api.deepseek.com
-RAG_LLM_CHAT_CHAT_PATH=/chat/completions
-RAG_LLM_CHAT_API_KEY=${DEEPSEEK_API_KEY}
-RAG_LLM_CHAT_MODEL=deepseek-v4-pro
-```
-
-然后调用：
-
-```bash
-curl --noproxy '*' -s -X POST \
-  http://127.0.0.1:8080/api/knowledge-bases/day6-kb/qa/ask \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "question": "这份文档主要讲了什么？",
-    "topK": 3
-  }'
-```
-
-当前已经验证过一次真实结果：
-
-1. `chatModel = deepseek-v4-pro`
-2. 返回结果中包含 `retrievalResults`
-3. 返回结果中包含 `sources`
-4. `deepseek-v4-pro` 已基于检索内容返回可用回答
-
-## Day 13 联调样例
-
-先执行一次问答：
-
-```bash
-curl --noproxy '*' -s -X POST \
-  http://127.0.0.1:8080/api/knowledge-bases/day6-kb/qa/ask \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "question": "这份文档主要讲了什么？",
-    "topK": 3
-  }'
-```
-
-再查询历史：
-
-```bash
-curl --noproxy '*' -s \
-  'http://127.0.0.1:8080/api/knowledge-bases/day6-kb/qa/history?pageNo=1&pageSize=5'
-```
-
-当前已经验证过一次真实结果：
-
-1. `/qa/ask` 成功后会写入 `chat_session / chat_message`
-2. `/qa/history` 能查回刚写入的问题和答案
-3. 历史结果里包含 `retrievalResults` 和 `sources`
-4. 历史结果里包含 `latencyMs` 和 `promptTemplate`
-
-## Day 14 联调样例
-
-本次使用新的 `day14-kb` 做了完整验收：
-
-```bash
-curl --noproxy '*' -s -X POST \
-  http://127.0.0.1:8080/api/knowledge-bases \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "kbCode": "day14-kb",
-    "name": "Day 14 Acceptance KB",
-    "description": "Week 2 end-to-end acceptance knowledge base",
-    "createdBy": "codex"
-  }'
-```
-
-```bash
-curl --noproxy '*' -s -X POST \
-  http://127.0.0.1:8080/api/knowledge-bases/day14-kb/documents/upload \
-  -F 'file=@work/plan.md' \
-  -F 'documentName=Week2 Acceptance Plan' \
-  -F 'tags=day14,acceptance,week2' \
-  -F 'source=work' \
-  -F 'operator=codex'
-```
-
-```bash
-curl --noproxy '*' -s -X POST \
-  'http://127.0.0.1:8080/api/knowledge-bases/day14-kb/documents/DOC-309162419068997632/process?operator=codex'
-
-curl --noproxy '*' -s -X POST \
-  http://127.0.0.1:8080/api/knowledge-bases/day14-kb/documents/DOC-309162419068997632/embed
-
-curl --noproxy '*' -s \
-  http://127.0.0.1:8080/api/knowledge-bases/day14-kb/qa/readiness
-```
-
-```bash
-curl --noproxy '*' -s -X POST \
-  http://127.0.0.1:8080/api/knowledge-bases/day14-kb/qa/retrieve \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "question": "第2周的目标是什么？",
-    "topK": 3
-  }'
-
-curl --noproxy '*' -s -X POST \
-  http://127.0.0.1:8080/api/knowledge-bases/day14-kb/qa/ask \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "question": "第2周的目标是什么？",
-    "topK": 3
-  }'
-
-curl --noproxy '*' -s \
-  'http://127.0.0.1:8080/api/knowledge-bases/day14-kb/qa/history?pageNo=1&pageSize=5'
-```
-
-当前已经验证过一次真实结果：
-
-1. `day14-kb` 已完成从上传到问答历史的完整闭环
-2. `/qa/retrieve` 已返回 Week 2 目标相关 chunk
-3. `/qa/ask` 已对问题“第2周的目标是什么？”返回“让项目从‘能跑’变成‘像样’”
-4. `/qa/ask` 已对无关问题返回“根据当前检索内容，无法确定答案。”
-5. `/qa/history` 已查回真实问答记录
-
-## 已验证结果
-
-当前仓库已经做过实际验证：
-
-1. Spring Boot 可正常启动
-2. PostgreSQL 可正常连接
-3. Redis 可正常连接
-4. Flyway 可成功执行迁移
-5. 新建 PostgreSQL 容器后可重新建表
-6. 知识库创建接口可写库
-7. 文档上传接口可写库
-8. 原始文件可保存到本地目录
-9. 同知识库重复文件会被拦截
-10. Redis 探针接口可完成一次最小读写
-11. 文档处理集成测试可真实写入 `document_chunk`
-12. MyBatis-Plus 自动填充 `created_at / updated_at` 已验证生效
-13. MyBatis-Plus 分页查询已通过单测与启动验证
-14. 本地 `bge-small-zh-v1.5` 模型已成功加载
-15. 本地 embedding 服务已返回真实 512 维向量
-16. `POST /embed` 已完成真实文档联调
-17. `document_chunk.embedding_vector` 已验证非空
-18. `mvn -q -DskipTests compile` 已通过
-19. Day 10 `/qa/retrieve` 第一版接口已落地
-20. Day 11 `/qa/ask` 第一版接口已落地
-21. DeepSeek `deepseek-v4-pro` 已完成真实联调
-22. Day 13 `/qa/history` 第一版接口已落地
-23. 问答记录持久化与历史查询已完成真实联调
-24. Day 14 端到端验收已完成
-
-## 已实现的工程约束
-
-### 统一返回结构
-
-所有接口统一返回：
-
-- `code`
-- `message`
-- `data`
-- `requestId`
-- `timestamp`
-
-实现见 [ApiResponse.java](/root/workspace/rag-system/src/main/java/com/example/rag/common/ApiResponse.java:1)。
-
-### 请求追踪
-
-当前已经接入请求级 `X-Request-Id` 透传与生成，便于后续日志排障和接口追踪。
-
-请求 ID 基于 Snowflake 算法生成；当系统时钟出现短暂回拨，或者同一毫秒内序列号耗尽时，生成器会阻塞等待到下一可用毫秒，而不是直接抛错。
-
-### 基础线程池
-
-当前已经提供 `indexingExecutor`，为后续异步解析、切块、索引任务预留执行器。
-
-实现见 [ExecutorConfig.java](/root/workspace/rag-system/src/main/java/com/example/rag/config/ExecutorConfig.java:1)。
-
-### 持久层约束
-
-当前持久层已经明确切到 MyBatis-Plus，不再混用 JPA：
-
-- `mapper` 只做数据库原子访问
-- `persistence` 负责组合型查询和持久化语义封装
-- `persistence/entity` 明确表示数据库持久化对象
-- `config/MybatisPlusConfig.java` 同时维护分页插件和审计时间自动填充
-
-当前不会再在 service 里手工维护 `createdAt / updatedAt`，统一交给 MyBatis-Plus 自动填充。
-
-## 下一步
-
-Week 1 已完成并完成收口，Week 2 也已经完成第一版收口。
-
-如果后续继续推进，重点就不再是“把主链路做出来”，而是：
-
-1. 建立评测集并做效果评测
-2. 优化召回质量、答案质量和引用质量
-3. 增加 session 复用与多轮对话
-4. 继续补齐异步编排、日志和观测能力
-
-更详细的阶段记录可参考：
-
-1. [work/current-status.md](/root/workspace/rag-system/work/current-status.md)
-2. [work/plan.md](/root/workspace/rag-system/work/plan.md)
-3. [work/week1.md](/root/workspace/rag-system/work/week1.md)
-4. [work/week2.md](/root/workspace/rag-system/work/week2.md)
-5. [work/work day12.md](/root/workspace/rag-system/work/work%20day12.md)
+1. [当前状态](/root/workspace/rag-system/work/current-status.md)
+2. [Week 1](/root/workspace/rag-system/work/week1.md)
+3. [Week 2](/root/workspace/rag-system/work/week2.md)
+4. [Week 3](/root/workspace/rag-system/work/week3.md)
+5. [Day 20 评测记录](/root/workspace/rag-system/work/work%20day20.md)
+6. [Day 21 收口说明](/root/workspace/rag-system/work/work%20day21.md)

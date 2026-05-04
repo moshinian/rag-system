@@ -5,9 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-/**
- * Day 10 基础检索请求。
- */
+/** 问题检索请求。 */
 public record QuestionRetrievalRequest(
         @NotBlank(message = "question must not be blank")
         @Size(max = 2000, message = "question length must be <= 2000")

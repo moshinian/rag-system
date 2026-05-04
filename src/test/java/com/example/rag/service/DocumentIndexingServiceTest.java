@@ -37,6 +37,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/** 文档异步索引服务测试。 */
 @ExtendWith(MockitoExtension.class)
 class DocumentIndexingServiceTest {
 
