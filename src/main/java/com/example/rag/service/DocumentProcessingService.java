@@ -47,6 +47,7 @@ import java.util.Map;
 @Service
 public class DocumentProcessingService {
 
+    private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
     private static final Logger log = LoggerFactory.getLogger(DocumentProcessingService.class);
 
     private final DocumentRepository documentRepository;
@@ -90,6 +91,18 @@ public class DocumentProcessingService {
             @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
     })
     public DocumentProcessResponse process(String kbCode, String documentCode, String operator) {
+        return processInternal(kbCode, documentCode, operator, false);
+    }
+
+    /** 异步索引链路内部调用时允许复用 process 逻辑，但要绕过“活动索引任务”自校验。 */
+    DocumentProcessResponse processForIndexing(String kbCode, String documentCode, String operator) {
+        return processInternal(kbCode, documentCode, operator, true);
+    }
+
+    private DocumentProcessResponse processInternal(String kbCode,
+                                                    String documentCode,
+                                                    String operator,
+                                                    boolean allowDuringActiveIndexing) {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
         ensureKnowledgeBaseActive(knowledgeBase);
@@ -100,6 +113,11 @@ public class DocumentProcessingService {
         // 被禁用的文档不允许再进入处理链路。
         if (document.getStatus() == DocumentStatus.DISABLED) {
             throw new BusinessException("Document is disabled and cannot be processed: " + documentCode);
+        }
+        if (!allowDuringActiveIndexing
+                && indexingTaskRepository.existsActiveTask(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
+            throw new BusinessException("Document has an active indexing task and cannot be manually processed: "
+                    + documentCode);
         }
 
         IndexingTaskEntity task = createRunningTask(document, operator);
@@ -267,6 +285,7 @@ public class DocumentProcessingService {
         task.setDocumentId(document.getId());
         task.setTaskType("DOCUMENT_PROCESS");
         task.setStatus(IndexingTaskStatus.RUNNING);
+        task.setTaskStage(com.example.rag.model.enums.IndexingTaskStage.DOCUMENT_PROCESSING);
         task.setStartedAt(OffsetDateTime.now());
         task.setCreatedBy(normalizeOperator(operator));
         return indexingTaskRepository.insert(task);
@@ -275,6 +294,7 @@ public class DocumentProcessingService {
     /** 把任务标记为成功。 */
     private void markTaskSucceeded(IndexingTaskEntity task, String parserName, int chunkCount) {
         task.setStatus(IndexingTaskStatus.SUCCEEDED);
+        task.setTaskStage(com.example.rag.model.enums.IndexingTaskStage.COMPLETED);
         task.setParserName(parserName);
         task.setChunkCount(chunkCount);
         task.setErrorMessage(null);

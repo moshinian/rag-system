@@ -13,6 +13,7 @@ import com.example.rag.model.response.PageResponse;
 import com.example.rag.model.response.DocumentUploadResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
 import com.example.rag.persistence.DocumentRepository;
+import com.example.rag.persistence.IndexingTaskRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.DocumentChunkEntity;
 import com.example.rag.persistence.entity.DocumentEntity;
@@ -47,6 +48,7 @@ import java.util.Set;
 @Service
 public class DocumentService {
 
+    private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
     private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("md", "txt", "pdf");
     private static final long DEFAULT_PAGE_NO = 1;
     private static final long DEFAULT_PAGE_SIZE = 20;
@@ -65,17 +67,20 @@ public class DocumentService {
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final DocumentRepository documentRepository;
+    private final IndexingTaskRepository indexingTaskRepository;
     private final LocalFileStorageService localFileStorageService;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
     public DocumentService(KnowledgeBaseRepository knowledgeBaseRepository,
                            DocumentChunkRepository documentChunkRepository,
                            DocumentRepository documentRepository,
+                           IndexingTaskRepository indexingTaskRepository,
                            LocalFileStorageService localFileStorageService,
                            SnowflakeIdGenerator snowflakeIdGenerator) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentChunkRepository = documentChunkRepository;
         this.documentRepository = documentRepository;
+        this.indexingTaskRepository = indexingTaskRepository;
         this.localFileStorageService = localFileStorageService;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
@@ -202,6 +207,9 @@ public class DocumentService {
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
         DocumentEntity document = documentRepository.findByCodeInKnowledgeBase(documentCode, kbCode)
                 .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
+        if (indexingTaskRepository.existsActiveTask(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
+            throw new BusinessException("Document has an active indexing task and cannot be disabled: " + documentCode);
+        }
         document.setStatus(DocumentStatus.DISABLED);
         documentRepository.updateById(document);
         return toDetailResponse(document, knowledgeBase.getKbCode());

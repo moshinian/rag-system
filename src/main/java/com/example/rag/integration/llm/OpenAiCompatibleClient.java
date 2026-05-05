@@ -25,6 +25,8 @@ import java.util.List;
 @Component
 public class OpenAiCompatibleClient {
 
+    private static final int CONNECT_TIMEOUT_MILLIS = 5_000;
+    private static final int READ_TIMEOUT_MILLIS = 30_000;
     private static final Logger log = LoggerFactory.getLogger(OpenAiCompatibleClient.class);
     private final ObjectMapper objectMapper;
 
@@ -48,6 +50,10 @@ public class OpenAiCompatibleClient {
                                                String path,
                                                String model,
                                                List<String> inputs) {
+        validateModel(model);
+        if (inputs == null || inputs.isEmpty()) {
+            throw new BusinessException("Embedding inputs must not be empty");
+        }
         try {
             EmbeddingResponse response = postJson(
                     normalizeUrl(baseUrl, path),
@@ -82,6 +88,7 @@ public class OpenAiCompatibleClient {
                                        Integer maxOutputTokens,
                                        String systemPrompt,
                                        String userPrompt) {
+        validateModel(model);
         try {
             ChatCompletionResponse response = postJson(
                     normalizeUrl(baseUrl, path),
@@ -124,6 +131,8 @@ public class OpenAiCompatibleClient {
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
         connection.setRequestMethod("POST");
         connection.setDoOutput(true);
+        connection.setConnectTimeout(CONNECT_TIMEOUT_MILLIS);
+        connection.setReadTimeout(READ_TIMEOUT_MILLIS);
         connection.setRequestProperty(HttpHeaders.CONTENT_TYPE, "application/json; charset=UTF-8");
         connection.setRequestProperty(HttpHeaders.ACCEPT, "application/json");
         connection.setFixedLengthStreamingMode(jsonBytes.length);
@@ -131,17 +140,21 @@ public class OpenAiCompatibleClient {
             connection.setRequestProperty(HttpHeaders.AUTHORIZATION, bearerToken(apiKey));
         }
 
-        try (OutputStream outputStream = connection.getOutputStream()) {
-            outputStream.write(jsonBytes);
-            outputStream.flush();
-        }
+        try {
+            try (OutputStream outputStream = connection.getOutputStream()) {
+                outputStream.write(jsonBytes);
+                outputStream.flush();
+            }
 
-        int statusCode = connection.getResponseCode();
-        String responseBody = readResponseBody(connection, statusCode);
-        if (statusCode < 200 || statusCode >= 300) {
-            throw new BusinessException(statusCode + " " + responseBody);
+            int statusCode = connection.getResponseCode();
+            String responseBody = readResponseBody(connection, statusCode);
+            if (statusCode < 200 || statusCode >= 300) {
+                throw new BusinessException(statusCode + " " + responseBody);
+            }
+            return objectMapper.readValue(responseBody, responseType);
+        } finally {
+            connection.disconnect();
         }
-        return objectMapper.readValue(responseBody, responseType);
     }
 
     /** 兼容成功流和错误流，统一读取 HTTP 返回体。 */
@@ -161,6 +174,12 @@ public class OpenAiCompatibleClient {
     private String normalizeUrl(String baseUrl, String path) {
         String normalizedBaseUrl = baseUrl == null ? "" : baseUrl.trim();
         String normalizedPath = path == null ? "" : path.trim();
+        if (normalizedBaseUrl.isEmpty()) {
+            throw new BusinessException("Base URL must not be blank");
+        }
+        if (normalizedPath.isEmpty()) {
+            throw new BusinessException("Request path must not be blank");
+        }
         if (normalizedBaseUrl.endsWith("/") && normalizedPath.startsWith("/")) {
             return normalizedBaseUrl.substring(0, normalizedBaseUrl.length() - 1) + normalizedPath;
         }
@@ -186,6 +205,13 @@ public class OpenAiCompatibleClient {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException ex) {
             throw new BusinessException("Failed to serialize request payload: " + ex.getMessage());
+        }
+    }
+
+    /** 模型名为空时直接快速失败，避免把明显配置错误拖到远端。 */
+    private void validateModel(String model) {
+        if (!hasText(model)) {
+            throw new BusinessException("Model must not be blank");
         }
     }
 

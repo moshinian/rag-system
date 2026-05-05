@@ -11,6 +11,7 @@ import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.DocumentEmbeddingResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
 import com.example.rag.persistence.DocumentRepository;
+import com.example.rag.persistence.IndexingTaskRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.DocumentChunkEntity;
 import com.example.rag.persistence.entity.DocumentEntity;
@@ -34,23 +35,27 @@ import java.util.Locale;
 @Service
 public class DocumentEmbeddingService {
 
+    private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
     private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
     private static final Logger log = LoggerFactory.getLogger(DocumentEmbeddingService.class);
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
+    private final IndexingTaskRepository indexingTaskRepository;
     private final RagEmbeddingProperties ragEmbeddingProperties;
     private final OpenAiCompatibleClient openAiCompatibleClient;
 
     public DocumentEmbeddingService(KnowledgeBaseRepository knowledgeBaseRepository,
                                     DocumentRepository documentRepository,
                                     DocumentChunkRepository documentChunkRepository,
+                                    IndexingTaskRepository indexingTaskRepository,
                                     RagEmbeddingProperties ragEmbeddingProperties,
                                     OpenAiCompatibleClient openAiCompatibleClient) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentRepository = documentRepository;
         this.documentChunkRepository = documentChunkRepository;
+        this.indexingTaskRepository = indexingTaskRepository;
         this.ragEmbeddingProperties = ragEmbeddingProperties;
         this.openAiCompatibleClient = openAiCompatibleClient;
     }
@@ -63,6 +68,15 @@ public class DocumentEmbeddingService {
             @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
     })
     public DocumentEmbeddingResponse embed(String kbCode, String documentCode) {
+        return embedInternal(kbCode, documentCode, false);
+    }
+
+    /** 异步索引链路内部调用时允许复用 embed 逻辑，但要绕过“活动索引任务”自校验。 */
+    DocumentEmbeddingResponse embedForIndexing(String kbCode, String documentCode) {
+        return embedInternal(kbCode, documentCode, true);
+    }
+
+    private DocumentEmbeddingResponse embedInternal(String kbCode, String documentCode, boolean allowDuringActiveIndexing) {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
         ensureKnowledgeBaseActive(knowledgeBase);
@@ -71,6 +85,11 @@ public class DocumentEmbeddingService {
                 .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
         if (document.getStatus() != DocumentStatus.INDEXED) {
             throw new BusinessException("Document must be INDEXED before embedding: " + documentCode);
+        }
+        if (!allowDuringActiveIndexing
+                && indexingTaskRepository.existsActiveTask(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
+            throw new BusinessException("Document has an active indexing task and cannot be manually embedded: "
+                    + documentCode);
         }
 
         int batchSize = normalizeBatchSize(ragEmbeddingProperties.getBatchSize());

@@ -10,6 +10,7 @@ import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.DocumentEmbeddingResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
 import com.example.rag.persistence.DocumentRepository;
+import com.example.rag.persistence.IndexingTaskRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.DocumentChunkEntity;
 import com.example.rag.persistence.entity.DocumentEntity;
@@ -43,6 +44,9 @@ class DocumentEmbeddingServiceTest {
     private DocumentChunkRepository documentChunkRepository;
 
     @Mock
+    private IndexingTaskRepository indexingTaskRepository;
+
+    @Mock
     private OpenAiCompatibleClient openAiCompatibleClient;
 
     private DocumentEmbeddingService documentEmbeddingService;
@@ -60,6 +64,7 @@ class DocumentEmbeddingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 documentChunkRepository,
+                indexingTaskRepository,
                 properties,
                 openAiCompatibleClient
         );
@@ -138,6 +143,28 @@ class DocumentEmbeddingServiceTest {
         assertThatThrownBy(() -> documentEmbeddingService.embed("settlement-kb", "DOC-1"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Document must be INDEXED");
+    }
+
+    @Test
+    void embedShouldRejectWhenActiveIndexingTaskExists() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        DocumentEntity document = new DocumentEntity();
+        document.setId(200L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.INDEXED);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(indexingTaskRepository.existsActiveTask(200L, "DOCUMENT_INDEXING")).thenReturn(true);
+
+        assertThatThrownBy(() -> documentEmbeddingService.embed("settlement-kb", "DOC-1"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("active indexing task");
     }
 
     private DocumentChunkEntity createChunk(Long id, Long documentId, int chunkIndex, String content) {

@@ -8,6 +8,7 @@ import com.example.rag.ingestion.parser.MarkdownDocumentTextParser;
 import com.example.rag.ingestion.parser.PlainTextDocumentTextParser;
 import com.example.rag.ingestion.parser.PdfDocumentTextParser;
 import com.example.rag.model.enums.DocumentStatus;
+import com.example.rag.model.enums.IndexingTaskStage;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.DocumentProcessResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
@@ -95,6 +96,7 @@ class DocumentProcessingServiceTest {
             entity.setUpdatedAt(OffsetDateTime.now());
             return entity;
         });
+        when(indexingTaskRepository.existsActiveTask(1L, "DOCUMENT_INDEXING")).thenReturn(false);
         when(indexingTaskRepository.insert(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(indexingTaskRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
         mockSnowflakeSequence(10L);
@@ -126,6 +128,7 @@ class DocumentProcessingServiceTest {
         verify(indexingTaskRepository).updateById(taskCaptor.capture());
         assertThat(taskCaptor.getValue().getChunkCount()).isGreaterThan(0);
         assertThat(taskCaptor.getValue().getParserName()).isEqualTo("markdown");
+        assertThat(taskCaptor.getValue().getTaskStage()).isEqualTo(IndexingTaskStage.COMPLETED);
     }
 
     @Test
@@ -143,6 +146,7 @@ class DocumentProcessingServiceTest {
             entity.setUpdatedAt(OffsetDateTime.now());
             return entity;
         });
+        when(indexingTaskRepository.existsActiveTask(1L, "DOCUMENT_INDEXING")).thenReturn(false);
         when(indexingTaskRepository.insert(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(indexingTaskRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
         mockSnowflakeSequence(10L);
@@ -187,6 +191,31 @@ class DocumentProcessingServiceTest {
         assertThatThrownBy(() -> service.process("settlement-kb", "DOC-1", "tester"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Knowledge base is inactive");
+    }
+
+    @Test
+    void processShouldRejectWhenActiveIndexingTaskExists() {
+        DocumentEntity document = createDocument("md");
+
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb"))
+                .thenReturn(Optional.of(document));
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(createKnowledgeBase()));
+        when(indexingTaskRepository.existsActiveTask(1L, "DOCUMENT_INDEXING")).thenReturn(true);
+
+        DocumentProcessingService service = new DocumentProcessingService(
+                documentRepository,
+                documentChunkRepository,
+                indexingTaskRepository,
+                knowledgeBaseRepository,
+                List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
+                new FixedWindowChunker(defaultChunkingProperties()),
+                snowflakeIdGenerator,
+                new ObjectMapper()
+        );
+
+        assertThatThrownBy(() -> service.process("settlement-kb", "DOC-1", "tester"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("active indexing task");
     }
 
     /**

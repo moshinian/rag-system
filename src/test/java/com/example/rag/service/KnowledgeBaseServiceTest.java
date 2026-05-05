@@ -1,8 +1,10 @@
 package com.example.rag.service;
 
+import com.example.rag.common.exception.BusinessException;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.KnowledgeBaseResponse;
 import com.example.rag.model.response.PageResponse;
+import com.example.rag.persistence.IndexingTaskRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import com.example.rag.persistence.query.PageResult;
@@ -17,6 +19,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -26,6 +29,9 @@ class KnowledgeBaseServiceTest {
 
     @Mock
     private KnowledgeBaseRepository knowledgeBaseRepository;
+
+    @Mock
+    private IndexingTaskRepository indexingTaskRepository;
 
     @Mock
     private com.example.rag.common.id.SnowflakeIdGenerator snowflakeIdGenerator;
@@ -84,11 +90,27 @@ class KnowledgeBaseServiceTest {
         entity.setStatus(KnowledgeBaseStatus.ACTIVE);
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(entity));
+        when(indexingTaskRepository.existsActiveTaskInKnowledgeBase(1L, "DOCUMENT_INDEXING")).thenReturn(false);
         when(knowledgeBaseRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         KnowledgeBaseResponse response = knowledgeBaseService.disable("settlement-kb");
 
         assertThat(response.status()).isEqualTo("INACTIVE");
+    }
+
+    @Test
+    void disableShouldRejectWhenKnowledgeBaseHasActiveIndexingTasks() {
+        KnowledgeBaseEntity entity = new KnowledgeBaseEntity();
+        entity.setId(1L);
+        entity.setKbCode("settlement-kb");
+        entity.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(entity));
+        when(indexingTaskRepository.existsActiveTaskInKnowledgeBase(1L, "DOCUMENT_INDEXING")).thenReturn(true);
+
+        assertThatThrownBy(() -> knowledgeBaseService.disable("settlement-kb"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("active indexing tasks");
     }
 
     @Test

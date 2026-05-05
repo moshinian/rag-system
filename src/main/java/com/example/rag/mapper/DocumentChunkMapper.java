@@ -16,6 +16,28 @@ import java.util.List;
 public interface DocumentChunkMapper extends BaseMapper<DocumentChunkEntity> {
 
     @Select("""
+            SELECT COUNT(*)
+            FROM document_chunk dc
+            JOIN document d ON d.id = dc.document_id
+            WHERE dc.knowledge_base_id = #{knowledgeBaseId}
+              AND dc.status = 'ACTIVE'
+              AND d.status = 'INDEXED'
+            """)
+    long countAvailableIndexedChunks(@Param("knowledgeBaseId") Long knowledgeBaseId);
+
+    @Select("""
+            SELECT COUNT(*)
+            FROM document_chunk dc
+            JOIN document d ON d.id = dc.document_id
+            WHERE dc.knowledge_base_id = #{knowledgeBaseId}
+              AND dc.status = 'ACTIVE'
+              AND dc.embedding_status = 'EMBEDDED'
+              AND dc.embedding_vector IS NOT NULL
+              AND d.status = 'INDEXED'
+            """)
+    long countAvailableEmbeddedChunks(@Param("knowledgeBaseId") Long knowledgeBaseId);
+
+    @Select("""
             SELECT dc.id,
                    dc.document_id AS documentId,
                    d.document_code AS documentCode,

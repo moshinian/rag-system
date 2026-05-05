@@ -46,19 +46,14 @@ public class DocumentChunkRepository {
         return entities;
     }
 
-    /** 统计某个知识库下的 chunk 总量。 */
-    public long countByKnowledgeBaseId(Long knowledgeBaseId) {
-        LambdaQueryWrapper<DocumentChunkEntity> query = new LambdaQueryWrapper<DocumentChunkEntity>()
-                .eq(DocumentChunkEntity::getKnowledgeBaseId, knowledgeBaseId);
-        return documentChunkMapper.selectCount(query);
+    /** 统计某个知识库下当前可参与检索的已切块数量。 */
+    public long countAvailableIndexedChunks(Long knowledgeBaseId) {
+        return documentChunkMapper.countAvailableIndexedChunks(knowledgeBaseId);
     }
 
-    /** 统计某个知识库下处于指定向量状态的 chunk 数量。 */
-    public long countByKnowledgeBaseIdAndEmbeddingStatus(Long knowledgeBaseId, EmbeddingStatus embeddingStatus) {
-        LambdaQueryWrapper<DocumentChunkEntity> query = new LambdaQueryWrapper<DocumentChunkEntity>()
-                .eq(DocumentChunkEntity::getKnowledgeBaseId, knowledgeBaseId)
-                .eq(DocumentChunkEntity::getEmbeddingStatus, embeddingStatus);
-        return documentChunkMapper.selectCount(query);
+    /** 统计某个知识库下当前可参与检索的已向量化数量。 */
+    public long countAvailableEmbeddedChunks(Long knowledgeBaseId) {
+        return documentChunkMapper.countAvailableEmbeddedChunks(knowledgeBaseId);
     }
 
     /** 按文档和 embedding 状态读取可继续向量化的 chunk。 */

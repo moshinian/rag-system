@@ -7,7 +7,7 @@ import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.config.CacheNames;
 import com.example.rag.integration.llm.OpenAiCompatibleClient;
 import com.example.rag.model.dto.RetrievedChunkCandidate;
-import com.example.rag.model.enums.EmbeddingStatus;
+import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.model.response.RetrievedChunkResponse;
@@ -57,16 +57,14 @@ public class QuestionAnsweringService {
     public QuestionAnsweringReadinessResponse getReadiness(String kbCode) {
         KnowledgeBaseEntity knowledgeBase = getKnowledgeBase(kbCode);
 
-        long indexedChunkCount = documentChunkRepository.countByKnowledgeBaseId(knowledgeBase.getId());
-        long embeddedChunkCount = documentChunkRepository.countByKnowledgeBaseIdAndEmbeddingStatus(
-                knowledgeBase.getId(),
-                EmbeddingStatus.EMBEDDED
-        );
+        long indexedChunkCount = documentChunkRepository.countAvailableIndexedChunks(knowledgeBase.getId());
+        long embeddedChunkCount = documentChunkRepository.countAvailableEmbeddedChunks(knowledgeBase.getId());
+        boolean knowledgeBaseActive = knowledgeBase.getStatus() == KnowledgeBaseStatus.ACTIVE;
 
         return new QuestionAnsweringReadinessResponse(
                 knowledgeBase.getKbCode(),
                 knowledgeBase.getStatus().name(),
-                indexedChunkCount > 0 && embeddedChunkCount > 0,
+                knowledgeBaseActive && indexedChunkCount > 0 && embeddedChunkCount > 0,
                 ragEmbeddingProperties.getProvider(),
                 ragEmbeddingProperties.getModel(),
                 ragEmbeddingProperties.getVectorDimensions(),
@@ -74,12 +72,15 @@ public class QuestionAnsweringService {
                 ragRetrievalProperties.getDefaultTopK(),
                 indexedChunkCount,
                 embeddedChunkCount,
-                resolveNextStep(indexedChunkCount, embeddedChunkCount)
+                resolveNextStep(knowledgeBaseActive, indexedChunkCount, embeddedChunkCount)
         );
     }
 
     /** 给调用方返回下一步建议，便于排查当前卡在哪个前置条件上。 */
-    private String resolveNextStep(long indexedChunkCount, long embeddedChunkCount) {
+    private String resolveNextStep(boolean knowledgeBaseActive, long indexedChunkCount, long embeddedChunkCount) {
+        if (!knowledgeBaseActive) {
+            return "Activate the knowledge base before running retrieval.";
+        }
         if (indexedChunkCount <= 0) {
             return "Process at least one document into chunks before running retrieval.";
         }
@@ -93,10 +94,11 @@ public class QuestionAnsweringService {
     @Transactional(readOnly = true)
     @Cacheable(
             cacheNames = CacheNames.QA_RETRIEVAL,
-            key = "#kbCode + ':' + #question + ':' + (#topK == null ? 'null' : #topK)"
+            key = "#kbCode + ':' + (#question == null ? 'null' : #question.trim()) + ':' + (#topK == null ? 'null' : #topK)"
     )
     public QuestionRetrievalResponse retrieve(String kbCode, String question, Integer topK) {
         KnowledgeBaseEntity knowledgeBase = getKnowledgeBase(kbCode);
+        ensureKnowledgeBaseActive(knowledgeBase);
         String normalizedQuestion = normalizeQuestion(question);
         int resolvedTopK = resolveTopK(topK);
         log.info(StructuredLogMessage.of("qa.retrieve.started")
@@ -144,6 +146,13 @@ public class QuestionAnsweringService {
     private KnowledgeBaseEntity getKnowledgeBase(String kbCode) {
         return knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
+    }
+
+    /** 只有启用状态的知识库才允许进入问答链路。 */
+    private void ensureKnowledgeBaseActive(KnowledgeBaseEntity knowledgeBase) {
+        if (knowledgeBase.getStatus() != KnowledgeBaseStatus.ACTIVE) {
+            throw new BusinessException("Knowledge base is inactive: " + knowledgeBase.getKbCode());
+        }
     }
 
     /** 统一校验并清理问题文本。 */

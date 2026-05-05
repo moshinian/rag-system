@@ -7,6 +7,7 @@ import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.request.CreateKnowledgeBaseRequest;
 import com.example.rag.model.response.KnowledgeBaseResponse;
 import com.example.rag.model.response.PageResponse;
+import com.example.rag.persistence.IndexingTaskRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import com.example.rag.persistence.query.KnowledgeBasePageQuery;
@@ -25,16 +26,20 @@ import java.util.Locale;
 @Service
 public class KnowledgeBaseService {
 
+    private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
     private static final long DEFAULT_PAGE_NO = 1;
     private static final long DEFAULT_PAGE_SIZE = 20;
     private static final long MAX_PAGE_SIZE = 100;
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private final IndexingTaskRepository indexingTaskRepository;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
     public KnowledgeBaseService(KnowledgeBaseRepository knowledgeBaseRepository,
+                                IndexingTaskRepository indexingTaskRepository,
                                 SnowflakeIdGenerator snowflakeIdGenerator) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
+        this.indexingTaskRepository = indexingTaskRepository;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
@@ -150,6 +155,10 @@ public class KnowledgeBaseService {
     private KnowledgeBaseResponse updateStatus(String kbCode, KnowledgeBaseStatus status) {
         KnowledgeBaseEntity entity = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
+        if (status == KnowledgeBaseStatus.INACTIVE
+                && indexingTaskRepository.existsActiveTaskInKnowledgeBase(entity.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
+            throw new BusinessException("Knowledge base has active indexing tasks and cannot be disabled: " + kbCode);
+        }
         entity.setStatus(status);
         knowledgeBaseRepository.updateById(entity);
         return toResponse(entity);

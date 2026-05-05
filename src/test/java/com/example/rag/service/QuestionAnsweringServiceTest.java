@@ -4,7 +4,6 @@ import com.example.rag.config.RagEmbeddingProperties;
 import com.example.rag.config.RagRetrievalProperties;
 import com.example.rag.integration.llm.OpenAiCompatibleClient;
 import com.example.rag.model.dto.RetrievedChunkCandidate;
-import com.example.rag.model.enums.EmbeddingStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
@@ -68,9 +67,8 @@ class QuestionAnsweringServiceTest {
         knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
-        when(documentChunkRepository.countByKnowledgeBaseId(100L)).thenReturn(0L);
-        when(documentChunkRepository.countByKnowledgeBaseIdAndEmbeddingStatus(100L, EmbeddingStatus.EMBEDDED))
-                .thenReturn(0L);
+        when(documentChunkRepository.countAvailableIndexedChunks(100L)).thenReturn(0L);
+        when(documentChunkRepository.countAvailableEmbeddedChunks(100L)).thenReturn(0L);
 
         QuestionAnsweringReadinessResponse response = questionAnsweringService.getReadiness("settlement-kb");
 
@@ -87,9 +85,8 @@ class QuestionAnsweringServiceTest {
         knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
-        when(documentChunkRepository.countByKnowledgeBaseId(100L)).thenReturn(12L);
-        when(documentChunkRepository.countByKnowledgeBaseIdAndEmbeddingStatus(100L, EmbeddingStatus.EMBEDDED))
-                .thenReturn(12L);
+        when(documentChunkRepository.countAvailableIndexedChunks(100L)).thenReturn(12L);
+        when(documentChunkRepository.countAvailableEmbeddedChunks(100L)).thenReturn(12L);
 
         QuestionAnsweringReadinessResponse response = questionAnsweringService.getReadiness("settlement-kb");
 
@@ -97,6 +94,23 @@ class QuestionAnsweringServiceTest {
         assertThat(response.embeddedChunkCount()).isEqualTo(12L);
         assertThat(response.vectorStore()).isEqualTo("pgvector");
         assertThat(response.nextStep()).contains("Retrieval prerequisites are ready");
+    }
+
+    @Test
+    void getReadinessShouldReportInactiveKnowledgeBaseAsNotReady() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.INACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentChunkRepository.countAvailableIndexedChunks(100L)).thenReturn(12L);
+        when(documentChunkRepository.countAvailableEmbeddedChunks(100L)).thenReturn(12L);
+
+        QuestionAnsweringReadinessResponse response = questionAnsweringService.getReadiness("settlement-kb");
+
+        assertThat(response.questionAnsweringReady()).isFalse();
+        assertThat(response.nextStep()).contains("Activate the knowledge base");
     }
 
     @Test
@@ -145,6 +159,19 @@ class QuestionAnsweringServiceTest {
 
         assertThatThrownBy(() -> questionAnsweringService.retrieve("settlement-kb", "问题", 11))
                 .hasMessageContaining("topK must be <= 10");
+    }
+
+    @Test
+    void retrieveShouldRejectWhenKnowledgeBaseInactive() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.INACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+
+        assertThatThrownBy(() -> questionAnsweringService.retrieve("settlement-kb", "问题", 3))
+                .hasMessageContaining("Knowledge base is inactive");
     }
 
     private RetrievedChunkCandidate createRetrievedChunkCandidate() {

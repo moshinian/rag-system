@@ -12,6 +12,7 @@ import com.example.rag.model.response.PageResponse;
 import com.example.rag.model.response.DocumentUploadResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
 import com.example.rag.persistence.DocumentRepository;
+import com.example.rag.persistence.IndexingTaskRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.DocumentChunkEntity;
 import com.example.rag.persistence.entity.DocumentEntity;
@@ -54,6 +55,9 @@ class DocumentServiceTest {
 
     @Mock
     private DocumentChunkRepository documentChunkRepository;
+
+    @Mock
+    private IndexingTaskRepository indexingTaskRepository;
 
     @Mock
     private LocalFileStorageService localFileStorageService;
@@ -283,11 +287,28 @@ class DocumentServiceTest {
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
         when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(indexingTaskRepository.existsActiveTask(1L, "DOCUMENT_INDEXING")).thenReturn(false);
         when(documentRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         DocumentDetailResponse response = documentService.disableDocument("settlement-kb", "DOC-1");
 
         assertThat(response.status()).isEqualTo("DISABLED");
+    }
+
+    @Test
+    void disableDocumentShouldRejectWhenActiveIndexingTaskExists() {
+        DocumentEntity document = new DocumentEntity();
+        document.setId(1L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.INDEXED);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(indexingTaskRepository.existsActiveTask(1L, "DOCUMENT_INDEXING")).thenReturn(true);
+
+        assertThatThrownBy(() -> documentService.disableDocument("settlement-kb", "DOC-1"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("active indexing task");
     }
 
     @Test

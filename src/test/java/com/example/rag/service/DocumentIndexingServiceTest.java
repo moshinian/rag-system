@@ -22,11 +22,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -86,6 +89,7 @@ class DocumentIndexingServiceTest {
             task.setId(999L);
             task.setDocumentId(200L);
             task.setKnowledgeBaseId(100L);
+            task.setParentTaskId(500L);
             task.setTaskType("DOCUMENT_INDEXING");
             task.setStatus(IndexingTaskStatus.QUEUED);
             task.setTaskStage(IndexingTaskStage.QUEUED);
@@ -93,9 +97,9 @@ class DocumentIndexingServiceTest {
             task.setStartedAt(OffsetDateTime.now());
             return Optional.of(task);
         });
-        when(documentProcessingService.process("settlement-kb", "DOC-1", "tester"))
+        when(documentProcessingService.processForIndexing("settlement-kb", "DOC-1", "tester"))
                 .thenReturn(new DocumentProcessResponse(200L, "DOC-1", "settlement-kb", "md", "INDEXED", 3, "markdown", OffsetDateTime.now()));
-        when(documentEmbeddingService.embed("settlement-kb", "DOC-1"))
+        when(documentEmbeddingService.embedForIndexing("settlement-kb", "DOC-1"))
                 .thenReturn(new DocumentEmbeddingResponse(200L, "DOC-1", "settlement-kb", "bge", 512, 16, 3, 0, 3, OffsetDateTime.now()));
         when(indexingTaskRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -149,6 +153,7 @@ class DocumentIndexingServiceTest {
         failedTask.setMaxRetryCount(3);
         failedTask.setCreatedBy("tester");
 
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
         when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
         when(documentRepository.findById(200L)).thenReturn(Optional.of(document));
         when(knowledgeBaseRepository.findById(100L)).thenReturn(Optional.of(knowledgeBase));
@@ -162,6 +167,7 @@ class DocumentIndexingServiceTest {
             task.setId(999L);
             task.setDocumentId(200L);
             task.setKnowledgeBaseId(100L);
+            task.setParentTaskId(500L);
             task.setTaskType("DOCUMENT_INDEXING");
             task.setStatus(IndexingTaskStatus.QUEUED);
             task.setTaskStage(IndexingTaskStage.QUEUED);
@@ -173,9 +179,9 @@ class DocumentIndexingServiceTest {
             task.setLastHeartbeatAt(OffsetDateTime.now());
             return Optional.of(task);
         });
-        when(documentProcessingService.process("settlement-kb", "DOC-1", "tester"))
+        when(documentProcessingService.processForIndexing("settlement-kb", "DOC-1", "tester"))
                 .thenReturn(new DocumentProcessResponse(200L, "DOC-1", "settlement-kb", "md", "INDEXED", 3, "markdown", OffsetDateTime.now()));
-        when(documentEmbeddingService.embed("settlement-kb", "DOC-1"))
+        when(documentEmbeddingService.embedForIndexing("settlement-kb", "DOC-1"))
                 .thenReturn(new DocumentEmbeddingResponse(200L, "DOC-1", "settlement-kb", "bge", 512, 16, 3, 0, 3, OffsetDateTime.now()));
 
         DocumentIndexingService service = new DocumentIndexingService(
@@ -231,6 +237,150 @@ class DocumentIndexingServiceTest {
     }
 
     @Test
+    void submitShouldTranslateDuplicateActiveTaskConstraint() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        DocumentEntity document = new DocumentEntity();
+        document.setId(200L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.UPLOADED);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(indexingTaskRepository.existsActiveTask(200L, "DOCUMENT_INDEXING")).thenReturn(false);
+        when(snowflakeIdGenerator.nextId()).thenReturn(999L);
+        when(indexingTaskRepository.insert(any()))
+                .thenThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint"));
+
+        DocumentIndexingService service = new DocumentIndexingService(
+                knowledgeBaseRepository,
+                documentRepository,
+                indexingTaskRepository,
+                documentProcessingService,
+                documentEmbeddingService,
+                snowflakeIdGenerator,
+                createIndexingProperties(),
+                directExecutor
+        );
+
+        assertThatThrownBy(() -> service.submit("settlement-kb", "DOC-1", "tester"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("active indexing task");
+    }
+
+    @Test
+    void retryShouldTranslateDuplicateActiveTaskConstraint() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        DocumentEntity document = new DocumentEntity();
+        document.setId(200L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.FAILED);
+
+        IndexingTaskEntity failedTask = new IndexingTaskEntity();
+        failedTask.setId(500L);
+        failedTask.setKnowledgeBaseId(100L);
+        failedTask.setDocumentId(200L);
+        failedTask.setTaskType("DOCUMENT_INDEXING");
+        failedTask.setStatus(IndexingTaskStatus.FAILED);
+        failedTask.setRetryCount(0);
+        failedTask.setMaxRetryCount(3);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(indexingTaskRepository.findById(500L)).thenReturn(Optional.of(failedTask));
+        when(indexingTaskRepository.existsActiveTask(200L, "DOCUMENT_INDEXING")).thenReturn(false);
+        when(snowflakeIdGenerator.nextId()).thenReturn(999L);
+        when(indexingTaskRepository.insert(any()))
+                .thenThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint"));
+
+        DocumentIndexingService service = new DocumentIndexingService(
+                knowledgeBaseRepository,
+                documentRepository,
+                indexingTaskRepository,
+                documentProcessingService,
+                documentEmbeddingService,
+                snowflakeIdGenerator,
+                createIndexingProperties(),
+                directExecutor
+        );
+
+        assertThatThrownBy(() -> service.retry("settlement-kb", "DOC-1", 500L, "tester"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("active indexing task");
+    }
+
+    @Test
+    void retryShouldRejectWhenDocumentDisabled() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        DocumentEntity document = new DocumentEntity();
+        document.setId(200L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.DISABLED);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        DocumentIndexingService service = new DocumentIndexingService(
+                knowledgeBaseRepository,
+                documentRepository,
+                indexingTaskRepository,
+                documentProcessingService,
+                documentEmbeddingService,
+                snowflakeIdGenerator,
+                createIndexingProperties(),
+                directExecutor
+        );
+
+        assertThatThrownBy(() -> service.retry("settlement-kb", "DOC-1", 500L, "tester"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("disabled");
+    }
+
+    @Test
+    void retryShouldRejectWhenKnowledgeBaseInactive() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.INACTIVE);
+
+        DocumentEntity document = new DocumentEntity();
+        document.setId(200L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.FAILED);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+
+        DocumentIndexingService service = new DocumentIndexingService(
+                knowledgeBaseRepository,
+                documentRepository,
+                indexingTaskRepository,
+                documentProcessingService,
+                documentEmbeddingService,
+                snowflakeIdGenerator,
+                createIndexingProperties(),
+                directExecutor
+        );
+
+        assertThatThrownBy(() -> service.retry("settlement-kb", "DOC-1", 500L, "tester"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("inactive");
+    }
+
+    @Test
     void recoverStaleTasksShouldCreateRecoveryTask() {
         KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
         knowledgeBase.setId(100L);
@@ -277,9 +427,9 @@ class DocumentIndexingServiceTest {
             task.setLastHeartbeatAt(OffsetDateTime.now());
             return Optional.of(task);
         });
-        when(documentProcessingService.process("settlement-kb", "DOC-1", "tester"))
+        when(documentProcessingService.processForIndexing("settlement-kb", "DOC-1", "tester"))
                 .thenReturn(new DocumentProcessResponse(200L, "DOC-1", "settlement-kb", "md", "INDEXED", 3, "markdown", OffsetDateTime.now()));
-        when(documentEmbeddingService.embed("settlement-kb", "DOC-1"))
+        when(documentEmbeddingService.embedForIndexing("settlement-kb", "DOC-1"))
                 .thenReturn(new DocumentEmbeddingResponse(200L, "DOC-1", "settlement-kb", "bge", 512, 16, 3, 0, 3, OffsetDateTime.now()));
 
         DocumentIndexingService service = new DocumentIndexingService(
@@ -297,6 +447,58 @@ class DocumentIndexingServiceTest {
 
         assertThat(staleTask.getRecoveredAt()).isNotNull();
         assertThat(staleTask.getErrorMessage()).contains("Recovered by task");
+        org.mockito.InOrder inOrder = inOrder(indexingTaskRepository);
+        inOrder.verify(indexingTaskRepository).updateById(staleTask);
+        inOrder.verify(indexingTaskRepository).insert(any());
+    }
+
+    @Test
+    void submitShouldFailWhenExecutorRejectsTask() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        DocumentEntity document = new DocumentEntity();
+        document.setId(200L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.UPLOADED);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(indexingTaskRepository.existsActiveTask(200L, "DOCUMENT_INDEXING")).thenReturn(false);
+        when(snowflakeIdGenerator.nextId()).thenReturn(999L);
+        when(indexingTaskRepository.insert(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(indexingTaskRepository.findById(999L)).thenAnswer(invocation -> {
+            IndexingTaskEntity task = new IndexingTaskEntity();
+            task.setId(999L);
+            task.setDocumentId(200L);
+            task.setKnowledgeBaseId(100L);
+            task.setTaskType("DOCUMENT_INDEXING");
+            task.setStatus(IndexingTaskStatus.QUEUED);
+            task.setTaskStage(IndexingTaskStage.QUEUED);
+            return Optional.of(task);
+        });
+        when(indexingTaskRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DocumentIndexingService service = new DocumentIndexingService(
+                knowledgeBaseRepository,
+                documentRepository,
+                indexingTaskRepository,
+                documentProcessingService,
+                documentEmbeddingService,
+                snowflakeIdGenerator,
+                createIndexingProperties(),
+                command -> {
+                    throw new RejectedExecutionException("queue full");
+                }
+        );
+
+        assertThatThrownBy(() -> service.submit("settlement-kb", "DOC-1", "tester"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("executor is busy");
+        verify(indexingTaskRepository).updateById(any());
     }
 
     @Test
@@ -314,7 +516,8 @@ class DocumentIndexingServiceTest {
         task.setEmbeddedChunkCount(6);
 
         when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
-        when(indexingTaskRepository.findByDocumentIdOrderByCreatedAtDesc(200L)).thenReturn(List.of(task));
+        when(indexingTaskRepository.findByDocumentIdAndTaskTypeOrderByCreatedAtDesc(200L, "DOCUMENT_INDEXING"))
+                .thenReturn(List.of(task));
 
         DocumentIndexingService service = new DocumentIndexingService(
                 knowledgeBaseRepository,
@@ -331,6 +534,39 @@ class DocumentIndexingServiceTest {
                 .singleElement()
                 .extracting(DocumentIndexingTaskResponse::taskStage)
                 .isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void listTasksShouldExcludeInternalProcessTasks() {
+        DocumentEntity document = new DocumentEntity();
+        document.setId(200L);
+        document.setDocumentCode("DOC-1");
+
+        IndexingTaskEntity indexingTask = new IndexingTaskEntity();
+        indexingTask.setId(999L);
+        indexingTask.setTaskType("DOCUMENT_INDEXING");
+        indexingTask.setStatus(IndexingTaskStatus.SUCCEEDED);
+        indexingTask.setTaskStage(IndexingTaskStage.COMPLETED);
+
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(indexingTaskRepository.findByDocumentIdAndTaskTypeOrderByCreatedAtDesc(200L, "DOCUMENT_INDEXING"))
+                .thenReturn(List.of(indexingTask));
+
+        DocumentIndexingService service = new DocumentIndexingService(
+                knowledgeBaseRepository,
+                documentRepository,
+                indexingTaskRepository,
+                documentProcessingService,
+                documentEmbeddingService,
+                snowflakeIdGenerator,
+                createIndexingProperties(),
+                directExecutor
+        );
+
+        assertThat(service.listTasks("settlement-kb", "DOC-1"))
+                .singleElement()
+                .extracting(DocumentIndexingTaskResponse::taskType)
+                .isEqualTo("DOCUMENT_INDEXING");
     }
 
     private RagIndexingProperties createIndexingProperties() {

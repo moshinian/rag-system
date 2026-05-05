@@ -1,11 +1,6 @@
 package com.example.rag.config;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
@@ -80,16 +75,12 @@ public class RedisCacheConfig {
     }
 
     private RedisSerializer<Object> redisSerializer() {
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        objectMapper.registerModule(new JavaTimeModule());
-        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        objectMapper.activateDefaultTyping(
-                LaissezFaireSubTypeValidator.instance,
-                ObjectMapper.DefaultTyping.NON_FINAL,
-                JsonTypeInfo.As.PROPERTY
-        );
-        return Objects.requireNonNull(new GenericJackson2JsonRedisSerializer(objectMapper),
+        return Objects.requireNonNull(
+                new GenericJackson2JsonRedisSerializer()
+                        .configure(objectMapper -> {
+                            objectMapper.registerModule(new JavaTimeModule());
+                            objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+                        }),
                 "redis value serializer must not be null");
     }
 }

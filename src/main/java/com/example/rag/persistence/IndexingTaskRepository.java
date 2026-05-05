@@ -48,6 +48,16 @@ public class IndexingTaskRepository {
         return indexingTaskMapper.selectList(query);
     }
 
+    /** 按文档和任务类型倒序读取任务。 */
+    public List<IndexingTaskEntity> findByDocumentIdAndTaskTypeOrderByCreatedAtDesc(Long documentId, String taskType) {
+        LambdaQueryWrapper<IndexingTaskEntity> query = new LambdaQueryWrapper<IndexingTaskEntity>()
+                .eq(IndexingTaskEntity::getDocumentId, documentId)
+                .eq(IndexingTaskEntity::getTaskType, taskType)
+                .orderByDesc(IndexingTaskEntity::getCreatedAt)
+                .orderByDesc(IndexingTaskEntity::getId);
+        return indexingTaskMapper.selectList(query);
+    }
+
     /** 判断文档下是否存在未结束的同类型任务。 */
     public boolean existsActiveTask(Long documentId, String taskType) {
         LambdaQueryWrapper<IndexingTaskEntity> query = new LambdaQueryWrapper<IndexingTaskEntity>()
@@ -64,6 +74,15 @@ public class IndexingTaskRepository {
                 .eq(IndexingTaskEntity::getTaskType, taskType)
                 .in(IndexingTaskEntity::getStatus, List.of(IndexingTaskStatus.QUEUED, IndexingTaskStatus.RUNNING))
                 .ne(IndexingTaskEntity::getId, excludedTaskId);
+        return indexingTaskMapper.selectCount(query) > 0;
+    }
+
+    /** 判断知识库下是否存在未结束的同类型任务。 */
+    public boolean existsActiveTaskInKnowledgeBase(Long knowledgeBaseId, String taskType) {
+        LambdaQueryWrapper<IndexingTaskEntity> query = new LambdaQueryWrapper<IndexingTaskEntity>()
+                .eq(IndexingTaskEntity::getKnowledgeBaseId, knowledgeBaseId)
+                .eq(IndexingTaskEntity::getTaskType, taskType)
+                .in(IndexingTaskEntity::getStatus, List.of(IndexingTaskStatus.QUEUED, IndexingTaskStatus.RUNNING));
         return indexingTaskMapper.selectCount(query) > 0;
     }
 
