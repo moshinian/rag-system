@@ -33,6 +33,7 @@ public class GlobalExceptionHandler {
                 .field("exception", ex.getClass().getSimpleName())
                 .field("message", ex.getMessage())
                 .build());
+        System.out.println(log.getClass());
         return ResponseEntity.badRequest()
                 .body(ApiResponse.failure(ErrorCode.INVALID_ARGUMENT.getCode(), ex.getMessage(), requestId(request)));
     }
@@ -47,6 +48,7 @@ public class GlobalExceptionHandler {
                 .field("errorCode", ex.getErrorCode().getCode())
                 .field("message", ex.getMessage())
                 .build());
+        System.out.println(log.getClass());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.failure(ex.getErrorCode().getCode(), ex.getMessage(), requestId(request)));
     }
