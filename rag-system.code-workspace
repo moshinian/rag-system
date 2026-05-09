@@ -1,0 +1,27 @@
+{
+  "folders": [
+    {
+      "name": "rag-system",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "java.import.maven.enabled": true
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "type": "java",
+        "name": "Spring Boot-RagApplication<rag-service>",
+        "request": "launch",
+        "cwd": "${workspaceFolder:rag-system}/rag-backend",
+        "mainClass": "com.example.rag.RagApplication",
+        "projectName": "rag-service",
+        "args": ""
+      }
+    ]
+  }
+}

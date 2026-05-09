@@ -1,6 +1,6 @@
-# RAG Service
+# RAG System
 
-一个面向企业内部知识库场景的 RAG 后端服务，当前聚焦结算领域文档的沉淀、检索、问答、来源返回和问答记录。
+一个面向企业内部知识库场景的 RAG 系统仓库，包含 Spring Boot 后端、React 前端、本地 embedding 服务，以及本地开发用的 PostgreSQL / Redis 依赖编排。当前聚焦结算领域文档的沉淀、检索、问答、来源返回和问答记录。
 
 当前仓库的真实阶段不是“设计中”，而是已经完成了前 3 周的第一版实现：
 
@@ -119,35 +119,60 @@
 
 ```text
 rag-system/
-├── docker-compose.yml
-├── pom.xml
-├── embedding-service/              # 本地 embedding 服务
-├── src/main/java/com/example/rag/
-│   ├── common/
-│   ├── config/
-│   ├── controller/
-│   ├── generation/
-│   ├── ingestion/
-│   │   ├── chunk/
-│   │   ├── parser/
-│   │   └── storage/
-│   ├── integration/llm/
-│   ├── mapper/
-│   ├── model/
-│   ├── persistence/
-│   ├── repository/
-│   ├── retrieval/
-│   └── service/
-├── src/main/resources/
-│   ├── application.yml
-│   ├── application-local.yml
-│   └── db/migration/
-├── src/test/java/com/example/rag/
-│   ├── evaluation/
-│   ├── ingestion/chunk/
-│   └── service/
-└── work/                           # 周计划、阶段记录、评测文档
+├── pom.xml                         # 根聚合 POM，便于 VS Code / Maven 识别工作区中的 Java 模块
+├── docker-compose.yml              # PostgreSQL / Redis / embedding-service / RedisInsight 本地依赖编排
+├── rag-system.code-workspace       # VS Code 推荐工作区
+├── .vscode/                        # VS Code 任务、启动配置、Java 导入设置
+├── rag-backend/                    # Spring Boot 后端工程
+│   ├── pom.xml                     # 后端 Maven 构建文件
+│   ├── maven-settings.xml          # Maven 镜像配置
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/com/example/rag/
+│   │   │   │   ├── common/         # 统一响应、错误码、异常、ID、结构化日志
+│   │   │   │   ├── config/         # Redis、线程池、请求 ID、配置属性
+│   │   │   │   ├── controller/     # 健康、知识库、文档、问答 HTTP 接口
+│   │   │   │   ├── ingestion/      # 文档解析、切块、文件存储
+│   │   │   │   ├── integration/    # 外部 LLM / embedding HTTP 集成
+│   │   │   │   ├── mapper/         # MyBatis-Plus Mapper
+│   │   │   │   ├── model/          # request / response / dto / enum
+│   │   │   │   ├── persistence/    # Repository、Entity、分页查询
+│   │   │   │   └── service/        # 业务主链路：上传、处理、索引、检索、问答
+│   │   │   └── resources/
+│   │   │       ├── application.yml
+│   │   │       ├── application-local.yml
+│   │   │       └── db/migration/   # Flyway 迁移脚本
+│   │   └── test/                   # 单元测试、集成测试、评测夹具
+│   ├── data/uploads/               # 本地文档上传落盘目录
+│   └── work/                       # 周计划、阶段记录、样本文档、评测结果
+├── rag-frontend/                   # React 前端工程
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   ├── src/
+│   │   ├── api/                    # 后端接口封装
+│   │   ├── app/                    # Router、Store、Provider
+│   │   ├── components/             # 卡片、表格、反馈、来源查看器等复用组件
+│   │   ├── hooks/                  # 当前知识库、轮询、API 错误处理
+│   │   ├── pages/                  # dashboard / documents / qa / retrieval / history / health
+│   │   ├── styles/                 # 全局样式
+│   │   ├── types/                  # 前端类型声明
+│   │   └── utils/                  # 格式化、状态映射
+│   ├── work/frontend plan.md       # 前端规划、完成情况、后续路线
+│   └── dist/                       # 前端生产构建产物
+└── embedding-service/              # 本地 embedding 服务
+    ├── main.py                     # FastAPI / Uvicorn 入口
+    ├── requirements.txt
+    ├── Dockerfile
+    └── README.md
 ```
+
+### 结构说明
+
+1. 根目录现在保留了聚合 `pom.xml`，目的是让 VS Code Java / Spring Boot Dashboard 在只打开仓库根目录时也能识别 `rag-backend` 模块。
+2. `rag-system.code-workspace` 当前只挂载仓库根目录，避免把根目录和 `rag-backend` / `rag-frontend` 重复加入 workspace 后造成 Java 项目重复导入。
+3. 后端的 `work/` 已迁移到 `rag-backend/work/`，所有周记、评测与样本文档都在这里。
+4. 前端的 `work/frontend plan.md` 记录的是页面规划、当前完成情况与后续可扩展路线，不参与构建。
 
 ## 核心数据
 
@@ -188,8 +213,23 @@ docker compose up -d postgres redis embedding-service
 ### 2. 启动应用
 
 ```bash
+cd rag-backend
 mvn spring-boot:run
 ```
+
+如果使用 VSCode：
+
+1. 打开 `rag-system.code-workspace`
+2. 等待 Java 扩展完成 Maven 导入；根目录聚合 `pom.xml` 会帮助 Spring Boot Dashboard 识别 `rag-backend`
+3. 使用 `.vscode/launch.json` 直接启动 Spring Boot
+4. 或使用 `.vscode/tasks.json` 执行 `dev: full stack` 同时拉起依赖、后端和前端开发服务
+
+### 2.1 启动方式建议
+
+1. 本地长期运行后端时，建议把日志重定向到文件或由 IDE 托管控制台，避免无人消费的终端 stdout 长时间阻塞请求日志输出。
+2. 如果只想验证后端是否可用，可以直接检查：
+   `curl --noproxy '*' -s http://127.0.0.1:8080/api/health`
+3. 如果 Spring Boot Dashboard 没立刻显示应用，先执行一次 Maven Reload / Java: Clean Java Language Server Workspace，再重开 `rag-system.code-workspace`。
 
 ### 3. 健康检查
 
@@ -201,7 +241,7 @@ curl --noproxy '*' -s http://127.0.0.1:8001/health
 
 ## 关键配置
 
-`src/main/resources/application.yml` 当前已经整理出这些主配置域：
+`rag-backend/src/main/resources/application.yml` 当前已经整理出这些主配置域：
 
 1. `rag.storage.*`
 2. `rag.executor.*`
@@ -323,10 +363,10 @@ curl --noproxy '*' -s http://127.0.0.1:8001/health
 
 ## 相关文档
 
-1. [当前状态](/root/workspace/rag-system/work/current-status.md)
-2. [Week 1](/root/workspace/rag-system/work/week1.md)
-3. [Week 2](/root/workspace/rag-system/work/week2.md)
-4. [Week 3](/root/workspace/rag-system/work/week3.md)
-5. [Week 3 难点与优化](/root/workspace/rag-system/work/week3-review.md)
-6. [Day 20 评测记录](/root/workspace/rag-system/work/work%20day20.md)
-7. [Day 21 收口说明](/root/workspace/rag-system/work/work%20day21.md)
+1. [当前状态](/root/workspace/rag-system/rag-backend/work/current-status.md)
+2. [Week 1](/root/workspace/rag-system/rag-backend/work/week1.md)
+3. [Week 2](/root/workspace/rag-system/rag-backend/work/week2.md)
+4. [Week 3](/root/workspace/rag-system/rag-backend/work/week3.md)
+5. [Day 20 评测记录](/root/workspace/rag-system/rag-backend/work/work%20day20.md)
+6. [Day 21 收口说明](/root/workspace/rag-system/rag-backend/work/work%20day21.md)
+7. [前端规划与完成情况](/root/workspace/rag-system/rag-frontend/work/frontend%20plan.md)
