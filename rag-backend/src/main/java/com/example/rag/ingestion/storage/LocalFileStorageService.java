@@ -6,8 +6,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.StandardCopyOption;
 
 /**
@@ -46,5 +49,29 @@ public class LocalFileStorageService {
             Files.copy(inputStream, targetFile, StandardCopyOption.REPLACE_EXISTING);
         }
         return targetFile;
+    }
+
+    /** 删除知识库对应的本地上传目录。 */
+    public void deleteKnowledgeBaseDirectory(String kbCode) throws IOException {
+        Path targetDirectory = baseDirectory().resolve(kbCode).normalize();
+        if (!Files.exists(targetDirectory)) {
+            return;
+        }
+        Files.walkFileTree(targetDirectory, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.deleteIfExists(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                if (exc != null) {
+                    throw exc;
+                }
+                Files.deleteIfExists(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 }

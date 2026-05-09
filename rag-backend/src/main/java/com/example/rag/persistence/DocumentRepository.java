@@ -8,6 +8,7 @@ import com.example.rag.persistence.query.DocumentPageQuery;
 import com.example.rag.persistence.query.PageResult;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -73,5 +74,20 @@ public class DocumentRepository {
     public DocumentEntity updateById(DocumentEntity entity) {
         documentMapper.updateById(entity);
         return entity;
+    }
+
+    /** 按知识库读取全部文档，供级联删除使用。 */
+    public List<DocumentEntity> findByKnowledgeBaseId(Long knowledgeBaseId) {
+        LambdaQueryWrapper<DocumentEntity> query = new LambdaQueryWrapper<DocumentEntity>()
+                .eq(DocumentEntity::getKnowledgeBaseId, knowledgeBaseId)
+                .orderByAsc(DocumentEntity::getId);
+        return documentMapper.selectList(query);
+    }
+
+    /** 按知识库删除全部文档。 */
+    public void deleteByKnowledgeBaseId(Long knowledgeBaseId) {
+        LambdaQueryWrapper<DocumentEntity> query = new LambdaQueryWrapper<DocumentEntity>()
+                .eq(DocumentEntity::getKnowledgeBaseId, knowledgeBaseId);
+        documentMapper.delete(query);
     }
 }

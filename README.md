@@ -22,7 +22,7 @@
 
 ### 已实现能力
 
-1. 知识库创建、列表、详情、启用、禁用
+1. 知识库创建、列表、详情、启用、禁用、直接删除
 2. 文档上传、列表、详情、chunk 查询、禁用、处理、重处理
 3. `md / txt / pdf` 第一版解析
 4. 第一版固定窗口切块与 chunk 入库
@@ -277,6 +277,7 @@ curl --noproxy '*' -s http://127.0.0.1:8001/health
 3. `GET /api/knowledge-bases/{kbCode}`
 4. `POST /api/knowledge-bases/{kbCode}/disable`
 5. `POST /api/knowledge-bases/{kbCode}/enable`
+6. `DELETE /api/knowledge-bases/{kbCode}`
 
 ### 文档
 
@@ -290,6 +291,13 @@ curl --noproxy '*' -s http://127.0.0.1:8001/health
 8. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/index`
 9. `GET /api/knowledge-bases/{kbCode}/documents/{documentCode}/indexing-tasks`
 10. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/indexing-tasks/{taskId}/retry`
+
+知识库删除说明：
+
+1. `DELETE /api/knowledge-bases/{kbCode}` 会物理删除知识库
+2. 会同时删除关联的 `document / document_chunk / indexing_task / chat_session / chat_message`
+3. 会清理该知识库在本地上传目录下的物料，并同步失效相关 Redis 业务缓存
+4. 如果知识库下仍有 `QUEUED / RUNNING` 的索引任务，请求会直接拒绝
 
 ### 问答
 

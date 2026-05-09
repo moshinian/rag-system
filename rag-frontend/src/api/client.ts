@@ -1,7 +1,7 @@
 import type { ApiError, ApiResponse } from "../types/api";
 
 type RequestOptions = {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "DELETE";
   body?: BodyInit | null;
   headers?: Record<string, string>;
 };
@@ -27,6 +27,10 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
 
 export const apiClient = {
   get: <T>(url: string) => request<T>(url),
+  delete: <T>(url: string) =>
+    request<T>(url, {
+      method: "DELETE"
+    }),
   postJson: <T>(url: string, body?: unknown) =>
     request<T>(url, {
       method: "POST",

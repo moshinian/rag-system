@@ -38,6 +38,13 @@ public class DocumentChunkRepository {
         documentChunkMapper.delete(query);
     }
 
+    /** 按知识库删除全部 chunk。 */
+    public void deleteByKnowledgeBaseId(Long knowledgeBaseId) {
+        LambdaQueryWrapper<DocumentChunkEntity> query = new LambdaQueryWrapper<DocumentChunkEntity>()
+                .eq(DocumentChunkEntity::getKnowledgeBaseId, knowledgeBaseId);
+        documentChunkMapper.delete(query);
+    }
+
     /** 批量新增 chunk。 */
     public List<DocumentChunkEntity> batchInsert(List<DocumentChunkEntity> entities) {
         for (DocumentChunkEntity entity : entities) {

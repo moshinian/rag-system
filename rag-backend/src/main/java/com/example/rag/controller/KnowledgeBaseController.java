@@ -8,6 +8,7 @@ import com.example.rag.service.KnowledgeBaseService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -65,6 +66,15 @@ public class KnowledgeBaseController {
                                                      HttpServletRequest httpRequest) {
         String requestId = String.valueOf(httpRequest.getAttribute(REQUEST_ID_ATTRIBUTE));
         KnowledgeBaseResponse response = knowledgeBaseService.enable(kbCode);
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 物理删除知识库。 */
+    @DeleteMapping("/{kbCode}")
+    public ApiResponse<KnowledgeBaseResponse> delete(@PathVariable String kbCode,
+                                                     HttpServletRequest httpRequest) {
+        String requestId = String.valueOf(httpRequest.getAttribute(REQUEST_ID_ATTRIBUTE));
+        KnowledgeBaseResponse response = knowledgeBaseService.delete(kbCode);
         return ApiResponse.success(response, requestId);
     }
 

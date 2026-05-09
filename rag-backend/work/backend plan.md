@@ -9,7 +9,8 @@
 3. Week 3 已完成异步索引、失败恢复、结构化日志、配置外置、切块实验与中文评测收口
 4. PostgreSQL / Redis / Flyway / MyBatis-Plus / `pgvector` / 本地 embedding 服务都已真实跑通
 5. 当前系统已经具备最小可用的企业知识库 RAG 问答闭环
-6. 下一步应进入 Week 4 的面试化包装，包括 README、架构图、接口说明、项目难点与讲稿整理
+6. 已支持物理删除知识库，并级联清理关联数据、上传物料与业务缓存
+7. 下一步应进入 Week 4 的面试化包装，包括 README、架构图、接口说明、项目难点与讲稿整理
 
 这个计划文档仍然保留长期目标，当前真实状态以 [work/current-status.md](/root/workspace/rag-system/work/current-status.md) 为准。
 

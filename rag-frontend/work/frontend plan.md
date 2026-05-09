@@ -14,6 +14,7 @@
       - GET /api/knowledge-bases/{kbCode}
       - POST /api/knowledge-bases/{kbCode}/enable
       - POST /api/knowledge-bases/{kbCode}/disable
+      - DELETE /api/knowledge-bases/{kbCode}
   - 文档接口：
       - POST /api/knowledge-bases/{kbCode}/documents/upload
       - GET /api/knowledge-bases/{kbCode}/documents?status&pageNo&pageSize
@@ -56,6 +57,7 @@
       - 检索默认 topK=5，最大 10
       - 列表分页默认 pageNo=1、pageSize=20，最大 100
       - qa/readiness 通过 knowledgeBaseStatus + indexedChunkCount + embeddedChunkCount 判断是否可问答
+      - 删除知识库会级联删除文档、chunk、索引任务、问答历史和本地上传物料；若仍有运行中的索引任务则不允许删除
       - 当前问答历史是“每次问答新建一个 session”，不是多轮会话；历史页应按单问单答记录展示，不要先设计成连续聊天线
         程
       - 没有 SSE / WebSocket / 任务进度百分比接口；索引监控必须用轮询 indexing-tasks + document detail + chunks
@@ -66,7 +68,7 @@
       - 解决“第一次进来不知道做什么”的问题
       - 展示知识库列表、全局说明、推荐下一步、最近问答入口
   - 知识库列表页
-      - 解决知识库创建、切换、状态筛选、启停管理
+      - 解决知识库创建、切换、状态筛选、启停管理、删除管理
   - 知识库创建页 / 抽屉
       - 解决首次建立知识库，输入 kbCode / name / description / createdBy
   - 知识库概览页
@@ -132,6 +134,7 @@
 
   - 工作台 / 知识库列表页：
       - GET /api/knowledge-bases
+      - DELETE /api/knowledge-bases/{kbCode}
   - 创建知识库：
       - POST /api/knowledge-bases
   - 知识库概览页：

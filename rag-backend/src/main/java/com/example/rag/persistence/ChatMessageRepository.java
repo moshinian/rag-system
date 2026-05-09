@@ -1,5 +1,6 @@
 package com.example.rag.persistence;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.rag.mapper.ChatMessageMapper;
@@ -35,5 +36,12 @@ public class ChatMessageRepository {
                 pageQuery.knowledgeBaseId()
         );
         return new PageResult<>(result.getRecords(), result.getTotal(), result.getCurrent(), result.getSize());
+    }
+
+    /** 按会话 ID 删除全部问答消息。 */
+    public void deleteBySessionIds(Iterable<Long> sessionIds) {
+        LambdaQueryWrapper<ChatMessageEntity> query = new LambdaQueryWrapper<ChatMessageEntity>()
+                .in(ChatMessageEntity::getSessionId, sessionIds);
+        chatMessageMapper.delete(query);
     }
 }

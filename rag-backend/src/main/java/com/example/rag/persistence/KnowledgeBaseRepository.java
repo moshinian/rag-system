@@ -60,4 +60,9 @@ public class KnowledgeBaseRepository {
         knowledgeBaseMapper.updateById(entity);
         return entity;
     }
+
+    /** 按主键删除知识库。 */
+    public void deleteById(Long id) {
+        knowledgeBaseMapper.deleteById(id);
+    }
 }

@@ -100,4 +100,11 @@ public class IndexingTaskRepository {
                 .last("LIMIT " + limit);
         return indexingTaskMapper.selectList(query);
     }
+
+    /** 按知识库删除全部任务。 */
+    public void deleteByKnowledgeBaseId(Long knowledgeBaseId) {
+        LambdaQueryWrapper<IndexingTaskEntity> query = new LambdaQueryWrapper<IndexingTaskEntity>()
+                .eq(IndexingTaskEntity::getKnowledgeBaseId, knowledgeBaseId);
+        indexingTaskMapper.delete(query);
+    }
 }

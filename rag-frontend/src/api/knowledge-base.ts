@@ -22,3 +22,7 @@ export function getKnowledgeBase(kbCode: string) {
 export function createKnowledgeBase(payload: CreateKnowledgeBasePayload) {
   return apiClient.postJson<KnowledgeBase>("/api/knowledge-bases", payload);
 }
+
+export function deleteKnowledgeBase(kbCode: string) {
+  return apiClient.delete<KnowledgeBase>(`/api/knowledge-bases/${kbCode}`);
+}

@@ -6,6 +6,7 @@ import {
   Drawer,
   Form,
   Input,
+  Popconfirm,
   Row,
   Space,
   Table,
@@ -13,7 +14,8 @@ import {
 } from "antd";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createKnowledgeBase, listKnowledgeBases } from "../../api/knowledge-base";
+import { createKnowledgeBase, deleteKnowledgeBase, listKnowledgeBases } from "../../api/knowledge-base";
+import { useAppStore } from "../../app/store";
 import { ApiErrorAlert } from "../../components/feedback/api-error-alert";
 import { StatusBadge } from "../../components/status/status-badge";
 import type { CreateKnowledgeBasePayload } from "../../types/knowledge-base";
@@ -22,6 +24,8 @@ import { formatDateTime, truncateText } from "../../utils/format";
 export function KnowledgeBasesPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const currentKbCode = useAppStore((state) => state.currentKbCode);
+  const setCurrentKbCode = useAppStore((state) => state.setCurrentKbCode);
   const [open, setOpen] = useState(false);
   const { data, isLoading, error } = useQuery({
     queryKey: ["knowledgeBases", "page"],
@@ -34,6 +38,24 @@ export function KnowledgeBasesPage() {
       queryClient.invalidateQueries({ queryKey: ["knowledgeBases"] });
       setOpen(false);
       navigate(`/kb/${created.kbCode}`);
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteKnowledgeBase,
+    onSuccess: (_, deletedKbCode) => {
+      queryClient.invalidateQueries({ queryKey: ["knowledgeBases"] });
+      queryClient.removeQueries({ queryKey: ["knowledgeBase", deletedKbCode] });
+      queryClient.removeQueries({ queryKey: ["documents", deletedKbCode] });
+      queryClient.removeQueries({ queryKey: ["readiness", deletedKbCode] });
+      queryClient.removeQueries({ queryKey: ["qaHistory", deletedKbCode] });
+      queryClient.removeQueries({ queryKey: ["indexingTasks", deletedKbCode] });
+      queryClient.removeQueries({ queryKey: ["documentDetail", deletedKbCode] });
+      queryClient.removeQueries({ queryKey: ["documentChunks", deletedKbCode] });
+      if (currentKbCode === deletedKbCode) {
+        setCurrentKbCode(undefined);
+        navigate("/knowledge-bases");
+      }
     }
   });
 
@@ -94,9 +116,27 @@ export function KnowledgeBasesPage() {
             {
               title: "操作",
               render: (_, record) => (
-                <Button type="link">
-                  <Link to={`/kb/${record.kbCode}`}>进入工作台</Link>
-                </Button>
+                <Space>
+                  <Button type="link">
+                    <Link to={`/kb/${record.kbCode}`}>进入工作台</Link>
+                  </Button>
+                  <Popconfirm
+                    title="删除知识库"
+                    description="将同时删除文档、切块、索引任务、问答历史和本地上传物料，且不可恢复。"
+                    okText="确认删除"
+                    cancelText="取消"
+                    okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+                    onConfirm={() => deleteMutation.mutate(record.kbCode)}
+                  >
+                    <Button
+                      type="link"
+                      danger
+                      loading={deleteMutation.isPending && deleteMutation.variables === record.kbCode}
+                    >
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
               )
             }
           ]}
