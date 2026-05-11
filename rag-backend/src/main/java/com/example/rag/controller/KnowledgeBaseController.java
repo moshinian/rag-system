@@ -2,6 +2,7 @@ package com.example.rag.controller;
 
 import com.example.rag.common.ApiResponse;
 import com.example.rag.model.request.CreateKnowledgeBaseRequest;
+import com.example.rag.model.response.KnowledgeBaseEnableResponse;
 import com.example.rag.model.response.KnowledgeBaseResponse;
 import com.example.rag.model.response.PageResponse;
 import com.example.rag.service.KnowledgeBaseService;
@@ -62,10 +63,16 @@ public class KnowledgeBaseController {
 
     /** 启用知识库。 */
     @PostMapping("/{kbCode}/enable")
-    public ApiResponse<KnowledgeBaseResponse> enable(@PathVariable String kbCode,
-                                                     HttpServletRequest httpRequest) {
+    public ApiResponse<KnowledgeBaseEnableResponse> enable(@PathVariable String kbCode,
+                                                           @RequestParam(value = "retryFailedIndexingTasks", required = false) Boolean retryFailedIndexingTasks,
+                                                           @RequestParam(value = "operator", required = false) String operator,
+                                                           HttpServletRequest httpRequest) {
         String requestId = String.valueOf(httpRequest.getAttribute(REQUEST_ID_ATTRIBUTE));
-        KnowledgeBaseResponse response = knowledgeBaseService.enable(kbCode);
+        KnowledgeBaseEnableResponse response = knowledgeBaseService.enable(
+                kbCode,
+                Boolean.TRUE.equals(retryFailedIndexingTasks),
+                operator
+        );
         return ApiResponse.success(response, requestId);
     }
 

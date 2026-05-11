@@ -37,6 +37,9 @@ class QuestionAnsweringServiceTest {
     @Mock
     private OpenAiCompatibleClient openAiCompatibleClient;
 
+    @Mock
+    private RetrievalReadinessService retrievalReadinessService;
+
     private QuestionAnsweringService questionAnsweringService;
 
     @BeforeEach
@@ -55,20 +58,30 @@ class QuestionAnsweringServiceTest {
                 documentChunkRepository,
                 embeddingProperties,
                 retrievalProperties,
-                openAiCompatibleClient
+                openAiCompatibleClient,
+                retrievalReadinessService
         );
     }
 
     @Test
     void getReadinessShouldRequireProcessedChunksBeforeRetrievalCanRun() {
-        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
-        knowledgeBase.setId(100L);
-        knowledgeBase.setKbCode("settlement-kb");
-        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
-
-        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
-        when(documentChunkRepository.countAvailableIndexedChunks(100L)).thenReturn(0L);
-        when(documentChunkRepository.countAvailableEmbeddedChunks(100L)).thenReturn(0L);
+        when(retrievalReadinessService.getReadiness("settlement-kb")).thenReturn(new QuestionAnsweringReadinessResponse(
+                "settlement-kb",
+                "ACTIVE",
+                false,
+                "openai-compatible",
+                "text-embedding-3-small",
+                "text-embedding-3-small",
+                1536,
+                "pgvector",
+                5,
+                0L,
+                0L,
+                false,
+                false,
+                null,
+                "Process at least one document into chunks before running retrieval."
+        ));
 
         QuestionAnsweringReadinessResponse response = questionAnsweringService.getReadiness("settlement-kb");
 
@@ -79,14 +92,23 @@ class QuestionAnsweringServiceTest {
 
     @Test
     void getReadinessShouldReportReadyWhenEmbeddedChunksExist() {
-        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
-        knowledgeBase.setId(100L);
-        knowledgeBase.setKbCode("settlement-kb");
-        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
-
-        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
-        when(documentChunkRepository.countAvailableIndexedChunks(100L)).thenReturn(12L);
-        when(documentChunkRepository.countAvailableEmbeddedChunks(100L)).thenReturn(12L);
+        when(retrievalReadinessService.getReadiness("settlement-kb")).thenReturn(new QuestionAnsweringReadinessResponse(
+                "settlement-kb",
+                "ACTIVE",
+                true,
+                "openai-compatible",
+                "text-embedding-3-small",
+                "text-embedding-3-small",
+                1536,
+                "pgvector",
+                5,
+                12L,
+                12L,
+                false,
+                false,
+                null,
+                "Retrieval prerequisites are ready."
+        ));
 
         QuestionAnsweringReadinessResponse response = questionAnsweringService.getReadiness("settlement-kb");
 
@@ -98,14 +120,23 @@ class QuestionAnsweringServiceTest {
 
     @Test
     void getReadinessShouldReportInactiveKnowledgeBaseAsNotReady() {
-        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
-        knowledgeBase.setId(100L);
-        knowledgeBase.setKbCode("settlement-kb");
-        knowledgeBase.setStatus(KnowledgeBaseStatus.INACTIVE);
-
-        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
-        when(documentChunkRepository.countAvailableIndexedChunks(100L)).thenReturn(12L);
-        when(documentChunkRepository.countAvailableEmbeddedChunks(100L)).thenReturn(12L);
+        when(retrievalReadinessService.getReadiness("settlement-kb")).thenReturn(new QuestionAnsweringReadinessResponse(
+                "settlement-kb",
+                "INACTIVE",
+                false,
+                "openai-compatible",
+                "text-embedding-3-small",
+                "text-embedding-3-small",
+                1536,
+                "pgvector",
+                5,
+                12L,
+                12L,
+                false,
+                false,
+                null,
+                "Activate the knowledge base before running retrieval."
+        ));
 
         QuestionAnsweringReadinessResponse response = questionAnsweringService.getReadiness("settlement-kb");
 
@@ -121,6 +152,7 @@ class QuestionAnsweringServiceTest {
         knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
         when(openAiCompatibleClient.createEmbedding(
                 eq("http://localhost:8001/v1"),
                 eq(""),
@@ -156,6 +188,7 @@ class QuestionAnsweringServiceTest {
         knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
 
         assertThatThrownBy(() -> questionAnsweringService.retrieve("settlement-kb", "问题", 11))
                 .hasMessageContaining("topK must be <= 10");
@@ -169,6 +202,8 @@ class QuestionAnsweringServiceTest {
         knowledgeBase.setStatus(KnowledgeBaseStatus.INACTIVE);
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        org.mockito.Mockito.doThrow(new com.example.rag.common.exception.BusinessException("Knowledge base is inactive: settlement-kb"))
+                .when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
 
         assertThatThrownBy(() -> questionAnsweringService.retrieve("settlement-kb", "问题", 3))
                 .hasMessageContaining("Knowledge base is inactive");

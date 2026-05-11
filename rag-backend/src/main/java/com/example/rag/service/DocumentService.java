@@ -448,6 +448,10 @@ public class DocumentService {
                 entity.getStatus().name(),
                 entity.getEmbeddingStatus() == null ? null : entity.getEmbeddingStatus().name(),
                 entity.getEmbeddingModel(),
+                entity.getEmbeddingProvider(),
+                entity.getEmbeddingProfileFingerprint(),
+                entity.getEmbeddingRebuildRunId(),
+                entity.getEmbeddingUpdatedBy(),
                 entity.getEmbeddingUpdatedAt(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()

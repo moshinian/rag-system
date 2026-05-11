@@ -65,6 +65,18 @@ public class DocumentChunkEntity {
     @TableField("embedding_model")
     private String embeddingModel;
 
+    @TableField("embedding_provider")
+    private String embeddingProvider;
+
+    @TableField("embedding_profile_fingerprint")
+    private String embeddingProfileFingerprint;
+
+    @TableField("embedding_rebuild_run_id")
+    private Long embeddingRebuildRunId;
+
+    @TableField("embedding_updated_by")
+    private String embeddingUpdatedBy;
+
     @TableField("embedding_error_message")
     private String embeddingErrorMessage;
 

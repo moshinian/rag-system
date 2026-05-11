@@ -7,11 +7,15 @@ public record QuestionAnsweringReadinessResponse(
         boolean questionAnsweringReady,
         String embeddingProvider,
         String embeddingModel,
+        String activeEmbeddingModel,
         Integer embeddingVectorDimensions,
         String vectorStore,
         Integer defaultTopK,
         long indexedChunkCount,
         long embeddedChunkCount,
+        boolean reembedRequired,
+        boolean reembedInProgress,
+        Long currentRebuildRunId,
         String nextStep
 ) {
 }

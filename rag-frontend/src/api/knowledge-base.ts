@@ -1,6 +1,11 @@
 import { apiClient } from "./client";
 import type { PageResponse } from "../types/api";
-import type { CreateKnowledgeBasePayload, KnowledgeBase } from "../types/knowledge-base";
+import type {
+  CreateKnowledgeBasePayload,
+  EmbeddingRebuildSubmitResponse,
+  KnowledgeBase,
+  KnowledgeBaseEnableResponse
+} from "../types/knowledge-base";
 
 export function listKnowledgeBases(params?: {
   status?: string;
@@ -21,6 +26,28 @@ export function getKnowledgeBase(kbCode: string) {
 
 export function createKnowledgeBase(payload: CreateKnowledgeBasePayload) {
   return apiClient.postJson<KnowledgeBase>("/api/knowledge-bases", payload);
+}
+
+export function disableKnowledgeBase(kbCode: string) {
+  return apiClient.postJson<KnowledgeBase>(`/api/knowledge-bases/${kbCode}/disable`);
+}
+
+export function enableKnowledgeBase(
+  kbCode: string,
+  params?: { retryFailedIndexingTasks?: boolean; operator?: string }
+) {
+  const search = new URLSearchParams();
+  if (params?.retryFailedIndexingTasks) search.set("retryFailedIndexingTasks", "true");
+  if (params?.operator) search.set("operator", params.operator);
+  const suffix = search.toString() ? `?${search.toString()}` : "";
+  return apiClient.postJson<KnowledgeBaseEnableResponse>(
+    `/api/knowledge-bases/${kbCode}/enable${suffix}`
+  );
+}
+
+export function submitEmbeddingRebuild(operator?: string) {
+  const suffix = operator ? `?operator=${encodeURIComponent(operator)}` : "";
+  return apiClient.postJson<EmbeddingRebuildSubmitResponse>(`/api/admin/embeddings/rebuild${suffix}`);
 }
 
 export function deleteKnowledgeBase(kbCode: string) {

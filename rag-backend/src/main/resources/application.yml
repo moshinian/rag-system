@@ -60,17 +60,18 @@ rag:
     overlap-chars: 80
     min-break-search-offset: 240
   embedding:
-    provider: local-openai-compatible
-    base-url: http://localhost:8001/v1
-    api-key: ""
-    model: bge-small-zh-v1.5
-    vector-dimensions: 512
+    provider: aliyun-bailian-openai-compatible
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api-key: ${DASHSCOPE_API_KEY:}
+    model: text-embedding-v4
+    vector-dimensions: 1024
+    distance-metric: cosine
     embedding-path: /embeddings
-    batch-size: 16
+    batch-size: 10
   llm:
     chat:
       base-url: https://api.deepseek.com
-      api-key: ${DEEPSEEK_API_KEY:change-me}
+      api-key: ${DEEPSEEK_API_KEY:}
       model: deepseek-v4-pro
       chat-path: /chat/completions
       temperature: 0.2

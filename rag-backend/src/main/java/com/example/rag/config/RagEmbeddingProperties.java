@@ -18,6 +18,7 @@ public class RagEmbeddingProperties {
     private String apiKey = "";
     private String model = "bge-small-zh-v1.5";
     private Integer vectorDimensions = 512;
+    private String distanceMetric = "cosine";
     private String embeddingPath = "/embeddings";
-    private Integer batchSize = 16;
+    private Integer batchSize = 10;
 }

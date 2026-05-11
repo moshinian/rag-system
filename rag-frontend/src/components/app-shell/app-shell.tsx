@@ -1,4 +1,5 @@
 import {
+  ArrowLeftOutlined,
   DatabaseOutlined,
   FileSearchOutlined,
   FileTextOutlined,
@@ -7,11 +8,12 @@ import {
   RadarChartOutlined,
   UploadOutlined
 } from "@ant-design/icons";
-import { Layout, Menu, Select, Space, Typography } from "antd";
+import { Button, Layout, Menu, Select, Space, Typography } from "antd";
 import { useMemo } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { listKnowledgeBases } from "../../api/knowledge-base";
+import { useAppStore } from "../../app/store";
 import { useCurrentKb } from "../../hooks/use-current-kb";
 
 const { Header, Sider, Content } = Layout;
@@ -20,6 +22,7 @@ export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const kbCode = useCurrentKb();
+  const setCurrentKbCode = useAppStore((state) => state.setCurrentKbCode);
   const { data } = useQuery({
     queryKey: ["knowledgeBases", "shell"],
     queryFn: () => listKnowledgeBases({ pageNo: 1, pageSize: 100 })
@@ -60,9 +63,22 @@ export function AppShell() {
       <Layout>
         <Header className="shell-header">
           <Space size="large" style={{ width: "100%", justifyContent: "space-between" }}>
-            <Typography.Text strong>
-              {kbCode ? `当前知识库: ${kbCode}` : "请选择或创建知识库"}
-            </Typography.Text>
+            <Space size="middle">
+              {kbCode ? (
+                <Button
+                  icon={<ArrowLeftOutlined />}
+                  onClick={() => {
+                    setCurrentKbCode(undefined);
+                    navigate("/knowledge-bases");
+                  }}
+                >
+                  返回知识库列表
+                </Button>
+              ) : null}
+              <Typography.Text strong>
+                {kbCode ? `当前知识库: ${kbCode}` : "请选择或创建知识库"}
+              </Typography.Text>
+            </Space>
             <Select
               allowClear
               style={{ width: 280 }}
@@ -74,6 +90,7 @@ export function AppShell() {
               }))}
               onChange={(value) => {
                 if (!value) {
+                  setCurrentKbCode(undefined);
                   navigate("/knowledge-bases");
                   return;
                 }

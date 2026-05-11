@@ -3,6 +3,7 @@ package com.example.rag.service;
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.ingestion.storage.LocalFileStorageService;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
+import com.example.rag.model.response.KnowledgeBaseEnableResponse;
 import com.example.rag.model.response.KnowledgeBaseResponse;
 import com.example.rag.model.response.PageResponse;
 import com.example.rag.persistence.ChatMessageRepository;
@@ -59,6 +60,9 @@ class KnowledgeBaseServiceTest {
 
     @Mock
     private LocalFileStorageService localFileStorageService;
+
+    @Mock
+    private DocumentIndexingService documentIndexingService;
 
     @InjectMocks
     private KnowledgeBaseService knowledgeBaseService;
@@ -147,9 +151,40 @@ class KnowledgeBaseServiceTest {
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(entity));
         when(knowledgeBaseRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        KnowledgeBaseResponse response = knowledgeBaseService.enable("settlement-kb");
+        KnowledgeBaseEnableResponse response = knowledgeBaseService.enable("settlement-kb", false, null);
 
         assertThat(response.status()).isEqualTo("ACTIVE");
+        assertThat(response.retriedFailedTaskCount()).isZero();
+    }
+
+    @Test
+    void enableShouldOptionallyRetryFailedIndexingTasks() {
+        KnowledgeBaseEntity entity = new KnowledgeBaseEntity();
+        entity.setId(1L);
+        entity.setKbCode("settlement-kb");
+        entity.setStatus(KnowledgeBaseStatus.INACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(entity));
+        when(knowledgeBaseRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(documentIndexingService.retryLatestFailedTasksInKnowledgeBase("settlement-kb", "frontend-dashboard"))
+                .thenReturn(new DocumentIndexingService.BatchRetryIndexingResult(
+                        2,
+                        1,
+                        0,
+                        1,
+                        List.of("DOC-1", "DOC-2")
+                ));
+
+        KnowledgeBaseEnableResponse response = knowledgeBaseService.enable(
+                "settlement-kb",
+                true,
+                "frontend-dashboard"
+        );
+
+        assertThat(response.status()).isEqualTo("ACTIVE");
+        assertThat(response.retryFailedIndexingTasks()).isTrue();
+        assertThat(response.retriedFailedTaskCount()).isEqualTo(2);
+        assertThat(response.retriedDocumentCodes()).containsExactly("DOC-1", "DOC-2");
     }
 
     @Test

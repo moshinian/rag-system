@@ -1,6 +1,6 @@
 # RAG System
 
-一个面向企业内部知识库场景的 RAG 系统仓库，包含 Spring Boot 后端、React 前端、本地 embedding 服务，以及本地开发用的 PostgreSQL / Redis 依赖编排。当前聚焦结算领域文档的沉淀、检索、问答、来源返回和问答记录。
+一个面向企业内部知识库场景的 RAG 系统仓库，包含 Spring Boot 后端、React 前端，以及本地开发用的 PostgreSQL / Redis 依赖编排。当前聚焦结算领域文档的沉淀、检索、问答、来源返回和问答记录。
 
 当前仓库的真实阶段不是“设计中”，而是已经完成了前 3 周的第一版实现：
 
@@ -39,12 +39,15 @@
 15. `rag.executor / rag.chunking / rag.qa / rag.embedding / rag.llm / rag.retrieval / rag.indexing / rag.cache` 配置外置
 16. 第一版切块参数实验
 17. 第一版中文问答评测样本、问题集、结果模板和真实评测记录
+18. embedding profile 变化后的全量重嵌入后台任务
+19. 知识库手工恢复使用，以及“恢复并重试失败索引任务”运维动作
+20. 前端知识库工作台已补入恢复、重嵌入和返回知识库列表入口
 
 ### 已完成验证
 
 1. PostgreSQL、Redis、Flyway 可正常工作
 2. `md / txt / pdf` 三类样本文档已完成真实联调
-3. 本地 `bge-small-zh-v1.5` embedding 服务已返回真实 512 维向量
+3. 远端 OpenAI-compatible embedding 接口已完成接入与真实向量返回
 4. `POST /embed` 已完成真实文档向量写库
 5. `POST /qa/retrieve` 已返回真实 TopK 结果
 6. `POST /qa/ask` 已完成真实联调
@@ -52,6 +55,8 @@
 8. `day14-kb` 已完成从上传到问答历史的端到端验收
 9. Redis 业务缓存已接入知识库、文档、chunk、`qa/readiness` 和检索结果读路径
 10. `day20-cn-kb` 已完成 6 条中文问题的真实评测，其中 5 条可回答问题命中预期文档，1 条无答案问题返回兜底话术
+11. 知识库恢复使用、恢复并重试失败任务、重新嵌入入口已完成前后端联动
+12. 前端生产构建已完成路由级懒加载与 vendor 拆包，不再是单一超大入口包
 
 ### 当前边界
 
@@ -60,6 +65,7 @@
 3. 还没有做 session 复用与多轮对话
 4. 还没有补齐完整监控、指标和 tracing
 5. 评测集还处在第一版，规模和覆盖度都需要继续扩展
+6. 前端已做第一轮拆包优化，但还没有继续做更细的业务级按需加载
 
 ## 周进度
 
@@ -75,13 +81,14 @@
 
 ### Week 2
 
-1. 本地 embedding 服务接入
+1. OpenAI-compatible embedding 接入
 2. `pgvector` 落地
 3. `POST /qa/retrieve` 检索接口完成
 4. `POST /qa/ask` 问答接口完成
 5. `sources` 来源返回完成
 6. `chat_session / chat_message` 与 `/qa/history` 完成
 7. Day 14 端到端验收完成
+8. embedding rebuild、readiness gate 和知识库恢复语义已落地
 
 ### Week 3
 
@@ -94,6 +101,7 @@
 7. 线程池、切块、问答记录与缓存参数完成配置外置
 8. `compact / balanced / wide` 切块参数实验完成
 9. 中文问答评测样本、问题集、夹具与首轮真实评测完成
+10. embedding rebuild、知识库恢复补偿和前端运维入口完成
 
 ## 技术选型
 
@@ -112,7 +120,7 @@
 当前设计取舍很明确：
 
 1. 第一阶段优先用 PostgreSQL 统一承载主数据、任务数据和向量数据
-2. embedding 单独做本地 HTTP 服务，降低 Java 主服务耦合
+2. embedding 统一走 OpenAI-compatible HTTP 接口，降低 Java 主服务耦合
 3. 先把单服务版本做完整，再考虑更复杂的编排和检索优化
 
 ## 项目结构
@@ -120,7 +128,7 @@
 ```text
 rag-system/
 ├── pom.xml                         # 根聚合 POM，便于 VS Code / Maven 识别工作区中的 Java 模块
-├── docker-compose.yml              # PostgreSQL / Redis / embedding-service / RedisInsight 本地依赖编排
+├── docker-compose.yml              # PostgreSQL / Redis / RedisInsight 本地依赖编排
 ├── rag-system.code-workspace       # VS Code 推荐工作区
 ├── .vscode/                        # VS Code 任务、启动配置、Java 导入设置
 ├── rag-backend/                    # Spring Boot 后端工程
@@ -160,11 +168,6 @@ rag-system/
 │   │   └── utils/                  # 格式化、状态映射
 │   ├── work/frontend plan.md       # 前端规划、完成情况、后续路线
 │   └── dist/                       # 前端生产构建产物
-└── embedding-service/              # 本地 embedding 服务
-    ├── main.py                     # FastAPI / Uvicorn 入口
-    ├── requirements.txt
-    ├── Dockerfile
-    └── README.md
 ```
 
 ### 结构说明
@@ -195,21 +198,51 @@ rag-system/
 6. `V8__create_chat_tables.sql`
 7. `V9__add_async_indexing_task_fields.sql`
 8. `V10__add_indexing_retry_and_recovery_fields.sql`
+9. `V14__embedding_rebuild_state.sql`
+10. `V15__drop_legacy_vector_index.sql`
+
+## 最近补充
+
+### 知识库恢复与失败任务补偿
+
+当前知识库不会因为切片或 embedding 失败自动进入 `INACTIVE`。`INACTIVE` 仍然是手工运维状态。
+
+现在后端已经支持：
+
+1. 仅恢复知识库使用状态
+2. 恢复知识库并重试每篇文档最近一次可重试的失败索引任务
+
+前端知识库列表页和知识库概览页都已经补入这些操作入口。
+
+### embedding 全量重嵌入
+
+当前后端已提供：
+
+1. `POST /api/admin/embeddings/rebuild`
+
+该接口会在 embedding profile 发生变化后，异步提交一次全量重嵌入任务。前端知识库概览页已补入“重新嵌入向量”入口，并与 `qa/readiness` 的 `reembedRequired / reembedInProgress / currentRebuildRunId` 联动展示。
+
+### 前端构建优化
+
+当前前端已完成：
+
+1. 路由级页面懒加载
+2. `react-vendor / router / query / antd / antd-icons / vendor` 拆包
+
+当前生产构建已不再出现最初的单一超大入口包问题。
 
 ## 运行方式
 
 ### 1. 启动依赖
 
 ```bash
-docker compose up -d postgres redis embedding-service
+docker compose up -d postgres redis
 ```
 
 默认端口：
 
 1. PostgreSQL：`5432`
 2. Redis：`6379`
-3. Embedding Service：`8001`
-
 ### 2. 启动应用
 
 ```bash
@@ -236,7 +269,6 @@ mvn spring-boot:run
 ```bash
 curl --noproxy '*' -s http://127.0.0.1:8080/api/health
 curl --noproxy '*' -s http://127.0.0.1:8080/api/health/redis-probe
-curl --noproxy '*' -s http://127.0.0.1:8001/health
 ```
 
 ## 关键配置
@@ -255,8 +287,8 @@ curl --noproxy '*' -s http://127.0.0.1:8001/health
 
 默认值里当前最重要的几项：
 
-1. embedding 模型：`bge-small-zh-v1.5`
-2. 向量维度：`512`
+1. embedding 模型：`text-embedding-v4`
+2. 向量维度：`1024`
 3. 默认切块：`600/80/240`
 4. 默认检索 `topK`：`5`
 5. 最大索引重试次数：`3`

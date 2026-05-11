@@ -13,6 +13,7 @@
       - GET /api/knowledge-bases?status&pageNo&pageSize
       - GET /api/knowledge-bases/{kbCode}
       - POST /api/knowledge-bases/{kbCode}/enable
+      - POST /api/knowledge-bases/{kbCode}/enable?retryFailedIndexingTasks=true
       - POST /api/knowledge-bases/{kbCode}/disable
       - DELETE /api/knowledge-bases/{kbCode}
   - 文档接口：
@@ -36,6 +37,8 @@
   - 健康接口：
       - GET /api/health
       - GET /api/health/redis-probe
+  - embedding 运维接口：
+      - POST /api/admin/embeddings/rebuild
   - 状态模型：
       - 知识库：ACTIVE / INACTIVE
       - 文档：UPLOADED / PARSING / PARSED / CHUNKING / INDEXED / FAILED / DISABLED
@@ -57,6 +60,8 @@
       - 检索默认 topK=5，最大 10
       - 列表分页默认 pageNo=1、pageSize=20，最大 100
       - qa/readiness 通过 knowledgeBaseStatus + indexedChunkCount + embeddedChunkCount 判断是否可问答
+      - 知识库不会因为文档处理或 embedding 失败自动禁用；`INACTIVE` 是手工运维状态
+      - 恢复知识库时可以选择只恢复使用，或恢复并重试最近一次可重试的失败索引任务
       - 删除知识库会级联删除文档、chunk、索引任务、问答历史和本地上传物料；若仍有运行中的索引任务则不允许删除
       - 当前问答历史是“每次问答新建一个 session”，不是多轮会话；历史页应按单问单答记录展示，不要先设计成连续聊天线
         程
@@ -68,12 +73,12 @@
       - 解决“第一次进来不知道做什么”的问题
       - 展示知识库列表、全局说明、推荐下一步、最近问答入口
   - 知识库列表页
-      - 解决知识库创建、切换、状态筛选、启停管理、删除管理
+      - 解决知识库创建、切换、状态筛选、启停管理、恢复补偿和删除管理
   - 知识库创建页 / 抽屉
       - 解决首次建立知识库，输入 kbCode / name / description / createdBy
   - 知识库概览页
       - 解决“当前库是否可问答、下一步该干什么”
-      - 核心显示 qa/readiness、文档数量、最新索引任务、快捷入口
+      - 核心显示 qa/readiness、文档数量、最新索引任务、快捷入口，以及恢复/重嵌入运维动作
   - 文档接入页
       - 解决上传文件、填写展示名/标签/来源、立即发起索引
       - 这是向导第 1 步
@@ -168,7 +173,7 @@
 
   - 知识库状态：
       - ACTIVE 显示绿色“可用”
-      - INACTIVE 显示灰色“已停用”，禁用上传/索引/问答按钮
+      - INACTIVE 显示灰色“已停用”，禁用上传/索引/问答按钮，并展示“恢复使用 / 恢复并重试失败任务”入口
   - 文档状态：
       - UPLOADED 显示“已上传，待处理”
       - PARSING 显示“解析中”
@@ -203,6 +208,9 @@
   - 空态提示：
       - qa/readiness.questionAnsweringReady=false 时，统一显示后端 nextStep
       - 没有文档、没有 chunk、没有历史时都给出下一步操作按钮
+  - 运维入口：
+      - 知识库概览页集中展示“禁用知识库 / 恢复使用 / 恢复并重试失败任务 / 重新嵌入向量”
+      - 全局 Header 在进入知识库后提供“返回知识库列表”按钮
 
 ## 7. 技术选型建议
 
@@ -249,6 +257,11 @@
       - 统一视觉规范、状态文案、埋点日志
       - 补齐前端测试、接口 mock、README 截图说明
       - 产出简历展示版项目说明和录屏脚本
+
+## 当前新增收口
+
+  - 已完成知识库恢复使用、恢复并重试失败任务、重新嵌入入口和返回知识库列表按钮。
+  - 已完成前端路由级懒加载和 vendor 拆包，生产包已摆脱最初的超大单入口包问题。
 
 ## 9. 后续扩展预留
 

@@ -5,6 +5,7 @@ import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.config.CacheNames;
 import com.example.rag.ingestion.storage.LocalFileStorageService;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
+import com.example.rag.model.response.KnowledgeBaseEnableResponse;
 import com.example.rag.model.request.CreateKnowledgeBaseRequest;
 import com.example.rag.model.response.KnowledgeBaseResponse;
 import com.example.rag.model.response.PageResponse;
@@ -47,6 +48,7 @@ public class KnowledgeBaseService {
     private final ChatMessageRepository chatMessageRepository;
     private final LocalFileStorageService localFileStorageService;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
+    private final DocumentIndexingService documentIndexingService;
 
     public KnowledgeBaseService(KnowledgeBaseRepository knowledgeBaseRepository,
                                 DocumentRepository documentRepository,
@@ -55,7 +57,8 @@ public class KnowledgeBaseService {
                                 ChatSessionRepository chatSessionRepository,
                                 ChatMessageRepository chatMessageRepository,
                                 LocalFileStorageService localFileStorageService,
-                                SnowflakeIdGenerator snowflakeIdGenerator) {
+                                SnowflakeIdGenerator snowflakeIdGenerator,
+                                DocumentIndexingService documentIndexingService) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentRepository = documentRepository;
         this.documentChunkRepository = documentChunkRepository;
@@ -64,6 +67,7 @@ public class KnowledgeBaseService {
         this.chatMessageRepository = chatMessageRepository;
         this.localFileStorageService = localFileStorageService;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
+        this.documentIndexingService = documentIndexingService;
     }
 
     /** 创建知识库。 */
@@ -141,8 +145,12 @@ public class KnowledgeBaseService {
             @CacheEvict(cacheNames = CacheNames.QA_READINESS, key = "#kbCode"),
             @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
     })
-    public KnowledgeBaseResponse enable(String kbCode) {
-        return updateStatus(kbCode, KnowledgeBaseStatus.ACTIVE);
+    public KnowledgeBaseEnableResponse enable(String kbCode, boolean retryFailedIndexingTasks, String operator) {
+        KnowledgeBaseEntity entity = updateStatusEntity(kbCode, KnowledgeBaseStatus.ACTIVE);
+        DocumentIndexingService.BatchRetryIndexingResult retrySummary = retryFailedIndexingTasks
+                ? documentIndexingService.retryLatestFailedTasksInKnowledgeBase(kbCode, operator)
+                : new DocumentIndexingService.BatchRetryIndexingResult(0, 0, 0, 0, List.of());
+        return toEnableResponse(entity, retryFailedIndexingTasks, retrySummary);
     }
 
     /** 物理删除知识库及其关联数据。 */
@@ -193,6 +201,28 @@ public class KnowledgeBaseService {
         );
     }
 
+    /** 把实体和恢复摘要转换成启用响应对象。 */
+    private KnowledgeBaseEnableResponse toEnableResponse(KnowledgeBaseEntity entity,
+                                                         boolean retryFailedIndexingTasks,
+                                                         DocumentIndexingService.BatchRetryIndexingResult retrySummary) {
+        return new KnowledgeBaseEnableResponse(
+                entity.getId(),
+                entity.getKbCode(),
+                entity.getName(),
+                entity.getDescription(),
+                entity.getStatus().name(),
+                entity.getCreatedBy(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt(),
+                retryFailedIndexingTasks,
+                retrySummary.retriedTaskCount(),
+                retrySummary.skippedDisabledDocumentCount(),
+                retrySummary.skippedActiveTaskDocumentCount(),
+                retrySummary.skippedRetryLimitDocumentCount(),
+                retrySummary.retriedDocumentCodes()
+        );
+    }
+
     /** 把空白字符串归一化成 null。 */
     private String trimToNull(String value) {
         if (value == null) {
@@ -210,6 +240,11 @@ public class KnowledgeBaseService {
 
     /** 更新知识库状态。 */
     private KnowledgeBaseResponse updateStatus(String kbCode, KnowledgeBaseStatus status) {
+        return toResponse(updateStatusEntity(kbCode, status));
+    }
+
+    /** 更新知识库状态并返回最新实体。 */
+    private KnowledgeBaseEntity updateStatusEntity(String kbCode, KnowledgeBaseStatus status) {
         KnowledgeBaseEntity entity = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
         if (status == KnowledgeBaseStatus.INACTIVE
@@ -218,7 +253,7 @@ public class KnowledgeBaseService {
         }
         entity.setStatus(status);
         knowledgeBaseRepository.updateById(entity);
-        return toResponse(entity);
+        return entity;
     }
 
     /** 解析知识库状态过滤条件。 */

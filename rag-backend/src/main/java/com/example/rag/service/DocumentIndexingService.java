@@ -146,6 +146,70 @@ public class DocumentIndexingService {
         return toResponse(retryTask, document, kbCode);
     }
 
+    /** 在知识库恢复使用后，批量重试每篇文档最近一次可重试的失败索引任务。 */
+    public BatchRetryIndexingResult retryLatestFailedTasksInKnowledgeBase(String kbCode, String operator) {
+        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
+                .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
+        ensureKnowledgeBaseActive(knowledgeBase);
+
+        List<DocumentEntity> documents = documentRepository.findByKnowledgeBaseId(knowledgeBase.getId());
+        int retriedTaskCount = 0;
+        int skippedDisabledDocumentCount = 0;
+        int skippedActiveTaskDocumentCount = 0;
+        int skippedRetryLimitDocumentCount = 0;
+        List<String> retriedDocumentCodes = new java.util.ArrayList<>();
+
+        for (DocumentEntity document : documents) {
+            if (document.getStatus() == DocumentStatus.DISABLED) {
+                skippedDisabledDocumentCount++;
+                continue;
+            }
+            if (indexingTaskRepository.existsActiveTask(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
+                skippedActiveTaskDocumentCount++;
+                continue;
+            }
+            IndexingTaskEntity latestTask = indexingTaskRepository
+                    .findByDocumentIdAndTaskTypeOrderByCreatedAtDesc(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
+            if (latestTask == null || latestTask.getStatus() != IndexingTaskStatus.FAILED) {
+                continue;
+            }
+            if (latestTask.getRetryCount() != null
+                    && latestTask.getMaxRetryCount() != null
+                    && latestTask.getRetryCount() >= latestTask.getMaxRetryCount()) {
+                skippedRetryLimitDocumentCount++;
+                continue;
+            }
+
+            IndexingTaskEntity retryTask = createRetryTask(
+                    document,
+                    latestTask,
+                    IndexingTaskTriggerSource.MANUAL_RETRY,
+                    normalizeOperator(operator)
+            );
+            dispatch(retryTask.getId());
+            retriedTaskCount++;
+            retriedDocumentCodes.add(document.getDocumentCode());
+        }
+
+        log.info(StructuredLogMessage.of("indexing.task.batch_retry_submitted")
+                .field("kbCode", kbCode)
+                .field("retriedTaskCount", retriedTaskCount)
+                .field("skippedDisabledDocumentCount", skippedDisabledDocumentCount)
+                .field("skippedActiveTaskDocumentCount", skippedActiveTaskDocumentCount)
+                .field("skippedRetryLimitDocumentCount", skippedRetryLimitDocumentCount)
+                .build());
+        return new BatchRetryIndexingResult(
+                retriedTaskCount,
+                skippedDisabledDocumentCount,
+                skippedActiveTaskDocumentCount,
+                skippedRetryLimitDocumentCount,
+                List.copyOf(retriedDocumentCodes)
+        );
+    }
+
     /** 定时扫描卡住的队列中/运行中任务，并重新投递。 */
     @Scheduled(
             fixedDelayString = "${rag.indexing.recovery.scan-interval-ms:60000}",
@@ -463,5 +527,15 @@ public class DocumentIndexingService {
                 indexingTaskRepository.updateById(parentTask);
             }
         });
+    }
+
+    /** 知识库级批量失败任务补偿结果。 */
+    public record BatchRetryIndexingResult(
+            int retriedTaskCount,
+            int skippedDisabledDocumentCount,
+            int skippedActiveTaskDocumentCount,
+            int skippedRetryLimitDocumentCount,
+            List<String> retriedDocumentCodes
+    ) {
     }
 }

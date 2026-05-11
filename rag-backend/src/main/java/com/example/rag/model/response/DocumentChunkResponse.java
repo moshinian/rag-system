@@ -20,6 +20,10 @@ public record DocumentChunkResponse(
         String status,
         String embeddingStatus,
         String embeddingModel,
+        String embeddingProvider,
+        String embeddingProfileFingerprint,
+        Long embeddingRebuildRunId,
+        String embeddingUpdatedBy,
         OffsetDateTime embeddingUpdatedAt,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt

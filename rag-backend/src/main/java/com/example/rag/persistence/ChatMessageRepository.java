@@ -8,6 +8,9 @@ import com.example.rag.model.dto.QaHistoryRecordView;
 import com.example.rag.persistence.entity.ChatMessageEntity;
 import com.example.rag.persistence.query.PageResult;
 import com.example.rag.persistence.query.QaHistoryPageQuery;
+
+import java.util.List;
+
 import org.springframework.stereotype.Repository;
 
 /**
@@ -32,14 +35,17 @@ public class ChatMessageRepository {
     public PageResult<QaHistoryRecordView> pageByKnowledgeBase(QaHistoryPageQuery pageQuery) {
         Page<QaHistoryRecordView> page = new Page<>(pageQuery.pageNo(), pageQuery.pageSize());
         IPage<QaHistoryRecordView> result = chatMessageMapper.selectPageByKnowledgeBaseId(
-                page,
-                pageQuery.knowledgeBaseId()
+            page,
+            pageQuery.knowledgeBaseId()
         );
         return new PageResult<>(result.getRecords(), result.getTotal(), result.getCurrent(), result.getSize());
     }
 
     /** 按会话 ID 删除全部问答消息。 */
-    public void deleteBySessionIds(Iterable<Long> sessionIds) {
+    public void deleteBySessionIds(List<Long> sessionIds) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return;
+        }
         LambdaQueryWrapper<ChatMessageEntity> query = new LambdaQueryWrapper<ChatMessageEntity>()
                 .in(ChatMessageEntity::getSessionId, sessionIds);
         chatMessageMapper.delete(query);

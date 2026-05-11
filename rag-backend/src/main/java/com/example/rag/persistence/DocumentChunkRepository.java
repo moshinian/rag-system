@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 文档切块持久化访问层。
@@ -63,6 +64,21 @@ public class DocumentChunkRepository {
         return documentChunkMapper.countAvailableEmbeddedChunks(knowledgeBaseId);
     }
 
+    /** 统计某个知识库下维度与当前配置不一致的已向量化 chunk 数量。 */
+    public long countEmbeddedChunksWithDifferentDimensions(Long knowledgeBaseId, int expectedDimensions) {
+        return documentChunkMapper.countEmbeddedChunksWithDifferentDimensions(knowledgeBaseId, expectedDimensions);
+    }
+
+    /** 检查活动知识库中是否仍存在需要人工重嵌入的旧向量。 */
+    public boolean existsEmbeddedChunksNeedingRebuild(String currentFingerprint, int expectedDimensions) {
+        return documentChunkMapper.existsEmbeddedChunksNeedingRebuild(currentFingerprint, expectedDimensions);
+    }
+
+    /** 返回活动知识库中最近一次写入的 embedding 模型名称。 */
+    public Optional<String> findLatestEmbeddedModelInActiveKnowledgeBases() {
+        return Optional.ofNullable(documentChunkMapper.findLatestEmbeddedModelInActiveKnowledgeBases());
+    }
+
     /** 按文档和 embedding 状态读取可继续向量化的 chunk。 */
     public List<DocumentChunkEntity> findEmbeddableChunksByDocumentId(Long documentId,
                                                                       List<EmbeddingStatus> embeddingStatuses,
@@ -88,12 +104,20 @@ public class DocumentChunkRepository {
     public void updateEmbeddingState(Long chunkId,
                                      EmbeddingStatus embeddingStatus,
                                      String embeddingModel,
+                                     String embeddingProvider,
+                                     String embeddingProfileFingerprint,
+                                     Long embeddingRebuildRunId,
+                                     String embeddingUpdatedBy,
                                      String embeddingErrorMessage,
                                      OffsetDateTime embeddingUpdatedAt) {
         documentChunkMapper.updateEmbeddingState(
                 chunkId,
                 embeddingStatus.name(),
                 embeddingModel,
+                embeddingProvider,
+                embeddingProfileFingerprint,
+                embeddingRebuildRunId,
+                embeddingUpdatedBy,
                 embeddingErrorMessage,
                 embeddingUpdatedAt
         );
@@ -103,13 +127,38 @@ public class DocumentChunkRepository {
     public void updateEmbeddingVector(Long chunkId,
                                       EmbeddingStatus embeddingStatus,
                                       String embeddingModel,
+                                      String embeddingProvider,
+                                      String embeddingProfileFingerprint,
+                                      Long embeddingRebuildRunId,
+                                      String embeddingUpdatedBy,
                                       String embeddingVectorLiteral,
                                       OffsetDateTime embeddingUpdatedAt) {
         documentChunkMapper.updateEmbeddingVector(
                 chunkId,
                 embeddingStatus.name(),
                 embeddingModel,
+                embeddingProvider,
+                embeddingProfileFingerprint,
+                embeddingRebuildRunId,
+                embeddingUpdatedBy,
                 embeddingVectorLiteral,
+                embeddingUpdatedAt
+        );
+    }
+
+    /** 为全量重嵌入统一清空旧向量并标记待处理。 */
+    public void resetEmbeddingsForRebuild(String embeddingModel,
+                                          String embeddingProvider,
+                                          String embeddingProfileFingerprint,
+                                          Long embeddingRebuildRunId,
+                                          String embeddingUpdatedBy,
+                                          OffsetDateTime embeddingUpdatedAt) {
+        documentChunkMapper.resetEmbeddingsForRebuild(
+                embeddingModel,
+                embeddingProvider,
+                embeddingProfileFingerprint,
+                embeddingRebuildRunId,
+                embeddingUpdatedBy,
                 embeddingUpdatedAt
         );
     }

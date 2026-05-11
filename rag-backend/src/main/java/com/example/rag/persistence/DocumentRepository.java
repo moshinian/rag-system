@@ -90,4 +90,9 @@ public class DocumentRepository {
                 .eq(DocumentEntity::getKnowledgeBaseId, knowledgeBaseId);
         documentMapper.delete(query);
     }
+
+    /** 读取全部启用知识库下已完成索引的文档。 */
+    public List<DocumentEntity> findIndexedDocumentsInActiveKnowledgeBases() {
+        return documentMapper.selectIndexedDocumentsInActiveKnowledgeBases();
+    }
 }

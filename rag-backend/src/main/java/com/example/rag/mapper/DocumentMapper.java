@@ -5,6 +5,8 @@ import com.example.rag.persistence.entity.DocumentEntity;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.util.List;
+
 /**
  * 文档 Mapper。
  */
@@ -23,4 +25,14 @@ public interface DocumentMapper extends BaseMapper<DocumentEntity> {
             """)
     DocumentEntity selectByCodeInKnowledgeBase(@Param("documentCode") String documentCode,
                                                @Param("kbCode") String kbCode);
+
+    @Select("""
+            SELECT d.*
+            FROM document d
+            JOIN knowledge_base kb ON kb.id = d.knowledge_base_id
+            WHERE d.status = 'INDEXED'
+              AND kb.status = 'ACTIVE'
+            ORDER BY d.id ASC
+            """)
+    List<DocumentEntity> selectIndexedDocumentsInActiveKnowledgeBases();
 }

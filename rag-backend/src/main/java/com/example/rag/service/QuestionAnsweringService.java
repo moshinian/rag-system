@@ -7,7 +7,6 @@ import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.config.CacheNames;
 import com.example.rag.integration.llm.OpenAiCompatibleClient;
 import com.example.rag.model.dto.RetrievedChunkCandidate;
-import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.model.response.RetrievedChunkResponse;
@@ -38,56 +37,27 @@ public class QuestionAnsweringService {
     private final RagEmbeddingProperties ragEmbeddingProperties;
     private final RagRetrievalProperties ragRetrievalProperties;
     private final OpenAiCompatibleClient openAiCompatibleClient;
+    private final RetrievalReadinessService retrievalReadinessService;
 
     public QuestionAnsweringService(KnowledgeBaseRepository knowledgeBaseRepository,
                                     DocumentChunkRepository documentChunkRepository,
                                     RagEmbeddingProperties ragEmbeddingProperties,
                                     RagRetrievalProperties ragRetrievalProperties,
-                                    OpenAiCompatibleClient openAiCompatibleClient) {
+                                    OpenAiCompatibleClient openAiCompatibleClient,
+                                    RetrievalReadinessService retrievalReadinessService) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentChunkRepository = documentChunkRepository;
         this.ragEmbeddingProperties = ragEmbeddingProperties;
         this.ragRetrievalProperties = ragRetrievalProperties;
         this.openAiCompatibleClient = openAiCompatibleClient;
+        this.retrievalReadinessService = retrievalReadinessService;
     }
 
     /** 返回指定知识库当前是否具备进入检索和问答阶段的前置条件。 */
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = CacheNames.QA_READINESS, key = "#kbCode")
     public QuestionAnsweringReadinessResponse getReadiness(String kbCode) {
-        KnowledgeBaseEntity knowledgeBase = getKnowledgeBase(kbCode);
-
-        long indexedChunkCount = documentChunkRepository.countAvailableIndexedChunks(knowledgeBase.getId());
-        long embeddedChunkCount = documentChunkRepository.countAvailableEmbeddedChunks(knowledgeBase.getId());
-        boolean knowledgeBaseActive = knowledgeBase.getStatus() == KnowledgeBaseStatus.ACTIVE;
-
-        return new QuestionAnsweringReadinessResponse(
-                knowledgeBase.getKbCode(),
-                knowledgeBase.getStatus().name(),
-                knowledgeBaseActive && indexedChunkCount > 0 && embeddedChunkCount > 0,
-                ragEmbeddingProperties.getProvider(),
-                ragEmbeddingProperties.getModel(),
-                ragEmbeddingProperties.getVectorDimensions(),
-                ragRetrievalProperties.getVectorStore(),
-                ragRetrievalProperties.getDefaultTopK(),
-                indexedChunkCount,
-                embeddedChunkCount,
-                resolveNextStep(knowledgeBaseActive, indexedChunkCount, embeddedChunkCount)
-        );
-    }
-
-    /** 给调用方返回下一步建议，便于排查当前卡在哪个前置条件上。 */
-    private String resolveNextStep(boolean knowledgeBaseActive, long indexedChunkCount, long embeddedChunkCount) {
-        if (!knowledgeBaseActive) {
-            return "Activate the knowledge base before running retrieval.";
-        }
-        if (indexedChunkCount <= 0) {
-            return "Process at least one document into chunks before running retrieval.";
-        }
-        if (embeddedChunkCount <= 0) {
-            return "Generate embeddings for existing chunks before running retrieval.";
-        }
-        return "Retrieval prerequisites are ready.";
+        return retrievalReadinessService.getReadiness(kbCode);
     }
 
     /** 对指定知识库执行向量检索，并返回命中的 chunk 列表。 */
@@ -98,7 +68,7 @@ public class QuestionAnsweringService {
     )
     public QuestionRetrievalResponse retrieve(String kbCode, String question, Integer topK) {
         KnowledgeBaseEntity knowledgeBase = getKnowledgeBase(kbCode);
-        ensureKnowledgeBaseActive(knowledgeBase);
+        retrievalReadinessService.assertRetrievalReady(kbCode);
         String normalizedQuestion = normalizeQuestion(question);
         int resolvedTopK = resolveTopK(topK);
         log.info(StructuredLogMessage.of("qa.retrieve.started")
@@ -146,13 +116,6 @@ public class QuestionAnsweringService {
     private KnowledgeBaseEntity getKnowledgeBase(String kbCode) {
         return knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
-    }
-
-    /** 只有启用状态的知识库才允许进入问答链路。 */
-    private void ensureKnowledgeBaseActive(KnowledgeBaseEntity knowledgeBase) {
-        if (knowledgeBase.getStatus() != KnowledgeBaseStatus.ACTIVE) {
-            throw new BusinessException("Knowledge base is inactive: " + knowledgeBase.getKbCode());
-        }
     }
 
     /** 统一校验并清理问题文本。 */

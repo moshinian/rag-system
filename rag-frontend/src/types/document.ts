@@ -75,6 +75,10 @@ export type DocumentChunk = {
   status: string;
   embeddingStatus: EmbeddingStatus;
   embeddingModel?: string;
+  embeddingProvider?: string;
+  embeddingProfileFingerprint?: string;
+  embeddingRebuildRunId?: number;
+  embeddingUpdatedBy?: string;
   embeddingUpdatedAt?: string;
   createdAt: string;
   updatedAt: string;
@@ -111,11 +115,15 @@ export type Readiness = {
   questionAnsweringReady: boolean;
   embeddingProvider: string;
   embeddingModel: string;
+  activeEmbeddingModel?: string;
   embeddingVectorDimensions: number;
   vectorStore: string;
   defaultTopK: number;
   indexedChunkCount: number;
   embeddedChunkCount: number;
+  reembedRequired: boolean;
+  reembedInProgress: boolean;
+  currentRebuildRunId?: number;
   nextStep: string;
 };
 

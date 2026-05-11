@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  App,
   Button,
   Card,
   Col,
@@ -14,7 +15,13 @@ import {
 } from "antd";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createKnowledgeBase, deleteKnowledgeBase, listKnowledgeBases } from "../../api/knowledge-base";
+import {
+  createKnowledgeBase,
+  deleteKnowledgeBase,
+  disableKnowledgeBase,
+  enableKnowledgeBase,
+  listKnowledgeBases
+} from "../../api/knowledge-base";
 import { useAppStore } from "../../app/store";
 import { ApiErrorAlert } from "../../components/feedback/api-error-alert";
 import { StatusBadge } from "../../components/status/status-badge";
@@ -22,6 +29,7 @@ import type { CreateKnowledgeBasePayload } from "../../types/knowledge-base";
 import { formatDateTime, truncateText } from "../../utils/format";
 
 export function KnowledgeBasesPage() {
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const currentKbCode = useAppStore((state) => state.currentKbCode);
@@ -56,6 +64,34 @@ export function KnowledgeBasesPage() {
         setCurrentKbCode(undefined);
         navigate("/knowledge-bases");
       }
+    }
+  });
+
+  const disableMutation = useMutation({
+    mutationFn: disableKnowledgeBase,
+    onSuccess: (_, kbCode) => {
+      queryClient.invalidateQueries({ queryKey: ["knowledgeBases"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledgeBase", kbCode] });
+      queryClient.invalidateQueries({ queryKey: ["readiness", kbCode] });
+      message.success("知识库已禁用，问答和检索入口会被就绪门禁阻断。");
+    }
+  });
+
+  const enableMutation = useMutation({
+    mutationFn: ({ kbCode, retryFailedIndexingTasks }: { kbCode: string; retryFailedIndexingTasks: boolean }) =>
+      enableKnowledgeBase(kbCode, {
+        retryFailedIndexingTasks,
+        operator: "frontend-dashboard"
+      }),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ["knowledgeBases"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledgeBase", response.kbCode] });
+      queryClient.invalidateQueries({ queryKey: ["readiness", response.kbCode] });
+      queryClient.invalidateQueries({ queryKey: ["documents", response.kbCode] });
+      const detail = response.retryFailedIndexingTasks
+        ? `并提交 ${response.retriedFailedTaskCount} 个失败索引任务重试`
+        : "当前未触发历史失败任务重试";
+      message.success(`知识库已恢复使用，${detail}。`);
     }
   });
 
@@ -120,6 +156,57 @@ export function KnowledgeBasesPage() {
                   <Button type="link">
                     <Link to={`/kb/${record.kbCode}`}>进入工作台</Link>
                   </Button>
+                  {record.status === "ACTIVE" ? (
+                    <Popconfirm
+                      title="禁用知识库"
+                      description="禁用后检索和问答会被阻断，但不会删除数据。"
+                      okText="确认禁用"
+                      cancelText="取消"
+                      onConfirm={() => disableMutation.mutate(record.kbCode)}
+                    >
+                      <Button
+                        type="link"
+                        loading={disableMutation.isPending && disableMutation.variables === record.kbCode}
+                      >
+                        禁用
+                      </Button>
+                    </Popconfirm>
+                  ) : (
+                    <>
+                      <Button
+                        type="link"
+                        loading={
+                          enableMutation.isPending &&
+                          enableMutation.variables?.kbCode === record.kbCode &&
+                          !enableMutation.variables?.retryFailedIndexingTasks
+                        }
+                        onClick={() =>
+                          enableMutation.mutate({
+                            kbCode: record.kbCode,
+                            retryFailedIndexingTasks: false
+                          })
+                        }
+                      >
+                        恢复使用
+                      </Button>
+                      <Button
+                        type="link"
+                        loading={
+                          enableMutation.isPending &&
+                          enableMutation.variables?.kbCode === record.kbCode &&
+                          !!enableMutation.variables?.retryFailedIndexingTasks
+                        }
+                        onClick={() =>
+                          enableMutation.mutate({
+                            kbCode: record.kbCode,
+                            retryFailedIndexingTasks: true
+                          })
+                        }
+                      >
+                        恢复并重试失败任务
+                      </Button>
+                    </>
+                  )}
                   <Popconfirm
                     title="删除知识库"
                     description="将同时删除文档、切块、索引任务、问答历史和本地上传物料，且不可恢复。"

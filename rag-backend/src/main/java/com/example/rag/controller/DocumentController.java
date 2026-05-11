@@ -127,7 +127,7 @@ public class DocumentController {
         return ApiResponse.success(response, requestId);
     }
 
-    /** 对已切块文档执行本地 embedding，并把向量写入 pgvector。 */
+    /** 对已切块文档执行当前配置的 embedding，并把向量写入 pgvector。 */
     @PostMapping("/{documentCode}/embed")
     public ApiResponse<DocumentEmbeddingResponse> embed(@PathVariable String kbCode,
                                                         @PathVariable String documentCode,

@@ -1,4 +1,5 @@
 target/
+update/
 .idea/
 .vscode/
 .codex

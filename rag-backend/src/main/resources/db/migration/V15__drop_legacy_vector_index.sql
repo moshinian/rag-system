@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_document_chunk_embedding_vector_cosine;

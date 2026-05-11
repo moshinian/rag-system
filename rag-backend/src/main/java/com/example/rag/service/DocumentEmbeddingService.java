@@ -37,6 +37,7 @@ public class DocumentEmbeddingService {
 
     private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
     private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
+    private static final int DASHSCOPE_MAX_BATCH_SIZE = 10;
     private static final Logger log = LoggerFactory.getLogger(DocumentEmbeddingService.class);
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
@@ -45,19 +46,22 @@ public class DocumentEmbeddingService {
     private final IndexingTaskRepository indexingTaskRepository;
     private final RagEmbeddingProperties ragEmbeddingProperties;
     private final OpenAiCompatibleClient openAiCompatibleClient;
+    private final EmbeddingConfigurationStateService embeddingConfigurationStateService;
 
     public DocumentEmbeddingService(KnowledgeBaseRepository knowledgeBaseRepository,
                                     DocumentRepository documentRepository,
                                     DocumentChunkRepository documentChunkRepository,
                                     IndexingTaskRepository indexingTaskRepository,
                                     RagEmbeddingProperties ragEmbeddingProperties,
-                                    OpenAiCompatibleClient openAiCompatibleClient) {
+                                    OpenAiCompatibleClient openAiCompatibleClient,
+                                    EmbeddingConfigurationStateService embeddingConfigurationStateService) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentRepository = documentRepository;
         this.documentChunkRepository = documentChunkRepository;
         this.indexingTaskRepository = indexingTaskRepository;
         this.ragEmbeddingProperties = ragEmbeddingProperties;
         this.openAiCompatibleClient = openAiCompatibleClient;
+        this.embeddingConfigurationStateService = embeddingConfigurationStateService;
     }
 
     /** 对指定文档的 chunk 执行向量化并写入 pgvector。 */
@@ -68,15 +72,22 @@ public class DocumentEmbeddingService {
             @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
     })
     public DocumentEmbeddingResponse embed(String kbCode, String documentCode) {
-        return embedInternal(kbCode, documentCode, false);
+        return embedInternal(kbCode, documentCode, false, buildContext("system", null));
     }
 
     /** 异步索引链路内部调用时允许复用 embed 逻辑，但要绕过“活动索引任务”自校验。 */
     DocumentEmbeddingResponse embedForIndexing(String kbCode, String documentCode) {
-        return embedInternal(kbCode, documentCode, true);
+        return embedInternal(kbCode, documentCode, true, buildContext("system", null));
     }
 
-    private DocumentEmbeddingResponse embedInternal(String kbCode, String documentCode, boolean allowDuringActiveIndexing) {
+    DocumentEmbeddingResponse embedForRebuild(String kbCode, String documentCode, String operator, Long rebuildRunId) {
+        return embedInternal(kbCode, documentCode, true, buildContext(operator, rebuildRunId));
+    }
+
+    private DocumentEmbeddingResponse embedInternal(String kbCode,
+                                                    String documentCode,
+                                                    boolean allowDuringActiveIndexing,
+                                                    EmbeddingWriteContext context) {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
         ensureKnowledgeBaseActive(knowledgeBase);
@@ -124,6 +135,10 @@ public class DocumentEmbeddingService {
                         chunk.getId(),
                         EmbeddingStatus.EMBEDDING,
                         ragEmbeddingProperties.getModel(),
+                        context.embeddingProvider(),
+                        context.embeddingProfileFingerprint(),
+                        context.embeddingRebuildRunId(),
+                        context.embeddingUpdatedBy(),
                         null,
                         startedAt
                 );
@@ -140,6 +155,7 @@ public class DocumentEmbeddingService {
                 if (embeddings.size() != chunks.size()) {
                     throw new BusinessException("Embedding result size does not match chunk count");
                 }
+                validateEmbeddingDimensions(embeddings);
 
                 OffsetDateTime updatedAt = OffsetDateTime.now();
                 // 接口返回顺序和输入顺序一一对应，逐条回写到原始 chunk 即可。
@@ -150,6 +166,10 @@ public class DocumentEmbeddingService {
                             chunk.getId(),
                             EmbeddingStatus.EMBEDDED,
                             ragEmbeddingProperties.getModel(),
+                            context.embeddingProvider(),
+                            context.embeddingProfileFingerprint(),
+                            context.embeddingRebuildRunId(),
+                            context.embeddingUpdatedBy(),
                             vectorLiteral,
                             updatedAt
                     );
@@ -169,6 +189,10 @@ public class DocumentEmbeddingService {
                             chunk.getId(),
                             EmbeddingStatus.FAILED,
                             ragEmbeddingProperties.getModel(),
+                            context.embeddingProvider(),
+                            context.embeddingProfileFingerprint(),
+                            context.embeddingRebuildRunId(),
+                            context.embeddingUpdatedBy(),
                             errorMessage,
                             failedAt
                     );
@@ -219,10 +243,24 @@ public class DocumentEmbeddingService {
 
     /** 对批大小做兜底，避免缺配置或非法配置导致整条链路不可用。 */
     private int normalizeBatchSize(Integer batchSize) {
-        if (batchSize == null || batchSize < 1) {
-            return 16;
+        int normalized = (batchSize == null || batchSize < 1) ? 10 : batchSize;
+        if (usesDashScopeCompatibleEmbeddings()) {
+            return Math.min(normalized, DASHSCOPE_MAX_BATCH_SIZE);
         }
-        return batchSize;
+        return normalized;
+    }
+
+    private void validateEmbeddingDimensions(List<List<Double>> embeddings) {
+        int expectedDimensions = ragEmbeddingProperties.getVectorDimensions() == null ? 0 : ragEmbeddingProperties.getVectorDimensions();
+        if (expectedDimensions <= 0) {
+            throw new BusinessException("Embedding vectorDimensions must be > 0");
+        }
+        for (List<Double> embedding : embeddings) {
+            if (embedding == null || embedding.size() != expectedDimensions) {
+                throw new BusinessException("Embedding vector dimensions do not match configured vectorDimensions: expected "
+                        + expectedDimensions + ", actual " + (embedding == null ? 0 : embedding.size()));
+            }
+        }
     }
 
     /** 把 embedding 结果转换成 pgvector 可写入的文本字面量。 */
@@ -245,5 +283,29 @@ public class DocumentEmbeddingService {
             return message;
         }
         return message.substring(0, ERROR_MESSAGE_MAX_LENGTH);
+    }
+
+    private EmbeddingWriteContext buildContext(String operator, Long rebuildRunId) {
+        return new EmbeddingWriteContext(
+                ragEmbeddingProperties.getProvider(),
+                embeddingConfigurationStateService.getRequiredState().getCurrentConfigFingerprint(),
+                rebuildRunId,
+                operator == null || operator.isBlank() ? "system" : operator.trim()
+        );
+    }
+
+    private boolean usesDashScopeCompatibleEmbeddings() {
+        String provider = ragEmbeddingProperties.getProvider();
+        if (provider != null && provider.toLowerCase(Locale.ROOT).contains("aliyun")) {
+            return true;
+        }
+        String baseUrl = ragEmbeddingProperties.getBaseUrl();
+        return baseUrl != null && baseUrl.contains("dashscope.aliyuncs.com");
+    }
+
+    private record EmbeddingWriteContext(String embeddingProvider,
+                                         String embeddingProfileFingerprint,
+                                         Long embeddingRebuildRunId,
+                                         String embeddingUpdatedBy) {
     }
 }

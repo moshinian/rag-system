@@ -86,6 +86,14 @@ public class IndexingTaskRepository {
         return indexingTaskMapper.selectCount(query) > 0;
     }
 
+    /** 判断系统内是否存在未结束的同类型任务。 */
+    public boolean existsAnyActiveTask(String taskType) {
+        LambdaQueryWrapper<IndexingTaskEntity> query = new LambdaQueryWrapper<IndexingTaskEntity>()
+                .eq(IndexingTaskEntity::getTaskType, taskType)
+                .in(IndexingTaskEntity::getStatus, List.of(IndexingTaskStatus.QUEUED, IndexingTaskStatus.RUNNING));
+        return indexingTaskMapper.selectCount(query) > 0;
+    }
+
     /** 读取可恢复的卡住任务。 */
     public List<IndexingTaskEntity> findRecoverableTasks(String taskType, OffsetDateTime cutoff, int limit) {
         LambdaQueryWrapper<IndexingTaskEntity> query = new LambdaQueryWrapper<IndexingTaskEntity>()

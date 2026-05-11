@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Col, Descriptions, Progress, Row, Space, Typography } from "antd";
+import { Alert, Button, Card, Col, Descriptions, Progress, Row, Space, Tag, Typography } from "antd";
 import { Link } from "react-router-dom";
 import type { Readiness } from "../../types/document";
 
@@ -31,6 +31,13 @@ export function ReadinessCard({ kbCode, readiness }: ReadinessCardProps) {
           message={readiness.questionAnsweringReady ? "知识库已可问答" : "知识库尚未就绪"}
           description={readiness.nextStep}
         />
+        <Space wrap>
+          <Tag color={readiness.questionAnsweringReady ? "green" : "gold"}>
+            {readiness.questionAnsweringReady ? "问答可用" : "问答阻断中"}
+          </Tag>
+          {readiness.reembedRequired ? <Tag color="red">待重新嵌入</Tag> : null}
+          {readiness.reembedInProgress ? <Tag color="blue">重新嵌入进行中</Tag> : null}
+        </Space>
         <Row gutter={[16, 16]}>
           <Col xs={24} lg={14}>
             <Descriptions column={1} size="small">
@@ -40,8 +47,14 @@ export function ReadinessCard({ kbCode, readiness }: ReadinessCardProps) {
               <Descriptions.Item label="Embedding Model">
                 {readiness.embeddingModel}
               </Descriptions.Item>
+              <Descriptions.Item label="Active Model">
+                {readiness.activeEmbeddingModel ?? "-"}
+              </Descriptions.Item>
               <Descriptions.Item label="Vector Store">
                 {readiness.vectorStore}
+              </Descriptions.Item>
+              <Descriptions.Item label="Rebuild Run">
+                {readiness.currentRebuildRunId ?? "-"}
               </Descriptions.Item>
               <Descriptions.Item label="默认 TopK">
                 {readiness.defaultTopK}
