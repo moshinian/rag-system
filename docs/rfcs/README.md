@@ -8,7 +8,7 @@
 
 1. `rag-backend/work/` 里的日记式推进记录。
 2. `README.md` 里的项目总览。
-3. `CHANGELOG-*.md` 里的发布/变更摘要。
+3. `rag-backend/work/` 和 `rag-frontend/work/` 里的阶段性推进记录。
 
 这里的 RFC 负责把“分散在周记、日记、提交记录和代码里的长期决策”整理成可持续维护的单点文档。
 
@@ -64,7 +64,7 @@
 
 ## Candidate Backlog
 
-结合当前仓库里的 `README.md`、`CHANGELOG-20260509.md`、`rag-backend/work/` 下周记/日记、前端计划和最近提交记录，下一批最值得进入 RFC 的主题有这些：
+结合当前仓库里的 `README.md`、`rag-backend/work/` 下周记/日记、前端计划和最近提交记录，下一批最值得进入 RFC 的主题有这些：
 
 ### RFC-0009 Evaluation Dataset And Acceptance Baseline
 
@@ -81,20 +81,18 @@
 当前 RFC 目录最主要的历史来源如下：
 
 1. [README.md](../../README.md)
-2. [CHANGELOG-20260509.md](../../CHANGELOG-20260509.md)
-3. [current-status.md](../../rag-backend/work/current-status.md)
-4. [week1.md](../../rag-backend/work/week1.md)
-5. [week2.md](../../rag-backend/work/week2.md)
-6. [week3.md](../../rag-backend/work/week3.md)
-7. [update1.md](../../update/update1.md)
-8. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
+2. [current-status.md](../../rag-backend/work/current-status.md)
+3. [week1.md](../../rag-backend/work/week1.md)
+4. [week2.md](../../rag-backend/work/week2.md)
+5. [week3.md](../../rag-backend/work/week3.md)
+6. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
 
 这些文档的作用不同：
 
 1. `README.md` 提供当前项目口径和边界。
-2. `CHANGELOG-20260509.md` 提供仓库结构调整和前端接入背景。
-3. `week*.md` 与 `work day*.md` 提供迭代顺序和决策上下文。
-4. `update/update1.md` 提供当前 embedding profile / readiness / rebuild 设计的直接依据。
+2. `current-status.md` 与 `week*.md`、`work day*.md` 提供迭代顺序和决策上下文。
+3. `frontend plan.md` 提供用户前端接入、运维入口和页面约束。
+4. `README.md` 已吸收近期关于 embedding rebuild、知识库恢复和前端构建优化的阶段总结。
 
 ## Maintenance Notes
 
@@ -103,4 +101,4 @@
 1. 不把 RFC 写成逐日流水账，历史脉络可以保留，但结论必须先行。
 2. 不把“计划”写成“已实现”，尤其是 rerank、混合检索、多轮对话这类主题。
 3. 代码实现已经发生变化时，优先更新现有 RFC，而不是先追加一篇重复 RFC。
-4. 如果新的变更只是修 bug，而没有改变长期行为，优先写进 changelog，不必强行升格为 RFC。
+4. 如果新的变更只是修 bug，而没有改变长期行为，优先写进 README 或周记/日记，不必强行升格为 RFC。

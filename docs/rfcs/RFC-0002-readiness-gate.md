@@ -44,7 +44,7 @@
 
 ### Phase 2: 检索链路扩大后，readiness 需要与真实行为一致
 
-- 参考资料：`update/update1.md`
+- 参考资料：`README.md` 最近补充、`week3.md`、`current-status.md`
 - 特征：随着 embedding profile、异步重建和取消重建等状态引入，readiness 不能只展示“看起来如何”，必须直接决定“能不能检索”。
 
 ### Phase 3: readiness 接入缓存与前端卡片
@@ -130,9 +130,8 @@ readiness gate 还有一个常被低估的价值：它已经成为前后端共�
 
 ## References
 
-1. [update1.md](../../update/update1.md)
-2. [README.md](../../README.md)
-3. [week3.md](../../rag-backend/work/week3.md)
-4. [current-status.md](../../rag-backend/work/current-status.md)
-5. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
-6. Commit `bab81c2` `Add Redis business caching and close week 3`
+1. [README.md](../../README.md)
+2. [week3.md](../../rag-backend/work/week3.md)
+3. [current-status.md](../../rag-backend/work/current-status.md)
+4. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
+5. Commit `bab81c2` `Add Redis business caching and close week 3`

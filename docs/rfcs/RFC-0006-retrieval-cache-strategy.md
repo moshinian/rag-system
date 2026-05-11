@@ -173,7 +173,7 @@ Week 3 之前，Redis 在项目里更多承担连通性验证和健康探针作�
 1. [README.md](../../README.md)
 2. [week3.md](../../rag-backend/work/week3.md)
 3. [current-status.md](../../rag-backend/work/current-status.md)
-4. [CHANGELOG-20260509.md](../../CHANGELOG-20260509.md)
+4. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
 5. Commit `bab81c2` `Add Redis business caching and close week 3`
 6. Commit `3d9cf4d` `Close week 3 review and fix Redis cache config`
 7. Commit `764df97` `Fix indexing state consistency and cache regressions`

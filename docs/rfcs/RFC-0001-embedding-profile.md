@@ -60,7 +60,7 @@
 
 ### Phase 3: 切换到远端兼容接口，profile 升级为系统级状态
 
-- 参考设计：`update/update1.md`
+- 参考材料：`README.md` 最近补充、`week2.md`、`current-status.md`
 - 特征：模型切换到 `text-embedding-v4`，维度升到 `1024`，旧数据不再能默认视为安全。
 
 ### Phase 4: 引入 profile 状态识别与重建编排
@@ -129,10 +129,9 @@
 ## References
 
 1. [README.md](../../README.md)
-2. [update1.md](../../update/update1.md)
-3. [week2.md](../../rag-backend/work/week2.md)
-4. [current-status.md](../../rag-backend/work/current-status.md)
-5. [work day9.md](../../rag-backend/work/work%20day9.md)
-6. [work day10.md](../../rag-backend/work/work%20day10.md)
-7. Commit `5185f87` `Add local embedding pipeline and day 9 docs`
-8. Commit `29507a6` `implement day10 retrieval and prepare day11`
+2. [week2.md](../../rag-backend/work/week2.md)
+3. [current-status.md](../../rag-backend/work/current-status.md)
+4. [work day9.md](../../rag-backend/work/work%20day9.md)
+5. [work day10.md](../../rag-backend/work/work%20day10.md)
+6. Commit `5185f87` `Add local embedding pipeline and day 9 docs`
+7. Commit `29507a6` `implement day10 retrieval and prepare day11`
