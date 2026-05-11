@@ -5,13 +5,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 健康检查返回对象。
+ * 系统健康检查返回对象。
  */
 public record HealthStatusResponse(
         String status,
         String serviceName,
         List<String> activeProfiles,
-        Map<String, String> components,
+        Map<String, HealthComponentStatusResponse> components,
         Instant checkedAt
 ) {
 }

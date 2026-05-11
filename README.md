@@ -44,6 +44,7 @@
 20. 前端知识库工作台已补入恢复、重嵌入和返回知识库列表入口
 21. 文档级软禁用/恢复，禁用后历史 chunk 与向量保留但不再参与检索口径
 22. Redis 坏缓存读失败自愈，以及异步索引提交阶段的孤儿 `QUEUED` 任务兜底
+23. 系统健康页已覆盖 PostgreSQL、Redis、embedding 接口和 LLM 接口的可用性检查
 
 ### 已完成验证
 
@@ -254,6 +255,17 @@ rag-system/
 2. `react-vendor / router / query / antd / antd-icons / vendor` 拆包
 
 当前生产构建已不再出现最初的单一超大入口包问题。
+
+### 系统健康观测
+
+当前 `GET /api/health` 已返回结构化组件健康信息，不再只包含基础依赖存活状态：
+
+1. `postgres`：执行 `SELECT 1` 验证数据库可用性
+2. `redis`：执行 `PING` 验证 Redis 连通性
+3. `embedding`：对当前配置的 embedding 接口发起最小真实请求，验证向量能力可用
+4. `llm`：对当前配置的 chat completion 接口发起最小真实请求，验证回答能力可用
+
+前端 `/health` 页面会展示各组件的状态、endpoint、provider/model、耗时和错误信息；`/api/health/redis-probe` 仍保留最小读写探针，用于确认 Redis 不只是能连通，也能正常读写。
 
 ## 运行方式
 

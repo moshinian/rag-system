@@ -1,5 +1,9 @@
 package com.example.rag.service;
 
+import com.example.rag.config.RagEmbeddingProperties;
+import com.example.rag.config.RagLlmProperties;
+import com.example.rag.integration.llm.OpenAiCompatibleClient;
+import com.example.rag.model.response.HealthComponentStatusResponse;
 import com.example.rag.model.response.HealthStatusResponse;
 import com.example.rag.model.response.RedisProbeResponse;
 import org.springframework.dao.DataAccessException;
@@ -22,27 +26,42 @@ import java.util.Map;
 @Service
 public class SystemHealthService {
 
+    private static final int LLM_HEALTH_PROBE_MAX_TOKENS = 16;
+
     private final Environment environment;
     private final JdbcTemplate jdbcTemplate;
     private final StringRedisTemplate stringRedisTemplate;
+    private final RagEmbeddingProperties ragEmbeddingProperties;
+    private final RagLlmProperties ragLlmProperties;
+    private final OpenAiCompatibleClient openAiCompatibleClient;
 
     public SystemHealthService(Environment environment,
                                JdbcTemplate jdbcTemplate,
-                               StringRedisTemplate stringRedisTemplate) {
+                               StringRedisTemplate stringRedisTemplate,
+                               RagEmbeddingProperties ragEmbeddingProperties,
+                               RagLlmProperties ragLlmProperties,
+                               OpenAiCompatibleClient openAiCompatibleClient) {
         this.environment = environment;
         this.jdbcTemplate = jdbcTemplate;
         this.stringRedisTemplate = stringRedisTemplate;
+        this.ragEmbeddingProperties = ragEmbeddingProperties;
+        this.ragLlmProperties = ragLlmProperties;
+        this.openAiCompatibleClient = openAiCompatibleClient;
     }
 
     /** 返回服务当前状态及关键依赖组件状态。 */
     public HealthStatusResponse currentStatus() {
         List<String> activeProfiles = Arrays.asList(environment.getActiveProfiles());
-        Map<String, String> components = new LinkedHashMap<>();
+        Map<String, HealthComponentStatusResponse> components = new LinkedHashMap<>();
 
         components.put("postgres", databaseStatus());
         components.put("redis", redisStatus());
+        components.put("embedding", embeddingStatus());
+        components.put("llm", llmStatus());
 
-        String overallStatus = components.containsValue("DOWN") ? "DEGRADED" : "UP";
+        boolean hasDownComponent = components.values().stream()
+                .anyMatch(component -> "DOWN".equals(component.status()));
+        String overallStatus = hasDownComponent ? "DEGRADED" : "UP";
         return new HealthStatusResponse("UP".equals(overallStatus) ? "UP" : "DEGRADED",
                 "rag-service",
                 activeProfiles,
@@ -60,22 +79,173 @@ public class SystemHealthService {
     }
 
     /** 检查数据库连通状态。 */
-    private String databaseStatus() {
+    private HealthComponentStatusResponse databaseStatus() {
+        long startedAt = System.nanoTime();
         try {
             Integer result = jdbcTemplate.queryForObject("SELECT 1", Integer.class);
-            return Integer.valueOf(1).equals(result) ? "UP" : "DOWN";
+            boolean healthy = Integer.valueOf(1).equals(result);
+            return new HealthComponentStatusResponse(
+                    healthy ? "UP" : "DOWN",
+                    "infrastructure",
+                    "jdbc:postgresql",
+                    null,
+                    null,
+                    elapsedMillis(startedAt),
+                    healthy ? "SELECT 1 succeeded" : "SELECT 1 returned unexpected value",
+                    healthy ? null : "Unexpected database probe result",
+                    Instant.now()
+            );
         } catch (DataAccessException exception) {
-            return "DOWN";
+            return new HealthComponentStatusResponse(
+                    "DOWN",
+                    "infrastructure",
+                    "jdbc:postgresql",
+                    null,
+                    null,
+                    elapsedMillis(startedAt),
+                    "SELECT 1 failed",
+                    exception.getMessage(),
+                    Instant.now()
+            );
         }
     }
 
     /** 检查 Redis 连通状态。 */
-    private String redisStatus() {
+    private HealthComponentStatusResponse redisStatus() {
+        long startedAt = System.nanoTime();
         try {
             String pong = stringRedisTemplate.execute((RedisConnection connection) -> connection.ping());
-            return "PONG".equalsIgnoreCase(pong) ? "UP" : "DOWN";
+            boolean healthy = "PONG".equalsIgnoreCase(pong);
+            return new HealthComponentStatusResponse(
+                    healthy ? "UP" : "DOWN",
+                    "infrastructure",
+                    "redis://ping",
+                    null,
+                    null,
+                    elapsedMillis(startedAt),
+                    healthy ? "PING/PONG succeeded" : "PING returned unexpected value: " + pong,
+                    healthy ? null : "Unexpected Redis ping result",
+                    Instant.now()
+            );
         } catch (Exception exception) {
-            return "DOWN";
+            return new HealthComponentStatusResponse(
+                    "DOWN",
+                    "infrastructure",
+                    "redis://ping",
+                    null,
+                    null,
+                    elapsedMillis(startedAt),
+                    "Redis ping failed",
+                    exception.getMessage(),
+                    Instant.now()
+            );
         }
+    }
+
+    /** 检查 embedding 接口是否可返回真实向量。 */
+    private HealthComponentStatusResponse embeddingStatus() {
+        long startedAt = System.nanoTime();
+        try {
+            openAiCompatibleClient.createEmbedding(
+                    ragEmbeddingProperties.getBaseUrl(),
+                    ragEmbeddingProperties.getApiKey(),
+                    ragEmbeddingProperties.getEmbeddingPath(),
+                    ragEmbeddingProperties.getModel(),
+                    "health check"
+            );
+            return new HealthComponentStatusResponse(
+                    "UP",
+                    "ai-capability",
+                    joinUrl(ragEmbeddingProperties.getBaseUrl(), ragEmbeddingProperties.getEmbeddingPath()),
+                    ragEmbeddingProperties.getProvider(),
+                    ragEmbeddingProperties.getModel(),
+                    elapsedMillis(startedAt),
+                    "Embedding request returned a vector",
+                    null,
+                    Instant.now()
+            );
+        } catch (Exception exception) {
+            return new HealthComponentStatusResponse(
+                    "DOWN",
+                    "ai-capability",
+                    joinUrl(ragEmbeddingProperties.getBaseUrl(), ragEmbeddingProperties.getEmbeddingPath()),
+                    ragEmbeddingProperties.getProvider(),
+                    ragEmbeddingProperties.getModel(),
+                    elapsedMillis(startedAt),
+                    "Embedding request failed",
+                    exception.getMessage(),
+                    Instant.now()
+            );
+        }
+    }
+
+    /** 检查 chat completion 接口是否可返回最小回答。 */
+    private HealthComponentStatusResponse llmStatus() {
+        long startedAt = System.nanoTime();
+        RagLlmProperties.ChatProperties chat = ragLlmProperties.getChat();
+        try {
+            openAiCompatibleClient.probeChatCompletion(
+                    chat.getBaseUrl(),
+                    chat.getApiKey(),
+                    chat.getChatPath(),
+                    chat.getModel(),
+                    chat.getTemperature(),
+                    resolveLlmProbeMaxTokens(chat.getMaxOutputTokens()),
+                    "You are a health check endpoint. Return a very short reply.",
+                    "ping"
+            );
+            return new HealthComponentStatusResponse(
+                    "UP",
+                    "ai-capability",
+                    joinUrl(chat.getBaseUrl(), chat.getChatPath()),
+                    "openai-compatible-chat",
+                    chat.getModel(),
+                    elapsedMillis(startedAt),
+                    "Chat completion request returned a response",
+                    null,
+                    Instant.now()
+            );
+        } catch (Exception exception) {
+            return new HealthComponentStatusResponse(
+                    "DOWN",
+                    "ai-capability",
+                    joinUrl(chat.getBaseUrl(), chat.getChatPath()),
+                    "openai-compatible-chat",
+                    chat.getModel(),
+                    elapsedMillis(startedAt),
+                    "Chat completion request failed",
+                    exception.getMessage(),
+                    Instant.now()
+            );
+        }
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return Math.max(1L, (System.nanoTime() - startedAt) / 1_000_000L);
+    }
+
+    private int resolveLlmProbeMaxTokens(Integer configuredMaxOutputTokens) {
+        if (configuredMaxOutputTokens == null || configuredMaxOutputTokens < 1) {
+            return LLM_HEALTH_PROBE_MAX_TOKENS;
+        }
+        return Math.min(configuredMaxOutputTokens, LLM_HEALTH_PROBE_MAX_TOKENS);
+    }
+
+    private String joinUrl(String baseUrl, String path) {
+        String normalizedBaseUrl = baseUrl == null ? "" : baseUrl.trim();
+        String normalizedPath = path == null ? "" : path.trim();
+        if (normalizedBaseUrl.isEmpty()) {
+            return normalizedPath;
+        }
+        if (normalizedPath.isEmpty()) {
+            return normalizedBaseUrl;
+        }
+        if (normalizedBaseUrl.endsWith("/") && normalizedPath.startsWith("/")) {
+            return normalizedBaseUrl.substring(0, normalizedBaseUrl.length() - 1) + normalizedPath;
+        }
+        if (!normalizedBaseUrl.endsWith("/") && !normalizedPath.startsWith("/")) {
+            return normalizedBaseUrl + "/" + normalizedPath;
+        }
+        return normalizedBaseUrl + normalizedPath;
     }
 }

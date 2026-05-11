@@ -122,6 +122,44 @@ public class OpenAiCompatibleClient {
         }
     }
 
+    /** 调用 chat completion 接口做健康探针，只要求返回合法 completion 响应。 */
+    public void probeChatCompletion(String baseUrl,
+                                    String apiKey,
+                                    String path,
+                                    String model,
+                                    Double temperature,
+                                    Integer maxOutputTokens,
+                                    String systemPrompt,
+                                    String userPrompt) {
+        validateModel(model);
+        try {
+            ChatCompletionResponse response = postJson(
+                    normalizeUrl(baseUrl, path),
+                    apiKey,
+                    new ChatCompletionRequest(
+                            model,
+                            List.of(
+                                    new ChatMessage("system", systemPrompt),
+                                    new ChatMessage("user", userPrompt)
+                            ),
+                            temperature,
+                            maxOutputTokens
+                    ),
+                    ChatCompletionResponse.class
+            );
+            if (response == null || response.choices() == null || response.choices().isEmpty()) {
+                throw new BusinessException("Chat completion response is empty");
+            }
+        } catch (IOException ex) {
+            log.warn(StructuredLogMessage.of("llm.chat.probe.failed")
+                    .field("url", normalizeUrl(baseUrl, path))
+                    .field("model", model)
+                    .field("message", ex.getMessage())
+                    .build());
+            throw new BusinessException("Failed to probe chat model: " + ex.getMessage());
+        }
+    }
+
     /** 发送 JSON POST 请求，并把响应反序列化成指定类型。 */
     private <T> T postJson(String url,
                            String apiKey,
