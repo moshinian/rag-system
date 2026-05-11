@@ -10,6 +10,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.lang.NonNull;
 
 import java.util.List;
 
@@ -126,7 +127,7 @@ class SystemHealthServiceTest {
 
         @Override
         @SuppressWarnings("unchecked")
-        public <T> T execute(RedisCallback<T> action) {
+        public <T> T execute(@NonNull RedisCallback<T> action) {
             return (T) "PONG";
         }
     }
