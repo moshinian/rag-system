@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * 文档异步索引服务。
@@ -39,6 +40,8 @@ import java.util.concurrent.RejectedExecutionException;
 public class DocumentIndexingService {
 
     private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
+    private static final int TASK_LOOKUP_MAX_ATTEMPTS = 5;
+    private static final long TASK_LOOKUP_RETRY_NANOS = 50_000_000L;
     private static final Logger log = LoggerFactory.getLogger(DocumentIndexingService.class);
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
@@ -290,17 +293,17 @@ public class DocumentIndexingService {
 
     /** 在线程池中执行实际索引流程，并持续更新任务状态。 */
     private void runAsync(Long taskId) {
-        IndexingTaskEntity task = indexingTaskRepository.findById(taskId)
-                .orElseThrow(() -> new BusinessException("Indexing task not found: " + taskId));
-        DocumentEntity document = documentRepository.findById(task.getDocumentId())
-                .orElseThrow(() -> new BusinessException("Document not found for indexing task: " + taskId));
-        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findById(task.getKnowledgeBaseId())
-                .orElseThrow(() -> new BusinessException("Knowledge base not found for indexing task: " + taskId));
-        String operator = task.getCreatedBy();
-        MDC.put("taskId", String.valueOf(task.getId()));
-        MDC.put("kbCode", knowledgeBase.getKbCode());
-        MDC.put("documentCode", document.getDocumentCode());
+        IndexingTaskEntity task = waitForTaskRecord(taskId)
+                .orElseThrow(() -> new BusinessException("Indexing task not found after dispatch: " + taskId));
         try {
+            DocumentEntity document = documentRepository.findById(task.getDocumentId())
+                    .orElseThrow(() -> new BusinessException("Document not found for indexing task: " + taskId));
+            KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findById(task.getKnowledgeBaseId())
+                    .orElseThrow(() -> new BusinessException("Knowledge base not found for indexing task: " + taskId));
+            String operator = task.getCreatedBy();
+            MDC.put("taskId", String.valueOf(task.getId()));
+            MDC.put("kbCode", knowledgeBase.getKbCode());
+            MDC.put("documentCode", document.getDocumentCode());
             log.info(StructuredLogMessage.of("indexing.task.started")
                     .field("taskId", task.getId())
                     .field("kbCode", knowledgeBase.getKbCode())
@@ -348,8 +351,6 @@ public class DocumentIndexingService {
             markParentAfterChildFailure(task, ex.getMessage());
             log.warn(StructuredLogMessage.of("indexing.task.failed")
                     .field("taskId", task.getId())
-                    .field("kbCode", knowledgeBase.getKbCode())
-                    .field("documentCode", document.getDocumentCode())
                     .field("taskStage", task.getTaskStage())
                     .field("message", ex.getMessage())
                     .build());
@@ -454,7 +455,17 @@ public class DocumentIndexingService {
     /** 把任务投递到异步执行器。 */
     private void dispatch(Long taskId) {
         try {
-            indexingExecutor.execute(() -> runAsync(taskId));
+            indexingExecutor.execute(() -> {
+                try {
+                    runAsync(taskId);
+                } catch (RuntimeException ex) {
+                    log.warn(StructuredLogMessage.of("indexing.task.dispatch_failed")
+                            .field("taskId", taskId)
+                            .field("message", ex.getMessage())
+                            .build());
+                    markTaskFailedAfterDispatch(taskId, ex);
+                }
+            });
         } catch (RejectedExecutionException ex) {
             IndexingTaskEntity task = indexingTaskRepository.findById(taskId)
                     .orElseThrow(() -> new BusinessException("Indexing task not found: " + taskId));
@@ -464,6 +475,27 @@ public class DocumentIndexingService {
             touchHeartbeat(task, truncate("Failed to dispatch indexing task: " + ex.getMessage()));
             throw new BusinessException("Indexing executor is busy, please retry later");
         }
+    }
+
+    private java.util.Optional<IndexingTaskEntity> waitForTaskRecord(Long taskId) {
+        for (int attempt = 1; attempt <= TASK_LOOKUP_MAX_ATTEMPTS; attempt++) {
+            java.util.Optional<IndexingTaskEntity> task = indexingTaskRepository.findById(taskId);
+            if (task.isPresent()) {
+                return task;
+            }
+            if (attempt < TASK_LOOKUP_MAX_ATTEMPTS) {
+                LockSupport.parkNanos(TASK_LOOKUP_RETRY_NANOS);
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
+    private void markTaskFailedAfterDispatch(Long taskId, RuntimeException ex) {
+        indexingTaskRepository.findById(taskId).ifPresent(task -> {
+            task.setStatus(IndexingTaskStatus.FAILED);
+            task.setFinishedAt(OffsetDateTime.now());
+            touchHeartbeat(task, truncate("Async dispatch failed: " + ex.getMessage()));
+        });
     }
 
     /** 只有启用状态的知识库才允许继续索引。 */

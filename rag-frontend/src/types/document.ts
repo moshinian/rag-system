@@ -29,6 +29,7 @@ export type DocumentSummary = {
   mediaType: string;
   fileSize: number;
   status: DocumentStatus;
+  disabledFromStatus?: DocumentStatus;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -55,6 +56,7 @@ export type DocumentUploadResponse = {
   storagePath: string;
   contentHash: string;
   status: DocumentStatus;
+  disabledFromStatus?: DocumentStatus;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

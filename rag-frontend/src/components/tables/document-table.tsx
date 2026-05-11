@@ -1,4 +1,4 @@
-import { Button, Space, Table, Typography } from "antd";
+import { Button, Popconfirm, Space, Table, Typography } from "antd";
 import { Link } from "react-router-dom";
 import type { ColumnsType } from "antd/es/table";
 import type { DocumentSummary } from "../../types/document";
@@ -8,9 +8,12 @@ import { StatusBadge } from "../status/status-badge";
 type DocumentTableProps = {
   kbCode: string;
   data: DocumentSummary[];
+  togglingDocumentCode?: string;
+  onDisable?: (documentCode: string) => void;
+  onEnable?: (documentCode: string) => void;
 };
 
-export function DocumentTable({ kbCode, data }: DocumentTableProps) {
+export function DocumentTable({ kbCode, data, togglingDocumentCode, onDisable, onEnable }: DocumentTableProps) {
   const columns: ColumnsType<DocumentSummary> = [
     {
       title: "文档",
@@ -50,11 +53,34 @@ export function DocumentTable({ kbCode, data }: DocumentTableProps) {
     {
       title: "操作",
       key: "action",
-      width: 120,
+      width: 220,
       render: (_, record) => (
-        <Button type="link">
-          <Link to={`/kb/${kbCode}/documents/${record.documentCode}`}>查看详情</Link>
-        </Button>
+        <Space>
+          <Button type="link">
+            <Link to={`/kb/${kbCode}/documents/${record.documentCode}`}>查看详情</Link>
+          </Button>
+          {record.status === "DISABLED" ? (
+            <Button
+              type="link"
+              loading={togglingDocumentCode === record.documentCode}
+              onClick={() => onEnable?.(record.documentCode)}
+            >
+              恢复文档
+            </Button>
+          ) : (
+            <Popconfirm
+              title="禁用文档"
+              description="禁用后历史 chunk 和向量会保留，但不会参与检索和问答。"
+              okText="确认禁用"
+              cancelText="取消"
+              onConfirm={() => onDisable?.(record.documentCode)}
+            >
+              <Button type="link" danger loading={togglingDocumentCode === record.documentCode}>
+                禁用文档
+              </Button>
+            </Popconfirm>
+          )}
+        </Space>
       )
     }
   ];

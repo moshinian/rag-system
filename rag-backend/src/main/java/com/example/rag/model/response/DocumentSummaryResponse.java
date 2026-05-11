@@ -15,6 +15,7 @@ public record DocumentSummaryResponse(
         String mediaType,
         Long fileSize,
         String status,
+        String disabledFromStatus,
         String createdBy,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt

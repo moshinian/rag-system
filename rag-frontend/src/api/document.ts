@@ -30,6 +30,18 @@ export function getDocument(kbCode: string, documentCode: string) {
   );
 }
 
+export function disableDocument(kbCode: string, documentCode: string) {
+  return apiClient.postJson<DocumentDetail>(
+    `/api/knowledge-bases/${kbCode}/documents/${documentCode}/disable`
+  );
+}
+
+export function enableDocument(kbCode: string, documentCode: string) {
+  return apiClient.postJson<DocumentDetail>(
+    `/api/knowledge-bases/${kbCode}/documents/${documentCode}/enable`
+  );
+}
+
 export function listDocumentChunks(kbCode: string, documentCode: string) {
   return apiClient.get<DocumentChunk[]>(
     `/api/knowledge-bases/${kbCode}/documents/${documentCode}/chunks`

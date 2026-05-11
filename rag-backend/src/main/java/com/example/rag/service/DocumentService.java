@@ -207,10 +207,40 @@ public class DocumentService {
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
         DocumentEntity document = documentRepository.findByCodeInKnowledgeBase(documentCode, kbCode)
                 .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
+        if (document.getStatus() == DocumentStatus.DISABLED) {
+            return toDetailResponse(document, knowledgeBase.getKbCode());
+        }
         if (indexingTaskRepository.existsActiveTask(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
             throw new BusinessException("Document has an active indexing task and cannot be disabled: " + documentCode);
         }
+        document.setDisabledFromStatus(document.getStatus());
         document.setStatus(DocumentStatus.DISABLED);
+        documentRepository.updateById(document);
+        return toDetailResponse(document, knowledgeBase.getKbCode());
+    }
+
+    /** 恢复已禁用文档。 */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheNames.DOCUMENT_DETAIL, key = "#kbCode + ':' + #documentCode"),
+            @CacheEvict(cacheNames = CacheNames.DOCUMENT_PAGE, allEntries = true),
+            @CacheEvict(cacheNames = CacheNames.DOCUMENT_CHUNKS, key = "#kbCode + ':' + #documentCode"),
+            @CacheEvict(cacheNames = CacheNames.QA_READINESS, key = "#kbCode"),
+            @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
+    })
+    public DocumentDetailResponse enableDocument(String kbCode, String documentCode) {
+        KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
+                .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
+        DocumentEntity document = documentRepository.findByCodeInKnowledgeBase(documentCode, kbCode)
+                .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
+        if (document.getStatus() != DocumentStatus.DISABLED) {
+            return toDetailResponse(document, knowledgeBase.getKbCode());
+        }
+        if (indexingTaskRepository.existsActiveTask(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
+            throw new BusinessException("Document has an active indexing task and cannot be enabled: " + documentCode);
+        }
+        document.setStatus(resolveRestoredStatus(document));
+        document.setDisabledFromStatus(null);
         documentRepository.updateById(document);
         return toDetailResponse(document, knowledgeBase.getKbCode());
     }
@@ -401,6 +431,7 @@ public class DocumentService {
                 entity.getMediaType(),
                 entity.getFileSize(),
                 entity.getStatus().name(),
+                entity.getDisabledFromStatus() == null ? null : entity.getDisabledFromStatus().name(),
                 entity.getCreatedBy(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
@@ -421,6 +452,7 @@ public class DocumentService {
                 entity.getFileSize(),
                 entity.getContentHash(),
                 entity.getStatus().name(),
+                entity.getDisabledFromStatus() == null ? null : entity.getDisabledFromStatus().name(),
                 entity.getVersion(),
                 entity.getSource(),
                 entity.getTags(),
@@ -429,6 +461,19 @@ public class DocumentService {
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
+    }
+
+    private DocumentStatus resolveRestoredStatus(DocumentEntity document) {
+        if (document.getDisabledFromStatus() != null && document.getDisabledFromStatus() != DocumentStatus.DISABLED) {
+            return document.getDisabledFromStatus();
+        }
+        if (!documentChunkRepository.findByDocumentIdOrderByChunkIndex(document.getId()).isEmpty()) {
+            return DocumentStatus.INDEXED;
+        }
+        if (trimToNull(document.getErrorMessage()) != null) {
+            return DocumentStatus.FAILED;
+        }
+        return DocumentStatus.UPLOADED;
     }
 
     /** 把持久化对象转换成 chunk 响应。 */

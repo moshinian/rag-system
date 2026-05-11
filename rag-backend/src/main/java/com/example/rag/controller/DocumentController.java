@@ -81,6 +81,16 @@ public class DocumentController {
         return ApiResponse.success(response, requestId);
     }
 
+    /** 恢复文档。 */
+    @PostMapping("/{documentCode}/enable")
+    public ApiResponse<DocumentDetailResponse> enable(@PathVariable String kbCode,
+                                                      @PathVariable String documentCode,
+                                                      HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        DocumentDetailResponse response = documentService.enableDocument(kbCode, documentCode);
+        return ApiResponse.success(response, requestId);
+    }
+
     /** 查询文档的全部 chunk。 */
     @GetMapping("/{documentCode}/chunks")
     public ApiResponse<java.util.List<DocumentChunkResponse>> listChunks(@PathVariable String kbCode,

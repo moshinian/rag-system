@@ -7,7 +7,7 @@
 
 ## Summary
 
-本 RFC 记录知识库 `ACTIVE / INACTIVE` 生命周期的当前语义，以及“恢复使用”“恢复并重试失败索引任务”的边界。核心结论是：知识库禁用是手工运维动作，不是切片或 embedding 失败后的自动惩罚；恢复知识库时，系统允许只恢复检索/问答可用性，也允许顺手补偿最近一次可重试的失败索引任务，但这两件事必须显式区分。
+本 RFC 记录知识库 `ACTIVE / INACTIVE` 生命周期，以及文档 `DISABLED` 软下线语义的当前边界。核心结论是：知识库禁用是手工运维动作，不是切片或 embedding 失败后的自动惩罚；文档禁用也采用可逆的软下线模型，保留原文件、chunk 和向量，只把该文档排除出检索口径；恢复时，系统允许只恢复知识库/文档可用性，也允许顺手补偿最近一次可重试的失败索引任务，但这些动作必须显式区分。
 
 ## Context
 
@@ -17,6 +17,7 @@
 2. readiness gate 是否直接阻断。
 3. 前端工作台应该展示哪些 CTA。
 4. 失败索引任务在恢复知识库后是否需要补偿。
+5. 文档级禁用后，历史 chunk 和向量是否应该删除，还是只退出检索口径。
 
 实际代码里早已有 `ACTIVE / INACTIVE`，但过去存在一个容易混淆的点：
 
@@ -43,6 +44,13 @@
    - 只恢复知识库使用状态。
    - 恢复知识库并重试每篇文档最近一次可重试的失败索引任务。
 
+系统当前采用下面的文档级生命周期规则：
+
+1. `DISABLED` 表示文档被手工软下线。
+2. 文档禁用不会删除原文件、chunk 或向量。
+3. 只要文档处于 `DISABLED`，它就不会参与 `qa/readiness` 统计、检索和问答。
+4. 恢复文档时，优先回到禁用前状态；历史老数据如果没有记录禁用前状态，则按“有 chunk 则恢复为 `INDEXED`，有错误则恢复为 `FAILED`，否则恢复为 `UPLOADED`”回退。
+
 ## Implementation
 
 核心实现位于：
@@ -50,6 +58,7 @@
 1. [KnowledgeBaseService.java](../../rag-backend/src/main/java/com/example/rag/service/KnowledgeBaseService.java)
 2. [KnowledgeBaseController.java](../../rag-backend/src/main/java/com/example/rag/controller/KnowledgeBaseController.java)
 3. [DocumentIndexingService.java](../../rag-backend/src/main/java/com/example/rag/service/DocumentIndexingService.java)
+4. [DocumentService.java](../../rag-backend/src/main/java/com/example/rag/service/DocumentService.java)
 
 当前行为如下：
 
@@ -59,6 +68,10 @@
    把知识库切为 `ACTIVE`。
 3. `POST /api/knowledge-bases/{kbCode}/enable?retryFailedIndexingTasks=true`
    在恢复知识库后，额外触发知识库级失败索引补偿。
+4. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/disable`
+   把文档切成 `DISABLED`，并失效 document/detail/chunks/readiness/retrieval 相关缓存。
+5. `POST /api/knowledge-bases/{kbCode}/documents/{documentCode}/enable`
+   把文档恢复成可用状态；新数据优先恢复到禁用前状态，历史数据使用回退规则。
 
 补偿逻辑当前只会重试：
 
@@ -74,6 +87,8 @@
 1. 知识库列表页可直接执行禁用、恢复使用、恢复并重试失败任务。
 2. 知识库概览页集中展示手工禁用状态、失败文档数、重嵌入入口和恢复动作。
 3. 页面文案明确说明：当前知识库不会因为切片或 embedding 失败自动被禁用。
+4. 文档列表页和文档详情页可直接执行“禁用文档 / 恢复文档”。
+5. 知识库概览页里的“可检索已切块 / 可检索已向量化”明确只统计当前可参与检索的文档，不再把总文档数和可检索 chunk 口径混在一起。
 
 这意味着知识库状态不再只是数据库字段，而是前后端共享的运维契约。
 
@@ -82,6 +97,7 @@
 1. `RFC-0002` 的 readiness gate 会在知识库 `INACTIVE` 时直接阻断检索。
 2. `RFC-0004` 的索引任务恢复只解决任务层补偿，不负责切换知识库状态。
 3. `RFC-0006` 的缓存策略要求禁用/恢复时同步失效相关 readiness 与 retrieval 缓存。
+4. 文档 `DISABLED` 通过查询条件退出 readiness 和 retrieval 口径，不需要物理删除 chunk 或向量。
 
 ## Consequences
 
@@ -90,12 +106,14 @@
 1. 知识库运维动作和失败任务补偿被显式分层。
 2. 用户可以更安全地手工恢复知识库，而不是依赖隐式系统行为。
 3. 前端能把“恢复服务能力”和“补偿历史失败任务”拆成不同按钮，减少误解。
+4. 文档可以临时下线再恢复，避免为了短期排障或内容治理而删掉已有物料。
 
 代价与约束：
 
 1. 恢复时的批量失败任务补偿仍是“最近一次失败任务”粒度，不是完整批处理编排。
 2. 当前不会自动识别“失败太多应否禁用知识库”，仍需要人工判断。
 3. 如果知识库文档规模很大，恢复并补偿失败任务的操作反馈仍然只是一轮任务提交，不是完整任务看板。
+4. 历史老文档如果是在没有 `disabled_from_status` 字段时被禁用，恢复时仍然只能使用回退规则，不能 100% 还原所有中间态。
 
 ## Non-Goals
 

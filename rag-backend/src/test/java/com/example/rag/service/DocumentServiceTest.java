@@ -293,6 +293,7 @@ class DocumentServiceTest {
         DocumentDetailResponse response = documentService.disableDocument("settlement-kb", "DOC-1");
 
         assertThat(response.status()).isEqualTo("DISABLED");
+        assertThat(response.disabledFromStatus()).isEqualTo("UPLOADED");
     }
 
     @Test
@@ -309,6 +310,49 @@ class DocumentServiceTest {
         assertThatThrownBy(() -> documentService.disableDocument("settlement-kb", "DOC-1"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("active indexing task");
+    }
+
+    @Test
+    void enableDocumentShouldRestoreDisabledFromStatus() {
+        DocumentEntity document = new DocumentEntity();
+        document.setId(1L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.DISABLED);
+        document.setDisabledFromStatus(DocumentStatus.INDEXED);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(indexingTaskRepository.existsActiveTask(1L, "DOCUMENT_INDEXING")).thenReturn(false);
+        when(documentRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DocumentDetailResponse response = documentService.enableDocument("settlement-kb", "DOC-1");
+
+        assertThat(response.status()).isEqualTo("INDEXED");
+        assertThat(response.disabledFromStatus()).isNull();
+    }
+
+    @Test
+    void enableDocumentShouldFallbackToIndexedWhenLegacyDisabledDocumentStillHasChunks() {
+        DocumentEntity document = new DocumentEntity();
+        document.setId(1L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.DISABLED);
+
+        DocumentChunkEntity chunk = new DocumentChunkEntity();
+        chunk.setId(11L);
+        chunk.setDocumentId(1L);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(indexingTaskRepository.existsActiveTask(1L, "DOCUMENT_INDEXING")).thenReturn(false);
+        when(documentChunkRepository.findByDocumentIdOrderByChunkIndex(1L)).thenReturn(List.of(chunk));
+        when(documentRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DocumentDetailResponse response = documentService.enableDocument("settlement-kb", "DOC-1");
+
+        assertThat(response.status()).isEqualTo("INDEXED");
     }
 
     @Test

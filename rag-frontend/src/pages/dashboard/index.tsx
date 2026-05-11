@@ -128,16 +128,37 @@ export function DashboardPage() {
           <Card><Statistic title="文档数" value={docsQuery.data?.total ?? 0} /></Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card><Statistic title="已切块" value={readinessQuery.data?.indexedChunkCount ?? 0} /></Card>
+          <Card>
+            <Statistic
+              title="可检索已切块"
+              value={readinessQuery.data?.indexedChunkCount ?? 0}
+            />
+          </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card><Statistic title="已向量化" value={readinessQuery.data?.embeddedChunkCount ?? 0} /></Card>
+          <Card>
+            <Statistic
+              title="可检索已向量化"
+              value={readinessQuery.data?.embeddedChunkCount ?? 0}
+            />
+          </Card>
         </Col>
       </Row>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} xl={14}>
-          <Card title="知识库操作">
+      {disabledDocumentsCount > 0 ? (
+        <Alert
+          type="info"
+          showIcon
+          message="首页切块/向量统计只计算当前可参与检索的文档"
+          description="已禁用文档即使保留历史 chunk 和向量，也不会计入“可检索已切块 / 可检索已向量化”这两个数字。"
+        />
+      ) : null}
+      <Card title="知识库操作">
+        <Row gutter={[24, 24]} align="top">
+          <Col xs={24} xl={15}>
             <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+              <Typography.Text type="secondary">
+                这里的操作会直接影响当前知识库是否参与问答，以及是否需要重新生成向量。
+              </Typography.Text>
               <Space wrap>
                 {kbInactive ? (
                   <>
@@ -185,6 +206,18 @@ export function DashboardPage() {
                   <Link to={`/kb/${kbCode}/history`}>查看问答记录</Link>
                 </Button>
               </Space>
+              {failedDocuments.length > 0 ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="存在失败文档"
+                  description={`最近发现失败文档: ${failedDocuments.slice(0, 6).join(", ")}`}
+                />
+              ) : null}
+            </Space>
+          </Col>
+          <Col xs={24} xl={9}>
+            <Card size="small" title="运行摘要">
               <List
                 size="small"
                 dataSource={[
@@ -195,29 +228,10 @@ export function DashboardPage() {
                 ]}
                 renderItem={(item) => <List.Item>{item}</List.Item>}
               />
-              {failedDocuments.length > 0 ? (
-                <Typography.Text type="secondary">
-                  最近发现失败文档: {failedDocuments.slice(0, 6).join(", ")}
-                </Typography.Text>
-              ) : null}
-            </Space>
-          </Card>
-        </Col>
-        <Col xs={24} xl={10}>
-          <Card title="页面优化方向">
-            <List
-              size="small"
-              dataSource={[
-                "给知识库概览页增加失败任务明细和最近一次失败原因。",
-                "把重新嵌入、恢复使用、禁用操作收敛到统一运维区，减少误触。",
-                "在文档页增加“只看失败/已禁用/待重嵌入 chunk”的快捷过滤。",
-                "把 readiness 的 nextStep 和前端 CTA 继续绑定，做成更明确的向导。"
-              ]}
-              renderItem={(item) => <List.Item>{item}</List.Item>}
-            />
-          </Card>
-        </Col>
-      </Row>
+            </Card>
+          </Col>
+        </Row>
+      </Card>
       {readinessQuery.data ? <ReadinessCard kbCode={kbCode} readiness={readinessQuery.data} /> : null}
     </Space>
   );

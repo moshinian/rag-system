@@ -77,6 +77,7 @@ Week 3 之前，Redis 在项目里更多承担连通性验证和健康探针作�
 3. 空值不缓存。
 4. 每类缓存从 `rag.cache.*` 读取 TTL。
 5. TTL 下限被限制为至少 `30s`。
+6. 读到不可反序列化的坏缓存值时，缓存层会忽略该值、删除脏 key 并回源重建，而不是直接把异常抛给业务调用方。
 
 ## Coverage
 
@@ -95,6 +96,24 @@ Week 3 之前，Redis 在项目里更多承担连通性验证和健康探针作�
    用于前端概览页、检索页和问答页反复读取的就绪状态。
 2. `qaRetrieval`
    用于相同问题和 `topK` 下的短 TTL 检索结果复用。
+
+## Corruption Recovery
+
+当前系统额外承担一层“坏缓存自愈”职责，原因是 Redis 在真实联调中可能残留旧格式 value、手工注入调试值，或者历史 serializer 写出的脏数据。
+
+当前行为是：
+
+1. Spring Cache 通过自定义 `CacheErrorHandler` 接管 Redis 反序列化异常。
+2. 读取阶段遇到坏值时，日志会记录 `Ignoring unreadable Redis cache entry...`。
+3. 当前请求继续回源执行业务逻辑，而不是直接返回 500。
+4. 回源成功后，缓存会被合法 JSON 重建，后续请求重新命中。
+
+这个能力当前主要保护：
+
+1. `qaReadiness`
+2. `documentDetail`
+3. `documentChunks`
+4. 其他走同一 Redis CacheManager 的读路径
 
 ## Invalidation Strategy
 
@@ -136,8 +155,9 @@ Week 3 之前，Redis 在项目里更多承担连通性验证和健康探针作�
 当前已有直接材料支撑：
 
 1. [RedisCacheConfigTest.java](../../rag-backend/src/test/java/com/example/rag/config/RedisCacheConfigTest.java) 验证 Redis serializer 与配置行为。
-2. [README.md](../../README.md) 记录了真实 Redis 联调和缓存写入观察。
-3. [week3.md](../../rag-backend/work/week3.md) 与 [current-status.md](../../rag-backend/work/current-status.md) 记录了缓存接入范围与工程取舍。
+2. [RedisCacheConfigIntegrationTest.java](../../rag-backend/src/test/java/com/example/rag/config/RedisCacheConfigIntegrationTest.java) 验证 `@Cacheable` 真实经过 Redis、读到坏值、自愈回源和重建缓存的链路。
+3. [README.md](../../README.md) 记录了真实 Redis 联调和缓存写入观察。
+4. [week3.md](../../rag-backend/work/week3.md) 与 [current-status.md](../../rag-backend/work/current-status.md) 记录了缓存接入范围与工程取舍。
 
 ## Consequences
 
@@ -152,6 +172,7 @@ Week 3 之前，Redis 在项目里更多承担连通性验证和健康探针作�
 1. `allEntries=true` 会牺牲一部分命中率。
 2. 当前还没有做到知识库级、问题级的最细粒度精确失效。
 3. 一旦缓存失效点漏掉，就可能出现 readiness 与 retrieval 的陈旧读回归。
+4. 如果自定义错误处理器 wiring 丢失，坏缓存会重新退化成直接 500，因此该接线本身也需要测试兜底。
 
 ## Non-Goals
 

@@ -56,11 +56,11 @@
 | [RFC-0001](./RFC-0001-embedding-profile.md) | Accepted | Embedding Profile | 把 embedding 配置从“启动参数”升级为“检索契约 + 重建触发器” |
 | [RFC-0002](./RFC-0002-readiness-gate.md) | Accepted | Readiness Gate | 统一 `qa/readiness` 展示状态与真实检索阻断行为 |
 | [RFC-0003](./RFC-0003-rerank-pipeline.md) | Planned | Rerank Pipeline | 为后续混合检索和二阶段排序提前占位 |
-| [RFC-0004](./RFC-0004-async-indexing-and-recovery.md) | Accepted | Async Indexing And Recovery | 把文档索引从同步动作收敛成可观察、可重试、可恢复的后台任务 |
+| [RFC-0004](./RFC-0004-async-indexing-and-recovery.md) | Accepted | Async Indexing And Recovery | 把文档索引从同步动作收敛成可观察、可重试、可恢复，并避免孤儿 `QUEUED` 任务的后台任务 |
 | [RFC-0005](./RFC-0005-chunking-strategy.md) | Accepted | Chunking Strategy | 为当前固定窗口切块、参数外置和默认 `balanced` 基线建立正式依据 |
-| [RFC-0006](./RFC-0006-retrieval-cache-strategy.md) | Accepted | Retrieval Cache Strategy | 为 Redis 读缓存、TTL 和一致性优先的失效策略建立正式依据 |
+| [RFC-0006](./RFC-0006-retrieval-cache-strategy.md) | Accepted | Retrieval Cache Strategy | 为 Redis 读缓存、TTL、一致性优先失效以及坏缓存自愈建立正式依据 |
 | [RFC-0007](./RFC-0007-qa-contract-answer-sources-history.md) | Accepted | QA Contract: Answer, Sources And History | 统一问答返回、来源展示和历史回放的证据契约 |
-| [RFC-0008](./RFC-0008-knowledge-base-lifecycle.md) | Accepted | Knowledge Base Lifecycle | 明确知识库手工禁用/恢复语义，以及恢复时是否补偿失败索引任务 |
+| [RFC-0008](./RFC-0008-knowledge-base-lifecycle.md) | Accepted | Knowledge Base Lifecycle | 明确知识库与文档的手工禁用/恢复语义，以及恢复时是否补偿失败索引任务 |
 
 ## Candidate Backlog
 

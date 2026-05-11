@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, Col, Descriptions, Row, Space, Typography } from "antd";
+import { Alert, App, Button, Card, Col, Descriptions, Popconfirm, Row, Space, Typography } from "antd";
 import { useParams } from "react-router-dom";
-import { retryIndexingTask } from "../../api/document";
+import { disableDocument, enableDocument, retryIndexingTask } from "../../api/document";
 import { ChunkPreviewList } from "../../components/cards/chunk-preview-list";
 import { IndexingTimeline } from "../../components/cards/indexing-timeline";
 import { RetryActionBar } from "../../components/cards/retry-action-bar";
@@ -13,18 +13,40 @@ import { useDocumentMonitor } from "../../hooks/use-polling-task";
 import { formatDateTime, formatFileSize } from "../../utils/format";
 
 export function DocumentDetailPage() {
+  const { message } = App.useApp();
   const kbCode = useCurrentKb();
   const { documentCode } = useParams();
   const queryClient = useQueryClient();
   const monitor = useDocumentMonitor(kbCode!, documentCode!, !!kbCode && !!documentCode);
   const task = monitor.tasksQuery.data?.[0];
+  const detail = monitor.detailQuery.data;
+
+  const refreshQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["indexingTasks", kbCode, documentCode] });
+    queryClient.invalidateQueries({ queryKey: ["documentDetail", kbCode, documentCode] });
+    queryClient.invalidateQueries({ queryKey: ["documentChunks", kbCode, documentCode] });
+    queryClient.invalidateQueries({ queryKey: ["documents", kbCode] });
+    queryClient.invalidateQueries({ queryKey: ["readiness", kbCode] });
+  };
 
   const retryMutation = useMutation({
     mutationFn: () => retryIndexingTask(kbCode!, documentCode!, task!.taskId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["indexingTasks", kbCode, documentCode] });
-      queryClient.invalidateQueries({ queryKey: ["documentDetail", kbCode, documentCode] });
-      queryClient.invalidateQueries({ queryKey: ["documentChunks", kbCode, documentCode] });
+      refreshQueries();
+    }
+  });
+  const disableMutation = useMutation({
+    mutationFn: () => disableDocument(kbCode!, documentCode!),
+    onSuccess: () => {
+      refreshQueries();
+      message.success("文档已禁用，当前不会参与检索和问答。");
+    }
+  });
+  const enableMutation = useMutation({
+    mutationFn: () => enableDocument(kbCode!, documentCode!),
+    onSuccess: () => {
+      refreshQueries();
+      message.success("文档已恢复。");
     }
   });
 
@@ -34,6 +56,14 @@ export function DocumentDetailPage() {
       {monitor.detailQuery.error ? <ApiErrorAlert error={monitor.detailQuery.error} /> : null}
       {monitor.tasksQuery.error ? <ApiErrorAlert error={monitor.tasksQuery.error} /> : null}
       {monitor.chunksQuery.error ? <ApiErrorAlert error={monitor.chunksQuery.error} /> : null}
+      {detail?.status === "DISABLED" ? (
+        <Alert
+          type="info"
+          showIcon
+          message="当前文档已禁用"
+          description="历史 chunk 和向量仍会保留并展示在本页，但不会计入知识库首页的可检索切块/向量统计，也不会参与问答检索。"
+        />
+      ) : null}
       <Card loading={monitor.detailQuery.isLoading}>
         <Row gutter={[16, 16]}>
           <Col xs={24} lg={14}>
@@ -54,9 +84,32 @@ export function DocumentDetailPage() {
               <Descriptions.Item label="来源">{monitor.detailQuery.data?.source ?? "-"}</Descriptions.Item>
               <Descriptions.Item label="标签">{monitor.detailQuery.data?.tags ?? "-"}</Descriptions.Item>
               <Descriptions.Item label="更新时间">
-                {formatDateTime(monitor.detailQuery.data?.updatedAt)}
+                {formatDateTime(detail?.updatedAt)}
               </Descriptions.Item>
             </Descriptions>
+            <Space style={{ marginTop: 16 }}>
+              {detail?.status === "DISABLED" ? (
+                <Button
+                  type="primary"
+                  loading={enableMutation.isPending}
+                  onClick={() => enableMutation.mutate()}
+                >
+                  恢复文档
+                </Button>
+              ) : (
+                <Popconfirm
+                  title="禁用文档"
+                  description="禁用后历史 chunk 和向量会保留，但不会参与检索和问答。"
+                  okText="确认禁用"
+                  cancelText="取消"
+                  onConfirm={() => disableMutation.mutate()}
+                >
+                  <Button danger loading={disableMutation.isPending}>
+                    禁用文档
+                  </Button>
+                </Popconfirm>
+              )}
+            </Space>
           </Col>
           <Col xs={24} lg={10}>
             <IndexingTimeline task={task} progress={monitor.progress} />

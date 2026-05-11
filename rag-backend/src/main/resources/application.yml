@@ -93,10 +93,10 @@ rag:
       stale-after-seconds: 600
       scan-limit: 20
   cache:
-    knowledge-base-detail-ttl-seconds: 600
-    knowledge-base-page-ttl-seconds: 300
-    document-detail-ttl-seconds: 300
-    document-page-ttl-seconds: 180
-    document-chunks-ttl-seconds: 180
-    qa-readiness-ttl-seconds: 60
-    qa-retrieval-ttl-seconds: 60
+    knowledge-base-detail-ttl-seconds: 3600
+    knowledge-base-page-ttl-seconds: 3600
+    document-detail-ttl-seconds: 3600
+    document-page-ttl-seconds: 1800
+    document-chunks-ttl-seconds: 1800
+    qa-readiness-ttl-seconds: 600
+    qa-retrieval-ttl-seconds: 600

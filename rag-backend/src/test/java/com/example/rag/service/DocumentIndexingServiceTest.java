@@ -28,6 +28,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.RejectedExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -127,6 +128,69 @@ class DocumentIndexingServiceTest {
         assertThat(finalTask.getTaskStage()).isEqualTo(IndexingTaskStage.COMPLETED);
         assertThat(finalTask.getChunkCount()).isEqualTo(3);
         assertThat(finalTask.getEmbeddedChunkCount()).isEqualTo(3);
+    }
+
+    @Test
+    void submitShouldRetryWhenTaskRecordIsNotImmediatelyVisibleToWorker() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        DocumentEntity document = new DocumentEntity();
+        document.setId(200L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.UPLOADED);
+
+        IndexingTaskEntity queuedTask = new IndexingTaskEntity();
+        queuedTask.setId(999L);
+        queuedTask.setDocumentId(200L);
+        queuedTask.setKnowledgeBaseId(100L);
+        queuedTask.setTaskType("DOCUMENT_INDEXING");
+        queuedTask.setStatus(IndexingTaskStatus.QUEUED);
+        queuedTask.setTaskStage(IndexingTaskStage.QUEUED);
+        queuedTask.setCreatedBy("tester");
+        queuedTask.setStartedAt(OffsetDateTime.now());
+        queuedTask.setLastHeartbeatAt(OffsetDateTime.now());
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(knowledgeBaseRepository.findById(100L)).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(documentRepository.findById(200L)).thenReturn(Optional.of(document));
+        when(indexingTaskRepository.existsActiveTask(200L, "DOCUMENT_INDEXING")).thenReturn(false);
+        when(snowflakeIdGenerator.nextId()).thenReturn(999L);
+        when(indexingTaskRepository.insert(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        AtomicInteger lookupCount = new AtomicInteger();
+        when(indexingTaskRepository.findById(999L))
+                .thenAnswer(invocation -> lookupCount.getAndIncrement() == 0
+                        ? Optional.empty()
+                        : Optional.of(queuedTask));
+        when(documentProcessingService.processForIndexing("settlement-kb", "DOC-1", "tester"))
+                .thenReturn(new DocumentProcessResponse(200L, "DOC-1", "settlement-kb", "md", "INDEXED", 3,
+                        "markdown", OffsetDateTime.now()));
+        when(documentEmbeddingService.embedForIndexing("settlement-kb", "DOC-1"))
+                .thenReturn(new DocumentEmbeddingResponse(200L, "DOC-1", "settlement-kb", "bge", 512, 16, 3,
+                        0, 3, OffsetDateTime.now()));
+        when(indexingTaskRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DocumentIndexingService service = new DocumentIndexingService(
+                knowledgeBaseRepository,
+                documentRepository,
+                indexingTaskRepository,
+                documentProcessingService,
+                documentEmbeddingService,
+                snowflakeIdGenerator,
+                createIndexingProperties(),
+                directExecutor
+        );
+
+        DocumentIndexingTaskResponse response = service.submit("settlement-kb", "DOC-1", "tester");
+
+        assertThat(response.status()).isEqualTo("QUEUED");
+        verify(indexingTaskRepository, atLeast(2)).findById(999L);
+        verify(documentProcessingService).processForIndexing("settlement-kb", "DOC-1", "tester");
+        verify(documentEmbeddingService).embedForIndexing("settlement-kb", "DOC-1");
     }
 
     @Test
@@ -499,6 +563,59 @@ class DocumentIndexingServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("executor is busy");
         verify(indexingTaskRepository).updateById(any());
+    }
+
+    @Test
+    void submitShouldMarkTaskFailedWhenAsyncPreparationCrashes() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        DocumentEntity document = new DocumentEntity();
+        document.setId(200L);
+        document.setKnowledgeBaseId(100L);
+        document.setDocumentCode("DOC-1");
+        document.setStatus(DocumentStatus.UPLOADED);
+
+        IndexingTaskEntity queuedTask = new IndexingTaskEntity();
+        queuedTask.setId(999L);
+        queuedTask.setDocumentId(200L);
+        queuedTask.setKnowledgeBaseId(100L);
+        queuedTask.setTaskType("DOCUMENT_INDEXING");
+        queuedTask.setStatus(IndexingTaskStatus.QUEUED);
+        queuedTask.setTaskStage(IndexingTaskStage.QUEUED);
+        queuedTask.setCreatedBy("tester");
+        queuedTask.setStartedAt(OffsetDateTime.now());
+        queuedTask.setLastHeartbeatAt(OffsetDateTime.now());
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb")).thenReturn(Optional.of(document));
+        when(indexingTaskRepository.existsActiveTask(200L, "DOCUMENT_INDEXING")).thenReturn(false);
+        when(snowflakeIdGenerator.nextId()).thenReturn(999L);
+        when(indexingTaskRepository.insert(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(indexingTaskRepository.findById(999L)).thenReturn(Optional.of(queuedTask));
+        when(documentRepository.findById(200L)).thenReturn(Optional.empty());
+        when(indexingTaskRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DocumentIndexingService service = new DocumentIndexingService(
+                knowledgeBaseRepository,
+                documentRepository,
+                indexingTaskRepository,
+                documentProcessingService,
+                documentEmbeddingService,
+                snowflakeIdGenerator,
+                createIndexingProperties(),
+                directExecutor
+        );
+
+        DocumentIndexingTaskResponse response = service.submit("settlement-kb", "DOC-1", "tester");
+
+        assertThat(response.status()).isEqualTo("QUEUED");
+        verify(indexingTaskRepository, atLeastOnce()).updateById(any());
+        assertThat(queuedTask.getStatus()).isEqualTo(IndexingTaskStatus.FAILED);
+        assertThat(queuedTask.getErrorMessage()).contains("Document not found");
+        assertThat(queuedTask.getFinishedAt()).isNotNull();
     }
 
     @Test

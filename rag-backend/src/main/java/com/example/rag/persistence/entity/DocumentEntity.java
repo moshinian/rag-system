@@ -1,6 +1,7 @@
 package com.example.rag.persistence.entity;
 
 import com.example.rag.model.enums.DocumentStatus;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -53,6 +54,9 @@ public class DocumentEntity {
 
     // 文档当前处理阶段，例如 UPLOADED / PARSING / INDEXED。
     private DocumentStatus status = DocumentStatus.UPLOADED;
+
+    @TableField(value = "disabled_from_status", updateStrategy = FieldStrategy.ALWAYS)
+    private DocumentStatus disabledFromStatus;
 
     private Integer version = 1;
 

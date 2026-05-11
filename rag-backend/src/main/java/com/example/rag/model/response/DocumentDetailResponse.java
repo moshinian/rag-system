@@ -17,6 +17,7 @@ public record DocumentDetailResponse(
         Long fileSize,
         String contentHash,
         String status,
+        String disabledFromStatus,
         Integer version,
         String source,
         String tags,

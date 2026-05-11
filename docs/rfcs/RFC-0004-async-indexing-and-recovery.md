@@ -33,6 +33,7 @@ Week 2 结束后，系统已经能同步完成文档处理、向量化、检索�
 5. `FAILED` 任务允许手动 retry。
 6. 长时间无心跳的 `QUEUED / RUNNING` 任务允许自动 recovery。
 7. 重试和恢复都生成新子任务，而不是覆盖原任务记录。
+8. 提交后 worker 如果短暂查不到刚插入的任务记录，会先做短暂重试；如果在真正进入 `RUNNING` 前就异常退出，也必须把任务落成 `FAILED`，不能留下孤儿 `QUEUED`。
 
 ## Historical Evolution
 
@@ -55,6 +56,11 @@ Week 2 结束后，系统已经能同步完成文档处理、向量化、检索�
 
 - 相关提交：`764df97` `Fix indexing state consistency and cache regressions`
 - 特征：索引不再只是“能跑”，还要保证状态语义与读路径一致。
+
+### Phase 5: 提交阶段兜底，避免孤儿 QUEUED 任务
+
+- 相关背景：Week 3 真实联调后的修复
+- 特征：worker 对刚创建任务的读取增加短暂重试；dispatch 阶段异常会显式写回 `FAILED`，并打出 `indexing.task.dispatch_failed` 日志。
 
 ## Implementation
 
@@ -101,6 +107,8 @@ Week 2 结束后，系统已经能同步完成文档处理、向量化、检索�
 2. 自动 recovery 仅针对长时间无心跳的 `QUEUED / RUNNING` 任务。
 3. 每次 retry/recovery 都生成新子任务，保留原任务用于审计和排障。
 4. 通过 `maxRetryCount` 限制无限恢复。
+5. 对提交后瞬时不可见的任务记录，只做毫秒级短暂重试，不把这种瞬时可见性问题错误放大为真正失败。
+6. 如果 dispatch 阶段已经拿到了任务 ID，但后续准备步骤异常，系统会把原任务直接标成 `FAILED`，而不是等 10 分钟后的恢复扫描接管。
 
 这意味着当前版本的目标不是“全局调度最优”，而是“单服务崩掉后不要让任务永久悬空”。
 
@@ -122,8 +130,9 @@ Week 2 结束后，系统已经能同步完成文档处理、向量化、检索�
 这个主题已经有直接的测试和历史材料支撑：
 
 1. [DocumentIndexingServiceTest.java](../../rag-backend/src/test/java/com/example/rag/service/DocumentIndexingServiceTest.java) 覆盖提交、重试、并发保护和恢复场景。
-2. [work day15.md](../../rag-backend/work/work%20day15.md) 记录了异步索引起步背景。
-3. [work day16.md](../../rag-backend/work/work%20day16.md) 记录了 retry 与 recovery 的目标和边界。
+2. 同一测试文件还覆盖“任务记录短暂不可见后可继续执行”和“dispatch 阶段异常会把任务直接落成 `FAILED`”。
+3. [work day15.md](../../rag-backend/work/work%20day15.md) 记录了异步索引起步背景。
+4. [work day16.md](../../rag-backend/work/work%20day16.md) 记录了 retry 与 recovery 的目标和边界。
 
 ## Consequences
 
