@@ -1,7 +1,9 @@
+import type { BackendLongId } from "./backend-id";
+
 export type KnowledgeBaseStatus = "ACTIVE" | "INACTIVE";
 
 export type KnowledgeBase = {
-  id: number;
+  id: BackendLongId;
   kbCode: string;
   name: string;
   description?: string;
@@ -21,7 +23,7 @@ export type KnowledgeBaseEnableResponse = KnowledgeBase & {
 };
 
 export type EmbeddingRebuildSubmitResponse = {
-  rebuildRunId: number;
+  rebuildRunId: BackendLongId;
   status: string;
   targetFingerprint: string;
   embeddingModel: string;

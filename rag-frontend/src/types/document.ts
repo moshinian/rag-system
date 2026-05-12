@@ -1,3 +1,5 @@
+import type { BackendLongId } from "./backend-id";
+
 export type DocumentStatus =
   | "UPLOADED"
   | "PARSING"
@@ -20,7 +22,7 @@ export type IndexingTaskStage =
 export type IndexingTaskTriggerSource = "SUBMIT" | "MANUAL_RETRY" | "RECOVERY";
 
 export type DocumentSummary = {
-  id: number;
+  id: BackendLongId;
   documentCode: string;
   knowledgeBaseCode: string;
   fileName: string;
@@ -45,7 +47,7 @@ export type DocumentDetail = DocumentSummary & {
 };
 
 export type DocumentUploadResponse = {
-  id: number;
+  id: BackendLongId;
   documentCode: string;
   knowledgeBaseCode: string;
   fileName: string;
@@ -63,8 +65,8 @@ export type DocumentUploadResponse = {
 };
 
 export type DocumentChunk = {
-  id: number;
-  documentId: number;
+  id: BackendLongId;
+  documentId: BackendLongId;
   chunkIndex: number;
   chunkType: string;
   title: string;
@@ -79,7 +81,7 @@ export type DocumentChunk = {
   embeddingModel?: string;
   embeddingProvider?: string;
   embeddingProfileFingerprint?: string;
-  embeddingRebuildRunId?: number;
+  embeddingRebuildRunId?: BackendLongId;
   embeddingUpdatedBy?: string;
   embeddingUpdatedAt?: string;
   createdAt: string;
@@ -87,15 +89,15 @@ export type DocumentChunk = {
 };
 
 export type DocumentIndexingTask = {
-  taskId: number;
+  taskId: BackendLongId;
   taskType: string;
   status: IndexingTaskStatus;
   taskStage: IndexingTaskStage;
   triggerSource: IndexingTaskTriggerSource;
-  documentId: number;
+  documentId: BackendLongId;
   documentCode: string;
   knowledgeBaseCode: string;
-  parentTaskId?: number;
+  parentTaskId?: BackendLongId;
   parserName?: string;
   chunkCount?: number;
   embeddedChunkCount?: number;
@@ -125,7 +127,7 @@ export type Readiness = {
   embeddedChunkCount: number;
   reembedRequired: boolean;
   reembedInProgress: boolean;
-  currentRebuildRunId?: number;
+  currentRebuildRunId?: BackendLongId;
   nextStep: string;
 };
 

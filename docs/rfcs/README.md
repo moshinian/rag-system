@@ -61,20 +61,23 @@
 | [RFC-0006](./RFC-0006-retrieval-cache-strategy.md) | Accepted | Retrieval Cache Strategy | 为 Redis 读缓存、TTL、一致性优先失效以及坏缓存自愈建立正式依据 |
 | [RFC-0007](./RFC-0007-qa-contract-answer-sources-history.md) | Accepted | QA Contract: Answer, Sources And History | 统一问答返回、来源展示和历史回放的证据契约 |
 | [RFC-0008](./RFC-0008-knowledge-base-lifecycle.md) | Accepted | Knowledge Base Lifecycle | 明确知识库与文档的手工禁用/恢复语义，以及恢复时是否补偿失败索引任务 |
+| [RFC-0009](./RFC-0009-evaluation-dataset-and-acceptance-baseline.md) | Accepted | Evaluation Dataset And Acceptance Baseline | 为中文评测问题集、验收维度和首轮真实结果建立稳定基线 |
+| [RFC-0010](./RFC-0010-chunk-inspector-workspace.md) | Accepted | Chunk Inspector Workspace | 把文档切块检视从折叠预览升级为 Retrieval Workspace 的证据检视子视图 |
+| [RFC-0011](./RFC-0011-session-reuse-and-multi-turn-conversation-model.md) | Planned | Session Reuse And Multi-turn Conversation Model | 为从单问单答历史记录演进到真实会话线程提前建立边界和影响面 |
 
 ## Candidate Backlog
 
 结合当前仓库里的 `README.md`、`rag-backend/work/` 下周记/日记、前端计划和最近提交记录，下一批最值得进入 RFC 的主题有这些：
 
-### RFC-0009 Evaluation Dataset And Acceptance Baseline
+### RFC-0012 Multi-instance Task Coordination And Cancellation
 
-成熟度：中，建议在效果优化前补。
+成熟度：中，建议在异步索引任务开始进入多实例或更复杂运维前补。
 
 理由：
 
-1. `Day 20` 已经形成中文评测样本文档、问题集、模板和夹具。
-2. README 已把 `day20-cn-kb` 结果写进项目完成度。
-3. 后续一旦改 chunking、embedding 或 rerank，就需要稳定对比口径。
+1. README 当前边界里仍明确写着“还没有做多实例任务协调、任务取消和批量索引编排”。
+2. `RFC-0004` 已经把异步索引、重试和恢复站稳，但还没有覆盖多实例调度与取消语义。
+3. 这个主题会直接影响后台任务执行模型、运维入口和故障恢复策略。
 
 ## Source Map
 
@@ -86,13 +89,16 @@
 4. [week2.md](../../rag-backend/work/week2.md)
 5. [week3.md](../../rag-backend/work/week3.md)
 6. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
+7. [work day20.md](../../rag-backend/work/work%20day20.md)
+8. [evaluation/](../../rag-backend/work/evaluation/)
 
 这些文档的作用不同：
 
 1. `README.md` 提供当前项目口径和边界。
 2. `current-status.md` 与 `week*.md`、`work day*.md` 提供迭代顺序和决策上下文。
 3. `frontend plan.md` 提供用户前端接入、运维入口和页面约束。
-4. `README.md` 已吸收近期关于 embedding rebuild、知识库恢复和前端构建优化的阶段总结。
+4. `work day20.md` 与 `work/evaluation/` 提供评测基线、结果模板和真实结果记录。
+5. `README.md` 已吸收近期关于 embedding rebuild、知识库恢复、评测结果和前端构建优化的阶段总结。
 
 ## Maintenance Notes
 

@@ -13,6 +13,7 @@ import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import com.example.rag.service.DocumentEmbeddingService;
 import com.example.rag.service.DocumentProcessingService;
 import com.example.rag.service.QuestionAnsweringService;
+import com.example.rag.support.TestPaths;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Disabled;
@@ -35,8 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Disabled("Requires unrestricted socket access to PostgreSQL and embedding service for real retrieval evaluation")
 class QaRetrievalEvaluationIntegrationTest {
 
-    private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
-    private static final Path DATASET_PATH = repoFile("work/evaluation/day20-qa-eval-cases.json");
+    private static final Path DATASET_PATH = backendFile("work/evaluation/day20-qa-eval-cases.json");
 
     @Autowired
     private KnowledgeBaseRepository knowledgeBaseRepository;
@@ -66,9 +66,9 @@ class QaRetrievalEvaluationIntegrationTest {
         List<String> documentCodes = new ArrayList<>();
 
         createKnowledgeBase(kbCode);
-        documentCodes.add(createDocument(kbCode, "结算异常处理指南", repoFile("work/samples/day20-cn-结算异常处理指南.md"), "md", "text/markdown"));
-        documentCodes.add(createDocument(kbCode, "对账常见问题", repoFile("work/samples/day20-cn-对账常见问题.md"), "md", "text/markdown"));
-        documentCodes.add(createDocument(kbCode, "值班巡检清单", repoFile("work/samples/day20-cn-值班巡检清单.txt"), "txt", "text/plain"));
+        documentCodes.add(createDocument(kbCode, "结算异常处理指南", backendFile("work/samples/day20-cn-结算异常处理指南.md"), "md", "text/markdown"));
+        documentCodes.add(createDocument(kbCode, "对账常见问题", backendFile("work/samples/day20-cn-对账常见问题.md"), "md", "text/markdown"));
+        documentCodes.add(createDocument(kbCode, "值班巡检清单", backendFile("work/samples/day20-cn-值班巡检清单.txt"), "txt", "text/plain"));
 
         processAndEmbedAll(kbCode, documentCodes);
 
@@ -154,8 +154,8 @@ class QaRetrievalEvaluationIntegrationTest {
         }
     }
 
-    private static Path repoFile(String relativePath) {
-        return REPO_ROOT.resolve(relativePath);
+    private static Path backendFile(String relativePath) {
+        return TestPaths.backendFile(relativePath);
     }
 
     private void processAndEmbedAll(String kbCode, List<String> documentCodes) {

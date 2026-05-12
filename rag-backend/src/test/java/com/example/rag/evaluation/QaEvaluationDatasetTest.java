@@ -1,5 +1,6 @@
 package com.example.rag.evaluation;
 
+import com.example.rag.support.TestPaths;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -16,8 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** 中文问答评测数据集完整性测试。 */
 class QaEvaluationDatasetTest {
 
-    private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
-    private static final Path DATASET_PATH = repoFile("work/evaluation/day20-qa-eval-cases.json");
+    private static final Path DATASET_PATH = backendFile("work/evaluation/day20-qa-eval-cases.json");
     private static final List<String> SAMPLE_FILES = List.of(
             "work/samples/day20-cn-结算异常处理指南.md",
             "work/samples/day20-cn-对账常见问题.md",
@@ -32,7 +32,7 @@ class QaEvaluationDatasetTest {
     void evaluationDatasetShouldBeCompleteAndChineseFocused() throws IOException {
         // 这组校验用来保证评测数据仍然满足当前中文问答基线的假设。
         assertThat(Files.exists(DATASET_PATH)).isTrue();
-        SAMPLE_FILES.forEach(sample -> assertThat(Files.exists(repoFile(sample))).isTrue());
+        SAMPLE_FILES.forEach(sample -> assertThat(Files.exists(backendFile(sample))).isTrue());
 
         JsonNode root = objectMapper.readTree(Files.readString(DATASET_PATH));
         assertThat(root.path("kbCode").asText()).isEqualTo("day20-cn-kb");
@@ -94,7 +94,7 @@ class QaEvaluationDatasetTest {
         return value != null && value.chars().anyMatch(ch -> (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'));
     }
 
-    private static Path repoFile(String relativePath) {
-        return REPO_ROOT.resolve(relativePath);
+    private static Path backendFile(String relativePath) {
+        return TestPaths.backendFile(relativePath);
     }
 }

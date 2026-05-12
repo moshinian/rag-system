@@ -7,6 +7,7 @@ import com.example.rag.ingestion.parser.ParsedDocument;
 import com.example.rag.ingestion.parser.PdfDocumentTextParser;
 import com.example.rag.ingestion.parser.PlainTextDocumentTextParser;
 import com.example.rag.persistence.entity.DocumentEntity;
+import com.example.rag.support.TestPaths;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -20,7 +21,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** 切块参数对比实验测试。 */
 class ChunkingExperimentTest {
 
-    private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
     private static final int SHORT_CHUNK_THRESHOLD = 120;
     private static final int LONG_CHUNK_THRESHOLD = 500;
 
@@ -37,10 +37,10 @@ class ChunkingExperimentTest {
                 new ChunkingProfile("wide", 720, 120, 300)
         );
         List<SampleDocumentSpec> samples = List.of(
-                new SampleDocumentSpec("markdown", "md", repoFile("work/samples/day4-upload-sample.md")),
-                new SampleDocumentSpec("plain-text", "txt", repoFile("work/samples/day4-upload-sample.txt")),
-                new SampleDocumentSpec("pdf", "pdf", repoFile("work/samples/day4-upload-sample.pdf")),
-                new SampleDocumentSpec("long-markdown", "md", repoFile("work/samples/day19-chunking-sample.md"))
+                new SampleDocumentSpec("markdown", "md", TestPaths.backendFile("work/samples/day4-upload-sample.md")),
+                new SampleDocumentSpec("plain-text", "txt", TestPaths.backendFile("work/samples/day4-upload-sample.txt")),
+                new SampleDocumentSpec("pdf", "pdf", TestPaths.backendFile("work/samples/day4-upload-sample.pdf")),
+                new SampleDocumentSpec("long-markdown", "md", TestPaths.backendFile("work/samples/day19-chunking-sample.md"))
         );
 
         List<ExperimentResult> results = profiles.stream()
@@ -145,10 +145,6 @@ class ChunkingExperimentTest {
 
     private String format(double value) {
         return String.format(Locale.ROOT, "%.1f", value);
-    }
-
-    private static Path repoFile(String relativePath) {
-        return REPO_ROOT.resolve(relativePath);
     }
 
     private record ChunkingProfile(

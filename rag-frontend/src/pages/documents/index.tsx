@@ -1,19 +1,42 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Card, Select, Space, Typography } from "antd";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { disableDocument, enableDocument, listDocuments } from "../../api/document";
 import { DocumentTable } from "../../components/tables/document-table";
 import { ApiErrorAlert } from "../../components/feedback/api-error-alert";
 import { useCurrentKb } from "../../hooks/use-current-kb";
+import {
+  DEFAULT_PAGE,
+  normalizePaginationParams,
+  PAGE_SIZE_OPTIONS
+} from "../../utils/pagination";
 
 export function DocumentsPage() {
   const { message } = App.useApp();
   const kbCode = useCurrentKb();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [status, setStatus] = useState<string>();
+  const { page, pageSize, normalized } = useMemo(
+    () => normalizePaginationParams(searchParams),
+    [searchParams]
+  );
+
+  useEffect(() => {
+    if (
+      searchParams.get("page") === normalized.page &&
+      searchParams.get("pageSize") === normalized.pageSize
+    ) {
+      return;
+    }
+
+    setSearchParams(normalized, { replace: true });
+  }, [normalized, searchParams, setSearchParams]);
+
   const query = useQuery({
-    queryKey: ["documents", kbCode, status],
-    queryFn: () => listDocuments(kbCode!, { status, pageNo: 1, pageSize: 100 }),
+    queryKey: ["documents", kbCode, status, page, pageSize],
+    queryFn: () => listDocuments(kbCode!, { status, pageNo: page, pageSize }),
     enabled: !!kbCode
   });
   const [togglingDocumentCode, setTogglingDocumentCode] = useState<string>();
@@ -45,6 +68,25 @@ export function DocumentsPage() {
     },
     onSettled: () => setTogglingDocumentCode(undefined)
   });
+  const pagination = useMemo(
+    () => ({
+      current: page,
+      pageSize,
+      total: query.data?.total ?? 0,
+      showSizeChanger: true,
+      pageSizeOptions: PAGE_SIZE_OPTIONS.map(String),
+      onChange: (nextPage: number, nextPageSize: number) => {
+        setSearchParams(
+          {
+            page: String(nextPageSize !== pageSize ? DEFAULT_PAGE : nextPage),
+            pageSize: String(nextPageSize)
+          },
+          { replace: false }
+        );
+      }
+    }),
+    [page, pageSize, query.data?.total, setSearchParams]
+  );
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -58,7 +100,16 @@ export function DocumentsPage() {
             placeholder="按状态筛选"
             style={{ width: 220 }}
             value={status}
-            onChange={setStatus}
+            onChange={(value) => {
+              setStatus(value);
+              setSearchParams(
+                {
+                  page: String(DEFAULT_PAGE),
+                  pageSize: String(pageSize)
+                },
+                { replace: false }
+              );
+            }}
             options={[
               "UPLOADED",
               "PARSING",
@@ -76,6 +127,7 @@ export function DocumentsPage() {
         <DocumentTable
           kbCode={kbCode!}
           data={query.data?.records ?? []}
+          pagination={pagination}
           togglingDocumentCode={togglingDocumentCode}
           onDisable={(documentCode) => disableMutation.mutate(documentCode)}
           onEnable={(documentCode) => enableMutation.mutate(documentCode)}

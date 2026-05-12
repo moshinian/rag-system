@@ -1,5 +1,8 @@
 package com.example.rag.model.response;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -7,6 +10,7 @@ import java.util.List;
  * 知识库启用/恢复结果。
  */
 public record KnowledgeBaseEnableResponse(
+        @JsonSerialize(using = ToStringSerializer.class)
         Long id,
         String kbCode,
         String name,

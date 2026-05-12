@@ -9,6 +9,8 @@ import type {
   UploadDocumentPayload
 } from "../types/document";
 import type { PageResponse } from "../types/api";
+import type { BackendLongId } from "../types/backend-id";
+import { toBackendIdParam } from "../types/backend-id";
 
 export function listDocuments(
   kbCode: string,
@@ -81,12 +83,12 @@ export function listIndexingTasks(kbCode: string, documentCode: string) {
 export function retryIndexingTask(
   kbCode: string,
   documentCode: string,
-  taskId: number,
+  taskId: BackendLongId,
   operator?: string
 ) {
   const suffix = operator ? `?operator=${encodeURIComponent(operator)}` : "";
   return apiClient.postJson<DocumentIndexingTask>(
-    `/api/knowledge-bases/${kbCode}/documents/${documentCode}/indexing-tasks/${taskId}/retry${suffix}`
+    `/api/knowledge-bases/${kbCode}/documents/${documentCode}/indexing-tasks/${toBackendIdParam(taskId)}/retry${suffix}`
   );
 }
 

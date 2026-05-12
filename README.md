@@ -62,6 +62,7 @@
 12. 前端生产构建已完成路由级懒加载与 vendor 拆包，不再是单一超大入口包
 13. 文档禁用/恢复已完成前后端联动，文档恢复后重新计入 readiness 口径
 14. Redis 不可反序列化缓存值已完成真实自愈验证，不再因为脏缓存直接返回 500
+15. 评测数据集、切块实验样本和 PDF 样本测试路径已统一收口，`mvn test` 已在当前仓库状态下全量通过
 
 ### 当前边界
 
@@ -395,6 +396,14 @@ curl --noproxy '*' -s http://127.0.0.1:8080/api/health/redis-probe
 2. 覆盖类型：`FACT / SUMMARY / PROCESS / NO_ANSWER`
 3. 结果：`5/5` 可回答问题命中预期文档
 4. 无答案问题返回“根据当前检索内容，无法确定答案。”
+
+这组评测基线当前已经有完整仓库资产支撑：
+
+1. 数据集文件：`rag-backend/work/evaluation/day20-qa-eval-cases.json`
+2. 结果模板与首轮真实结果记录：`rag-backend/work/evaluation/`
+3. 数据完整性测试：`QaEvaluationDatasetTest`
+4. 真实检索评测夹具：`QaRetrievalEvaluationIntegrationTest`
+5. 当前样本与评测测试路径已经统一收口，不再依赖脆弱的相对目录猜测
 
 ### 2026-05-04 RAG 与 Redis 联调
 

@@ -51,6 +51,28 @@
 3. 只要文档处于 `DISABLED`，它就不会参与 `qa/readiness` 统计、检索和问答。
 4. 恢复文档时，优先回到禁用前状态；历史老数据如果没有记录禁用前状态，则按“有 chunk 则恢复为 `INDEXED`，有错误则恢复为 `FAILED`，否则恢复为 `UPLOADED`”回退。
 
+## Historical Evolution
+
+### Phase 1: 只有知识库开关，没有明确运维语义
+
+- 特征：系统早期已经存在 `ACTIVE / INACTIVE`
+- 局限：
+  - 字段存在，但“什么情况下切换、谁来切换、是否自动切换”没有正式文档
+  - 文档失败和知识库禁用容易被误解成同一层问题
+
+### Phase 2: readiness gate 把知识库状态升级为真实阻断条件
+
+- 特征：`RFC-0002` 收口后，知识库状态不再只是展示字段，而会真实影响检索和问答入口
+- 结果：`INACTIVE` 开始具备明确的用户可见后果，但恢复和补偿语义还不完整
+
+### Phase 3: 补齐恢复语义和文档软禁用
+
+- 特征：
+  - 知识库支持“恢复使用”与“恢复并重试失败任务”
+  - 文档支持 `DISABLED` 软下线与恢复
+  - 首页 readiness 统计和检索口径开始排除已禁用文档
+- 结果：生命周期正式从“布尔开关”升级成前后端共享运维契约
+
 ## Implementation
 
 核心实现位于：
@@ -98,6 +120,15 @@
 2. `RFC-0004` 的索引任务恢复只解决任务层补偿，不负责切换知识库状态。
 3. `RFC-0006` 的缓存策略要求禁用/恢复时同步失效相关 readiness 与 retrieval 缓存。
 4. 文档 `DISABLED` 通过查询条件退出 readiness 和 retrieval 口径，不需要物理删除 chunk 或向量。
+
+## Validation
+
+当前已有直接验证材料：
+
+1. [KnowledgeBaseServiceTest.java](../../rag-backend/src/test/java/com/example/rag/service/KnowledgeBaseServiceTest.java) 已覆盖知识库禁用、恢复和失败任务补偿分支。
+2. [DocumentServiceTest.java](../../rag-backend/src/test/java/com/example/rag/service/DocumentServiceTest.java) 已覆盖文档禁用、恢复和历史状态回退规则。
+3. README 已把知识库恢复、恢复并重试失败任务、文档软禁用/恢复和 readiness 口径变化写入当前完成情况。
+4. 前端工作台当前已落地对应入口，说明这套生命周期语义已经进入实际用户路径，而不只是后端内部约定。
 
 ## Consequences
 

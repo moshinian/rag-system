@@ -1,5 +1,8 @@
 package com.example.rag.model.response;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+
 /** 问答链路就绪度返回对象。 */
 public record QuestionAnsweringReadinessResponse(
         String knowledgeBaseCode,
@@ -15,6 +18,7 @@ public record QuestionAnsweringReadinessResponse(
         long embeddedChunkCount,
         boolean reembedRequired,
         boolean reembedInProgress,
+        @JsonSerialize(using = ToStringSerializer.class)
         Long currentRebuildRunId,
         String nextStep
 ) {

@@ -1,5 +1,8 @@
 package com.example.rag.model.response;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+
 import java.time.OffsetDateTime;
 
 /**
@@ -8,6 +11,7 @@ import java.time.OffsetDateTime;
  * 描述本次处理使用的解析器、生成的 chunk 数量以及最终状态。
  */
 public record DocumentProcessResponse(
+        @JsonSerialize(using = ToStringSerializer.class)
         Long documentId,
         String documentCode,
         String knowledgeBaseCode,

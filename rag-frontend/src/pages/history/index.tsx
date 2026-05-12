@@ -1,18 +1,61 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, Collapse, Descriptions, Space, Table, Typography } from "antd";
+import { useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { listQaHistory } from "../../api/qa";
 import { ApiErrorAlert } from "../../components/feedback/api-error-alert";
 import { SourceList } from "../../components/source-viewer/source-list";
 import { useCurrentKb } from "../../hooks/use-current-kb";
 import { formatDateTime, truncateText } from "../../utils/format";
+import {
+  DEFAULT_PAGE,
+  normalizePaginationParams,
+  PAGE_SIZE_OPTIONS
+} from "../../utils/pagination";
 
 export function HistoryPage() {
   const kbCode = useCurrentKb();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { page, pageSize, normalized } = useMemo(
+    () => normalizePaginationParams(searchParams),
+    [searchParams]
+  );
+
+  useEffect(() => {
+    if (
+      searchParams.get("page") === normalized.page &&
+      searchParams.get("pageSize") === normalized.pageSize
+    ) {
+      return;
+    }
+
+    setSearchParams(normalized, { replace: true });
+  }, [normalized, searchParams, setSearchParams]);
+
   const query = useQuery({
-    queryKey: ["qaHistory", kbCode],
-    queryFn: () => listQaHistory(kbCode!, 1, 50),
+    queryKey: ["qaHistory", kbCode, page, pageSize],
+    queryFn: () => listQaHistory(kbCode!, page, pageSize),
     enabled: !!kbCode
   });
+  const pagination = useMemo(
+    () => ({
+      current: page,
+      pageSize,
+      total: query.data?.total ?? 0,
+      showSizeChanger: true,
+      pageSizeOptions: PAGE_SIZE_OPTIONS.map(String),
+      onChange: (nextPage: number, nextPageSize: number) => {
+        setSearchParams(
+          {
+            page: String(nextPageSize !== pageSize ? DEFAULT_PAGE : nextPage),
+            pageSize: String(nextPageSize)
+          },
+          { replace: false }
+        );
+      }
+    }),
+    [page, pageSize, query.data?.total, setSearchParams]
+  );
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -21,7 +64,7 @@ export function HistoryPage() {
         <Table
           rowKey="messageCode"
           dataSource={query.data?.records ?? []}
-          pagination={false}
+          pagination={pagination}
           expandable={{
             expandedRowRender: (record) => (
               <Collapse

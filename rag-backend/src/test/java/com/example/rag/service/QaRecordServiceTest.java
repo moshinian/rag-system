@@ -114,6 +114,6 @@ class QaRecordServiceTest {
         assertThat(messageCaptor.getValue().getMessageType()).isEqualTo("QA_AUDIT");
         assertThat(messageCaptor.getValue().getPromptTemplate()).isEqualTo("qa-config-v2");
         assertThat(messageCaptor.getValue().getRetrievedChunks()).contains("\"documentCode\":\"DOC-1\"");
-        assertThat(messageCaptor.getValue().getSources()).contains("\"chunkId\":1");
+        assertThat(messageCaptor.getValue().getSources()).contains("\"chunkId\":\"1\"");
     }
 }

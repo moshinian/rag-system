@@ -1,5 +1,6 @@
 import { Button, Popconfirm, Space, Table, Typography } from "antd";
 import { Link } from "react-router-dom";
+import type { TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { DocumentSummary } from "../../types/document";
 import { formatDateTime, formatFileSize, truncateText } from "../../utils/format";
@@ -8,12 +9,20 @@ import { StatusBadge } from "../status/status-badge";
 type DocumentTableProps = {
   kbCode: string;
   data: DocumentSummary[];
+  pagination?: TableProps<DocumentSummary>["pagination"];
   togglingDocumentCode?: string;
   onDisable?: (documentCode: string) => void;
   onEnable?: (documentCode: string) => void;
 };
 
-export function DocumentTable({ kbCode, data, togglingDocumentCode, onDisable, onEnable }: DocumentTableProps) {
+export function DocumentTable({
+  kbCode,
+  data,
+  pagination,
+  togglingDocumentCode,
+  onDisable,
+  onEnable
+}: DocumentTableProps) {
   const columns: ColumnsType<DocumentSummary> = [
     {
       title: "文档",
@@ -85,5 +94,5 @@ export function DocumentTable({ kbCode, data, togglingDocumentCode, onDisable, o
     }
   ];
 
-  return <Table rowKey="documentCode" columns={columns} dataSource={data} pagination={false} />;
+  return <Table rowKey="documentCode" columns={columns} dataSource={data} pagination={pagination} />;
 }

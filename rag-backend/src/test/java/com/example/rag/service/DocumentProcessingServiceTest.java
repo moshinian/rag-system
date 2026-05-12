@@ -19,6 +19,7 @@ import com.example.rag.persistence.entity.DocumentChunkEntity;
 import com.example.rag.persistence.entity.DocumentEntity;
 import com.example.rag.persistence.entity.IndexingTaskEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
+import com.example.rag.support.TestPaths;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,8 +49,6 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 class DocumentProcessingServiceTest {
-
-    private static final Path REPO_ROOT = Path.of("..").toAbsolutePath().normalize();
 
     @Mock
     private DocumentRepository documentRepository;
@@ -137,7 +136,7 @@ class DocumentProcessingServiceTest {
     void processShouldParsePdfAndPersistChunks() throws Exception {
         DocumentEntity document = createDocument("pdf");
         Path file = tempDir.resolve("sample.pdf");
-        Files.copy(REPO_ROOT.resolve("work/samples/day4-upload-sample.pdf"), file);
+        Files.copy(TestPaths.backendFile("work/samples/day4-upload-sample.pdf"), file);
         document.setStoragePath(file.toString());
 
         when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb"))

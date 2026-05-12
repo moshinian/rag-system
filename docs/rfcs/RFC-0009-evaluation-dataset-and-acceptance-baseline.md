@@ -1,0 +1,166 @@
+# RFC-0009 Evaluation Dataset And Acceptance Baseline
+
+- Status: Accepted
+- Created: 2026-05-12
+- Last Updated: 2026-05-12
+- Owners: RAG Team
+
+## Summary
+
+本 RFC 记录当前中文问答评测集、验收口径和首轮真实结果。核心结论是：系统已经不再只靠“主观感觉回答还行”来判断质量，而是固定一套最小可用的评测基线，包括中文样本文档、问题集、观察维度、结果模板和测试夹具；后续凡是改动 chunking、embedding、prompt、rerank 或拒答策略，都应该先回到这套基线比较，再决定是否算真正改进。
+
+## Context
+
+到 Week 3 后半段，系统已经具备：
+
+1. 异步索引、失败重试和恢复。
+2. 结构化日志与配置外置。
+3. 固定窗口切块和参数对比实验。
+4. 检索、问答、来源和历史回放。
+
+此时如果继续只凭单次演示或个别问题判断效果，会遇到几个典型问题：
+
+1. 检索命中和最终回答混在一起，无法判断到底是哪一层退化。
+2. 调 chunk 参数、embedding 模型或 prompt 后，没有稳定对照组。
+3. 无答案问题是否稳定拒答，很容易被“看起来没问题”的演示掩盖。
+4. README、周记、真实运行结果和测试夹具容易逐步脱节。
+
+因此 Day 20 没有继续扩功能，而是先把“评测样本、问题集、结果模板、验证维度和首轮结果”固定下来。
+
+## Decision
+
+系统当前采用一版最小可用的中文问答评测基线，具体约定如下：
+
+1. 评测语言固定为 `zh-CN`。
+2. 第一版评测知识库固定为 `day20-cn-kb`。
+3. 默认检索参数固定为 `topK=3`。
+4. 评测问题覆盖四类：
+   - `FACT`
+   - `SUMMARY`
+   - `PROCESS`
+   - `NO_ANSWER`
+5. 每条 case 至少记录：
+   - `caseCode`
+   - `category`
+   - `question`
+   - `expectedDocument`
+   - `expectedKeywords`
+   - `expectationType`
+   - `notes`
+6. 每轮结果至少记录：
+   - `retrievalHit`
+   - `answerAcceptable`
+   - `sourceStable`
+   - `notes`
+
+这套基线当前不是“最终评分体系”，而是第一版验收底线。它的目标是让后续效果改动具备可重复、可回看、可对比的最小依据。
+
+## Historical Evolution
+
+### Phase 1: 先做最小问答闭环
+
+- 时间：Week 2
+- 特征：系统已经具备检索、问答、来源返回和历史记录，但还没有正式评测基线。
+
+### Phase 2: 先固定 chunk 参数和工程边界
+
+- 时间：Week 3 前半段
+- 特征：异步索引、缓存、日志、切块实验已具备，开始有条件对问答效果做稳定比较。
+
+### Phase 3: 建立 Day 20 中文评测基线
+
+- 时间：Day 20
+- 特征：
+  - 新增三份中文样本文档。
+  - 新增问题集 `day20-qa-eval-cases.json`。
+  - 新增结果模板和结果记录。
+  - 新增数据完整性测试 `QaEvaluationDatasetTest`。
+  - 新增真实检索评测夹具 `QaRetrievalEvaluationIntegrationTest`。
+  - 完成 `day20-cn-kb` 首轮真实问答评测。
+
+## Implementation
+
+当前评测基线由下面几部分组成：
+
+1. 数据集文件：
+   [day20-qa-eval-cases.json](../../rag-backend/work/evaluation/day20-qa-eval-cases.json)
+2. 结果模板：
+   [day20-qa-eval-results-template.md](../../rag-backend/work/evaluation/day20-qa-eval-results-template.md)
+3. 首轮真实结果：
+   [day20-qa-eval-results.md](../../rag-backend/work/evaluation/day20-qa-eval-results.md)
+4. 数据完整性校验：
+   [QaEvaluationDatasetTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaEvaluationDatasetTest.java)
+5. 真实检索评测夹具：
+   [QaRetrievalEvaluationIntegrationTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaRetrievalEvaluationIntegrationTest.java)
+
+当前数据集的固定事实包括：
+
+1. `kbCode = day20-cn-kb`
+2. `language = zh-CN`
+3. `topK = 3`
+4. 共 `6` 条 case
+5. 覆盖四类问题：`FACT / SUMMARY / PROCESS / NO_ANSWER`
+
+当前结果记录中的首轮基线结论是：
+
+1. `5/5` 可回答问题命中预期文档。
+2. `5/5` 可回答问题的最终回答可接受。
+3. `5/5` 可回答问题的来源与回答一致。
+4. `1/1` 无答案问题返回兜底话术，没有直接胡乱编造。
+5. 当前主要剩余问题不在回答生成，而在无答案场景下检索仍会返回弱相关 chunk。
+
+## Why This Baseline Is Intentionally Small
+
+系统当前没有一上来就做复杂自动评分，是刻意控制范围。
+
+原因是：
+
+1. 项目还在第一版工程化收口阶段，先需要稳定口径，再需要规模。
+2. 当前最有价值的是“防止明显退化”，而不是追求虚假的细粒度分数。
+3. `retrievalHit / answerAcceptable / sourceStable` 已经足以把主要问题拆分到检索层、生成层和来源层。
+4. 真实中文样本文档和真实知识库比纯合成 case 更适合这个阶段。
+
+## Consequences
+
+正面影响：
+
+1. 评测第一次从口头描述变成仓库内资产。
+2. README、状态文档和真实样本之间有了共同基线。
+3. 后续优化 chunking、embedding、prompt 或 rerank 时，有最低限度的回归对照。
+4. 无答案问题第一次被纳入正式验收，而不是只看“可回答问题”。
+
+代价与约束：
+
+1. 当前 case 数量还小，只能算第一版验收底线。
+2. `answerAcceptable` 和 `sourceStable` 仍然是半人工判断，不是完全自动评分。
+3. 真正的端到端检索评测夹具依赖数据库和 embedding 服务，本地默认仍需受环境约束。
+4. 数据集、样本文档和结果记录一旦漂移，就会导致 RFC 与测试夹具脱节。
+
+## Non-Goals
+
+本 RFC 不定义：
+
+1. 最终版自动评分体系。
+2. 复杂的多维 benchmark 平台。
+3. 多轮对话评测。
+4. rerank 或 hybrid retrieval 的最终验收标准。
+
+## Open Questions
+
+1. 后续是否要把 `answerAcceptable` 和 `sourceStable` 进一步拆成更细维度。
+2. 无答案场景是否需要单独增加更多 case，避免当前只靠 `1` 条问题判断。
+3. 后续引入 rerank 或 citation mapping 后，是否需要新增 `rerankGain` 或 `citationCorrectness` 维度。
+4. 评测结果应继续以 Markdown 记录为主，还是补一份更结构化的结果文件。
+
+## References
+
+1. [README.md](../../README.md)
+2. [RFC Index](./README.md)
+3. [week3.md](../../rag-backend/work/week3.md)
+4. [current-status.md](../../rag-backend/work/current-status.md)
+5. [work day20.md](../../rag-backend/work/work%20day20.md)
+6. [day20-qa-eval-cases.json](../../rag-backend/work/evaluation/day20-qa-eval-cases.json)
+7. [day20-qa-eval-results-template.md](../../rag-backend/work/evaluation/day20-qa-eval-results-template.md)
+8. [day20-qa-eval-results.md](../../rag-backend/work/evaluation/day20-qa-eval-results.md)
+9. [QaEvaluationDatasetTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaEvaluationDatasetTest.java)
+10. [QaRetrievalEvaluationIntegrationTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaRetrievalEvaluationIntegrationTest.java)

@@ -127,7 +127,7 @@
   - DocumentTable：文档列表、状态筛选、操作列
   - IndexingTimeline：任务状态和阶段时间线，复用到列表行展开和详情页
   - RetryActionBar：失败说明、重试入口、调试入口
-  - ChunkPreviewList：chunk 内容、token、offset、embeddingStatus
+  - ChunkInspector：作为 Retrieval Workspace 的证据检视子视图，承载 chunk 内容、token、offset、embeddingStatus 与后续检索调试信息
   - RetrievalResultList：召回结果、score、来源跳转
   - AnswerCard：答案正文、模型名、topK
   - SourceList：来源列表，支持抽屉打开原文

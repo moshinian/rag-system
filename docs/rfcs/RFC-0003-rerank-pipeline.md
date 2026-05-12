@@ -2,12 +2,12 @@
 
 - Status: Planned
 - Created: 2026-05-11
-- Last Updated: 2026-05-11
+- Last Updated: 2026-05-12
 - Owners: RAG Team
 
 ## Summary
 
-本 RFC 记录项目对“重排序 pipeline”的历史定位和后续规划。需要先说明一件事：截至 2026-05-11，仓库里还没有合并完成的 rerank 实现；它目前仍属于路线图事项。本 RFC 的作用是把已有文档里的规划意图整理成正式记录，避免后续讨论重复从零开始。
+本 RFC 记录项目对“重排序 pipeline”的历史定位和后续规划。需要先说明一件事：截至 2026-05-12，仓库里还没有合并完成的 rerank 实现；它目前仍属于路线图事项。本 RFC 的作用是把已有文档里的规划意图整理成正式记录，同时明确“当前没有做什么”，避免后续把路线图误读成现状。
 
 ## Context
 
@@ -25,6 +25,18 @@
 3. 在中文长文档、多相似片段、需要细粒度证据排序时，单阶段召回的 precision 不够稳定。
 
 项目文档已经多次把“混合检索与重排序”列为后续方向，因此需要一份正式 RFC 说明：这不是已完成能力，而是当前架构的下一阶段扩展点。
+
+## Current State Boundary
+
+为了避免规划文档和当前实现混淆，本 RFC 先把现状边界写死：
+
+1. 当前线上口径仍然只有单阶段 dense retrieval，没有二阶段 rerank。
+2. 当前 `POST /qa/retrieve`、`POST /qa/ask`、`sources`、`/qa/history` 都没有暴露 rerank 分数、候选重排结果或 rerank explain 字段。
+3. 当前 readiness gate 不检查 rerank 模型可用性，也不会因为 rerank 缺失而阻断问答。
+4. 当前评测基线仍以“无 rerank”链路作为真实验收口径。
+5. 当前 README 中“还没有做混合检索、重排序和更细的召回抑制”仍然是准确描述，而不是过时注释。
+
+换句话说，只要仓库中还没有出现独立 rerank 排序层、可观测结果和新的验收口径，就不能把任何 retrieval 效果变化表述成“rerank 已上线”。
 
 ## Historical Signals
 
@@ -44,6 +56,7 @@
 2. rerank 将被视为二阶段排序层，位置在“召回之后、拼 prompt 之前”。
 3. readiness gate 未来需要能表达 rerank 是否可用，但在 rerank 未落地前，不把它纳入现有阻断条件。
 4. RFC 编号提前占位，后续实现时沿用同一文档持续演进，而不是另起一份不连续的设计稿。
+5. 在真正进入开发前，必须先补齐“模型来源、候选规模、降级行为、评测口径”四个前置决定，避免实现阶段边写边猜。
 
 ## Proposed Pipeline
 
@@ -60,6 +73,16 @@
 
 1. rerank 不可用时，系统退回当前 TopK 结果。
 2. rerank 可用时，对召回候选重新打分，输出更精确的上下文顺序。
+
+## Adoption Trigger
+
+只有满足下面条件，rerank 才应该从 `Planned` 进入真正实现阶段：
+
+1. 已经确定 rerank 能力来源，是独立模型、供应商接口还是本地服务。
+2. 已经确定 first-stage recall 的候选截断规模，并能解释成本上界。
+3. 已经确定“失败时如何降级回当前 dense retrieval”，且不会把现有问答主链路变成强依赖。
+4. 已经确定至少一套可重复的验收口径，能够用 `RFC-0009` 的评测基线证明 rerank 带来净收益，而不是只凭主观观感。
+5. 已经确定对外契约策略，明确是先内部启用、还是同步暴露 rerank 信号给前端和历史记录。
 
 ## Expected Benefits
 
@@ -86,6 +109,15 @@ rerank 真正落地前，至少需要补齐这些决策：
 
 因此，rerank 虽然还没实现，但它并不是孤立主题，而是建立在已有检索、切块和评测工作的下一层。
 
+## Consequences
+
+当前把 rerank 保持在 `Planned` 状态，有两个直接后果：
+
+1. 正面影响：团队不会把“潜在优化方向”误写成“现有产品能力”，README、RFC 和真实代码口径能保持一致。
+2. 代价：短期内问答质量提升仍然主要依赖切块、embedding profile、prompt 和评测收敛，而不是二阶段排序。
+
+这是一种刻意的保守做法。先把现有 dense retrieval 基线、评测基线和证据契约站稳，再引入 rerank，工程风险更低。
+
 ## Non-Goals
 
 本 RFC 当前不定义：
@@ -101,6 +133,7 @@ rerank 真正落地前，至少需要补齐这些决策：
 2. 候选集是固定 TopN，还是按相似度阈值截断。
 3. 若 rerank 成本较高，是否需要按知识库规模、租户或请求类型做动态开关。
 4. readiness 接口未来要不要新增 `rerankEnabled`、`rerankAvailable` 等字段。
+5. 如果后续同时推进 session reuse 和多轮问答，rerank 是否需要感知会话上下文，而不只是当前单轮 query。
 
 ## References
 

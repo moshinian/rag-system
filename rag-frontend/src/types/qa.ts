@@ -1,6 +1,8 @@
+import type { BackendLongId } from "./backend-id";
+
 export type RetrievedChunk = {
-  chunkId: number;
-  documentId: number;
+  chunkId: BackendLongId;
+  documentId: BackendLongId;
   documentCode: string;
   documentName: string;
   chunkIndex: number;
@@ -15,7 +17,7 @@ export type RetrievedChunk = {
 export type QaSource = {
   documentCode: string;
   documentName: string;
-  chunkId: number;
+  chunkId: BackendLongId;
   chunkIndex: number;
   content: string;
   score: number;

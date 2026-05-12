@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert, App, Button, Card, Col, Descriptions, Popconfirm, Row, Space, Typography } from "antd";
 import { useParams } from "react-router-dom";
 import { disableDocument, enableDocument, retryIndexingTask } from "../../api/document";
-import { ChunkPreviewList } from "../../components/cards/chunk-preview-list";
+import { ChunkInspector } from "../../components/cards/chunk-inspector";
 import { IndexingTimeline } from "../../components/cards/indexing-timeline";
 import { RetryActionBar } from "../../components/cards/retry-action-bar";
 import { ApiErrorAlert } from "../../components/feedback/api-error-alert";
@@ -121,7 +121,7 @@ export function DocumentDetailPage() {
         loading={retryMutation.isPending}
         onRetry={() => retryMutation.mutate()}
       />
-      <ChunkPreviewList chunks={monitor.chunksQuery.data ?? []} />
+      <ChunkInspector chunks={monitor.chunksQuery.data ?? []} />
     </Space>
   );
 }

@@ -13,8 +13,8 @@ import {
   Table,
   Typography
 } from "antd";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   createKnowledgeBase,
   deleteKnowledgeBase,
@@ -27,17 +27,39 @@ import { ApiErrorAlert } from "../../components/feedback/api-error-alert";
 import { StatusBadge } from "../../components/status/status-badge";
 import type { CreateKnowledgeBasePayload } from "../../types/knowledge-base";
 import { formatDateTime, truncateText } from "../../utils/format";
+import {
+  DEFAULT_PAGE,
+  normalizePaginationParams,
+  PAGE_SIZE_OPTIONS
+} from "../../utils/pagination";
 
 export function KnowledgeBasesPage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const currentKbCode = useAppStore((state) => state.currentKbCode);
   const setCurrentKbCode = useAppStore((state) => state.setCurrentKbCode);
   const [open, setOpen] = useState(false);
+  const { page, pageSize, normalized } = useMemo(
+    () => normalizePaginationParams(searchParams),
+    [searchParams]
+  );
+
+  useEffect(() => {
+    if (
+      searchParams.get("page") === normalized.page &&
+      searchParams.get("pageSize") === normalized.pageSize
+    ) {
+      return;
+    }
+
+    setSearchParams(normalized, { replace: true });
+  }, [normalized, searchParams, setSearchParams]);
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["knowledgeBases", "page"],
-    queryFn: () => listKnowledgeBases({ pageNo: 1, pageSize: 100 })
+    queryKey: ["knowledgeBases", "page", page, pageSize],
+    queryFn: () => listKnowledgeBases({ pageNo: page, pageSize })
   });
 
   const createMutation = useMutation({
@@ -95,6 +117,26 @@ export function KnowledgeBasesPage() {
     }
   });
 
+  const pagination = useMemo(
+    () => ({
+      current: page,
+      pageSize,
+      total: data?.total ?? 0,
+      showSizeChanger: true,
+      pageSizeOptions: PAGE_SIZE_OPTIONS.map(String),
+      onChange: (nextPage: number, nextPageSize: number) => {
+        setSearchParams(
+          {
+            page: String(nextPageSize !== pageSize ? DEFAULT_PAGE : nextPage),
+            pageSize: String(nextPageSize)
+          },
+          { replace: false }
+        );
+      }
+    }),
+    [data?.total, page, pageSize, setSearchParams]
+  );
+
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       <Card>
@@ -122,7 +164,7 @@ export function KnowledgeBasesPage() {
           rowKey="kbCode"
           loading={isLoading}
           dataSource={data?.records}
-          pagination={false}
+          pagination={pagination}
           columns={[
             {
               title: "知识库",
