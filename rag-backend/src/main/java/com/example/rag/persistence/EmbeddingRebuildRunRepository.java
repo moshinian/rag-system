@@ -44,4 +44,12 @@ public class EmbeddingRebuildRunRepository {
                 ));
         return mapper.selectCount(query) > 0;
     }
+
+    public List<EmbeddingRebuildRunEntity> findByStatuses(List<EmbeddingRebuildRunStatus> statuses, int limit) {
+        LambdaQueryWrapper<EmbeddingRebuildRunEntity> query = new LambdaQueryWrapper<EmbeddingRebuildRunEntity>()
+                .in(EmbeddingRebuildRunEntity::getStatus, statuses)
+                .orderByAsc(EmbeddingRebuildRunEntity::getCreatedAt)
+                .last("limit " + Math.max(1, limit));
+        return mapper.selectList(query);
+    }
 }

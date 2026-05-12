@@ -31,6 +31,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * 全量重嵌入后台任务服务。
@@ -40,6 +41,7 @@ public class EmbeddingRebuildService {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddingRebuildService.class);
     private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
+    private static final int RECOVERY_SCAN_LIMIT = 10;
 
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final RagEmbeddingProperties ragEmbeddingProperties;
@@ -127,7 +129,7 @@ public class EmbeddingRebuildService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                indexingExecutor.execute(() -> runAsync(run.getId()));
+                dispatchRun(run.getId());
             }
         });
 
@@ -149,12 +151,29 @@ public class EmbeddingRebuildService {
             initialDelayString = "${rag.indexing.recovery.initial-delay-ms:30000}"
     )
     public void recoverQueuedRebuildRuns() {
-        // v1 仅预留入口，当前通过提交后立即异步派发，不做额外恢复逻辑。
+        List<EmbeddingRebuildRunEntity> queuedRuns = embeddingRebuildRunRepository.findByStatuses(
+                List.of(EmbeddingRebuildRunStatus.QUEUED),
+                RECOVERY_SCAN_LIMIT
+        );
+        for (EmbeddingRebuildRunEntity queuedRun : queuedRuns) {
+            dispatchRun(queuedRun.getId());
+        }
+    }
+
+    private void dispatchRun(Long runId) {
+        try {
+            indexingExecutor.execute(() -> runAsync(runId));
+        } catch (RejectedExecutionException ex) {
+            markRunDispatchFailed(runId, ex);
+        }
     }
 
     private void runAsync(Long runId) {
         EmbeddingRebuildRunEntity run = embeddingRebuildRunRepository.findById(runId)
                 .orElseThrow(() -> new BusinessException("Embedding rebuild run not found: " + runId));
+        if (run.getStatus() != EmbeddingRebuildRunStatus.QUEUED) {
+            return;
+        }
         run.setStatus(EmbeddingRebuildRunStatus.RUNNING);
         run.setLastHeartbeatAt(OffsetDateTime.now());
         embeddingRebuildRunRepository.updateById(run);
@@ -220,6 +239,24 @@ public class EmbeddingRebuildService {
             return "Unknown rebuild error";
         }
         return message.length() <= 1024 ? message : message.substring(0, 1024);
+    }
+
+    private void markRunDispatchFailed(Long runId, RuntimeException ex) {
+        embeddingRebuildRunRepository.findById(runId).ifPresent(run -> {
+            run.setStatus(EmbeddingRebuildRunStatus.FAILED);
+            run.setErrorSummary(truncate("Failed to dispatch embedding rebuild: " + ex.getMessage()));
+            OffsetDateTime now = OffsetDateTime.now();
+            run.setFinishedAt(now);
+            run.setLastHeartbeatAt(now);
+            run.setFailedDocumentCount(run.getTotalDocumentCount());
+            embeddingRebuildRunRepository.updateById(run);
+            embeddingConfigurationStateService.markRebuildFailed(runId);
+            evictRebuildCaches();
+            log.warn(StructuredLogMessage.of("embedding.rebuild.dispatch_failed")
+                    .field("runId", runId)
+                    .field("message", ex.getMessage())
+                    .build());
+        });
     }
 
     private void evictRebuildCaches() {

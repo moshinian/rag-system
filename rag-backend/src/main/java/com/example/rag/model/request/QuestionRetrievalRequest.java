@@ -12,7 +12,7 @@ public record QuestionRetrievalRequest(
         String question,
 
         @Min(value = 1, message = "topK must be >= 1")
-        @Max(value = 50, message = "topK must be <= 50")
+        @Max(value = 10, message = "topK must be <= 10")
         Integer topK
 ) {
 }

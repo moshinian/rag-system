@@ -33,6 +33,16 @@ export function DashboardPage() {
     queryFn: () => listDocuments(kbCode!, { pageNo: 1, pageSize: 100 }),
     enabled: !!kbCode
   });
+  const failedDocsQuery = useQuery({
+    queryKey: ["documents", kbCode, "FAILED", "dashboard"],
+    queryFn: () => listDocuments(kbCode!, { status: "FAILED", pageNo: 1, pageSize: 6 }),
+    enabled: !!kbCode
+  });
+  const disabledDocsQuery = useQuery({
+    queryKey: ["documents", kbCode, "DISABLED", "dashboard"],
+    queryFn: () => listDocuments(kbCode!, { status: "DISABLED", pageNo: 1, pageSize: 1 }),
+    enabled: !!kbCode
+  });
 
   const disableMutation = useMutation({
     mutationFn: disableKnowledgeBase,
@@ -65,9 +75,10 @@ export function DashboardPage() {
   const rebuildMutation = useMutation({
     mutationFn: () => submitEmbeddingRebuild("frontend-dashboard"),
     onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ["readiness", kbCode] });
-      queryClient.invalidateQueries({ queryKey: ["documents", kbCode] });
-      message.success(`已提交重新嵌入任务 #${response.rebuildRunId}。`);
+      queryClient.invalidateQueries({ queryKey: ["readiness"] });
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      queryClient.invalidateQueries({ queryKey: ["documentChunks"] });
+      message.success(`已提交全局重新嵌入任务 #${response.rebuildRunId}，会影响所有活跃知识库。`);
     }
   });
 
@@ -75,10 +86,9 @@ export function DashboardPage() {
     return <Alert type="warning" showIcon message="请选择知识库" />;
   }
 
-  const failedDocuments =
-    docsQuery.data?.records.filter((document) => document.status === "FAILED").map((document) => document.documentCode) ?? [];
-  const disabledDocumentsCount =
-    docsQuery.data?.records.filter((document) => document.status === "DISABLED").length ?? 0;
+  const failedDocuments = failedDocsQuery.data?.records.map((document) => document.documentCode) ?? [];
+  const failedDocumentsCount = failedDocsQuery.data?.total ?? 0;
+  const disabledDocumentsCount = disabledDocsQuery.data?.total ?? 0;
   const kbInactive = kbQuery.data?.status === "INACTIVE";
   const reembedRequired = readinessQuery.data?.reembedRequired ?? false;
   const reembedInProgress = readinessQuery.data?.reembedInProgress ?? false;
@@ -157,7 +167,7 @@ export function DashboardPage() {
           <Col xs={24} xl={15}>
             <Space direction="vertical" size="middle" style={{ width: "100%" }}>
               <Typography.Text type="secondary">
-                这里的操作会直接影响当前知识库是否参与问答，以及是否需要重新生成向量。
+                这里既包含当前知识库的运维操作，也包含一次会影响所有活跃知识库的全局重嵌入动作。
               </Typography.Text>
               <Space wrap>
                 {kbInactive ? (
@@ -196,22 +206,22 @@ export function DashboardPage() {
                 <Button
                   type={reembedRequired ? "primary" : "default"}
                   danger={reembedRequired}
-                  disabled={kbInactive || reembedInProgress}
+                  disabled={reembedInProgress}
                   loading={rebuildMutation.isPending}
                   onClick={() => rebuildMutation.mutate()}
                 >
-                  {reembedInProgress ? "重新嵌入进行中" : "重新嵌入向量"}
+                  {reembedInProgress ? "全局重新嵌入进行中" : "提交全局重新嵌入"}
                 </Button>
                 <Button type="default">
                   <Link to={`/kb/${kbCode}/history`}>查看问答记录</Link>
                 </Button>
               </Space>
-              {failedDocuments.length > 0 ? (
+              {failedDocumentsCount > 0 ? (
                 <Alert
                   type="warning"
                   showIcon
                   message="存在失败文档"
-                  description={`最近发现失败文档: ${failedDocuments.slice(0, 6).join(", ")}`}
+                  description={`最近发现失败文档: ${failedDocuments.join(", ")}${failedDocumentsCount > failedDocuments.length ? " 等" : ""}`}
                 />
               ) : null}
             </Space>
@@ -221,7 +231,7 @@ export function DashboardPage() {
               <List
                 size="small"
                 dataSource={[
-                  `失败文档数: ${failedDocuments.length}`,
+                  `失败文档数: ${failedDocumentsCount}`,
                   `已禁用文档数: ${disabledDocumentsCount}`,
                   `需要重新嵌入: ${reembedRequired ? "是" : "否"}`,
                   `当前 Rebuild Run: ${readinessQuery.data?.currentRebuildRunId ?? "-"}`
