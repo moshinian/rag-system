@@ -160,7 +160,7 @@ public class EmbeddingRebuildService {
         }
     }
 
-    private void dispatchRun(Long runId) {
+    void dispatchRun(Long runId) {
         try {
             indexingExecutor.execute(() -> runAsync(runId));
         } catch (RejectedExecutionException ex) {

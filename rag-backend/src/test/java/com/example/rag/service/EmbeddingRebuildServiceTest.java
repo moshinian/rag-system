@@ -17,7 +17,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -112,7 +111,7 @@ class EmbeddingRebuildServiceTest {
         when(embeddingRebuildRunRepository.findById(1001L)).thenReturn(Optional.of(run));
         doThrow(new RejectedExecutionException("queue full")).when(indexingExecutor).execute(any(Runnable.class));
 
-        ReflectionTestUtils.invokeMethod(service, "dispatchRun", 1001L);
+        service.dispatchRun(1001L);
 
         assertThat(run.getStatus()).isEqualTo(EmbeddingRebuildRunStatus.FAILED);
         assertThat(run.getErrorSummary()).contains("Failed to dispatch embedding rebuild");
