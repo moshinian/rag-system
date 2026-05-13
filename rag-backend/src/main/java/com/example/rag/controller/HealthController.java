@@ -18,9 +18,9 @@ import static com.example.rag.config.RequestIdFilter.REQUEST_ID_ATTRIBUTE;
 @RestController
 @RequestMapping("/api")
 public class HealthController {
-
     private final SystemHealthService systemHealthService;
 
+    /** 构造HealthController。 */
     public HealthController(SystemHealthService systemHealthService) {
         this.systemHealthService = systemHealthService;
     }

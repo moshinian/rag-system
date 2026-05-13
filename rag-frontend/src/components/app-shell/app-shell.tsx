@@ -18,11 +18,16 @@ import { useCurrentKb } from "../../hooks/use-current-kb";
 
 const { Header, Sider, Content } = Layout;
 
+/** 渲染复用组件。 */
 export function AppShell() {
   const location = useLocation();
+
   const navigate = useNavigate();
+
   const kbCode = useCurrentKb();
+
   const setCurrentKbCode = useAppStore((state) => state.setCurrentKbCode);
+
   const { data } = useQuery({
     queryKey: ["knowledgeBases", "shell"],
     queryFn: () => listKnowledgeBases({ pageNo: 1, pageSize: 100 })

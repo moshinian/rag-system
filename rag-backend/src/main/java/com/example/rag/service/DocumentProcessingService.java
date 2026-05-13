@@ -46,10 +46,8 @@ import java.util.Map;
  */
 @Service
 public class DocumentProcessingService {
-
     private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
     private static final Logger log = LoggerFactory.getLogger(DocumentProcessingService.class);
-
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final IndexingTaskRepository indexingTaskRepository;
@@ -59,6 +57,7 @@ public class DocumentProcessingService {
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final ObjectMapper objectMapper;
 
+    /** 注入文档处理所需依赖。 */
     public DocumentProcessingService(DocumentRepository documentRepository,
                                      DocumentChunkRepository documentChunkRepository,
                                      IndexingTaskRepository indexingTaskRepository,
@@ -99,6 +98,7 @@ public class DocumentProcessingService {
         return processInternal(kbCode, documentCode, operator, true);
     }
 
+    /** 执行文档处理主流程，并按场景决定是否跳过活动索引任务校验。 */
     private DocumentProcessResponse processInternal(String kbCode,
                                                     String documentCode,
                                                     String operator,

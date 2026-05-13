@@ -10,10 +10,10 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class ChatClient {
-
     private final RagLlmProperties ragLlmProperties;
     private final OpenAiCompatibleClient openAiCompatibleClient;
 
+    /** 构造ChatClient。 */
     public ChatClient(RagLlmProperties ragLlmProperties,
                       OpenAiCompatibleClient openAiCompatibleClient) {
         this.ragLlmProperties = ragLlmProperties;

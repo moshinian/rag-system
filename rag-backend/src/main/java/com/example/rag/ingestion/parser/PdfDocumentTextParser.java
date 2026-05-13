@@ -18,12 +18,13 @@ import java.util.List;
  */
 @Component
 public class PdfDocumentTextParser implements DocumentTextParser {
-
+    /** 判断当前实现是否支持指定类型。 */
     @Override
     public boolean supports(String fileType) {
         return "pdf".equalsIgnoreCase(fileType);
     }
 
+    /** 解析文档并返回结构化结果。 */
     @Override
     public ParsedDocument parse(DocumentEntity document, Path path) throws IOException {
         try (PDDocument pdf = Loader.loadPDF(path.toFile())) {
@@ -44,11 +45,13 @@ public class PdfDocumentTextParser implements DocumentTextParser {
         }
     }
 
+    /** 为 PDF 文档推导默认标题，优先使用展示名。 */
     private String deriveDefaultTitle(DocumentEntity document) {
         String displayName = document.getDisplayName();
         return displayName == null || displayName.isBlank() ? document.getFileName() : displayName;
     }
 
+    /** 归一化单页文本内容，压缩空白并统一换行。 */
     private String normalizePageContent(String content) {
         if (content == null) {
             return "";

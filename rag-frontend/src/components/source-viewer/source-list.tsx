@@ -6,6 +6,7 @@ type SourceListProps = {
   sources: QaSource[];
 };
 
+/** 渲染复用组件。 */
 export function SourceList({ sources }: SourceListProps) {
   const [selected, setSelected] = useState<QaSource | null>(null);
 

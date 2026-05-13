@@ -57,11 +57,8 @@ public class DocumentEntity {
 
     @TableField(value = "disabled_from_status", updateStrategy = FieldStrategy.ALWAYS)
     private DocumentStatus disabledFromStatus;
-
     private Integer version = 1;
-
     private String source;
-
     private String tags;
 
     @TableField("error_message")

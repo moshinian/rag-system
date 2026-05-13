@@ -33,12 +33,12 @@ import static com.example.rag.config.RequestIdFilter.REQUEST_ID_ATTRIBUTE;
 @RestController
 @RequestMapping("/api/knowledge-bases/{kbCode}/documents")
 public class DocumentController {
-
     private final DocumentService documentService;
     private final DocumentProcessingService documentProcessingService;
     private final DocumentEmbeddingService documentEmbeddingService;
     private final DocumentIndexingService documentIndexingService;
 
+    /** 构造DocumentController。 */
     public DocumentController(DocumentService documentService,
                               DocumentProcessingService documentProcessingService,
                               DocumentEmbeddingService documentEmbeddingService,

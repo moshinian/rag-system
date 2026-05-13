@@ -16,12 +16,13 @@ import java.util.List;
  */
 @Component
 public class PlainTextDocumentTextParser implements DocumentTextParser {
-
+    /** 判断当前实现是否支持指定类型。 */
     @Override
     public boolean supports(String fileType) {
         return "txt".equalsIgnoreCase(fileType);
     }
 
+    /** 解析文档并返回结构化结果。 */
     @Override
     public ParsedDocument parse(DocumentEntity document, Path path) throws IOException {
         String content = Files.readString(path, StandardCharsets.UTF_8)

@@ -29,9 +29,7 @@ import java.util.Locale;
  */
 @Service
 public class QuestionAnsweringService {
-
     private static final Logger log = LoggerFactory.getLogger(QuestionAnsweringService.class);
-
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final RagEmbeddingProperties ragEmbeddingProperties;
@@ -39,6 +37,7 @@ public class QuestionAnsweringService {
     private final OpenAiCompatibleClient openAiCompatibleClient;
     private final RetrievalReadinessService retrievalReadinessService;
 
+    /** 构造QuestionAnsweringService。 */
     public QuestionAnsweringService(KnowledgeBaseRepository knowledgeBaseRepository,
                                     DocumentChunkRepository documentChunkRepository,
                                     RagEmbeddingProperties ragEmbeddingProperties,
@@ -68,6 +67,7 @@ public class QuestionAnsweringService {
     )
     public QuestionRetrievalResponse retrieve(String kbCode, String question, Integer topK) {
         KnowledgeBaseEntity knowledgeBase = getKnowledgeBase(kbCode);
+        // cache 命中前后都必须与同一套 readiness gate 保持一致，避免页面显示可用但检索真实不可用。
         retrievalReadinessService.assertRetrievalReady(kbCode);
         String normalizedQuestion = normalizeQuestion(question);
         int resolvedTopK = resolveTopK(topK);
@@ -84,6 +84,7 @@ public class QuestionAnsweringService {
                 ragEmbeddingProperties.getModel(),
                 normalizedQuestion
         );
+        // 当前 repository 查询层仍直接接收 pgvector 文本字面量，而不是 Java 数组参数。
         // pgvector 查询当前使用文本字面量格式，因此这里先把向量转换成 SQL 可识别的字符串。
         String queryVectorLiteral = toVectorLiteral(queryVector);
 
@@ -130,6 +131,7 @@ public class QuestionAnsweringService {
     private int resolveTopK(Integer topK) {
         int fallbackTopK = ragRetrievalProperties.getDefaultTopK() == null ? 5 : ragRetrievalProperties.getDefaultTopK();
         int maxTopK = ragRetrievalProperties.getMaxTopK() == null ? 10 : ragRetrievalProperties.getMaxTopK();
+        // 默认值和上限统一走配置，避免前端和后端各自维护一套口径。
         int resolvedTopK = topK == null ? fallbackTopK : topK;
         if (resolvedTopK < 1) {
             throw new BusinessException("topK must be >= 1");

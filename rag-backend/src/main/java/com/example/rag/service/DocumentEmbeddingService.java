@@ -34,12 +34,10 @@ import java.util.Locale;
  */
 @Service
 public class DocumentEmbeddingService {
-
     private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
     private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
     private static final int DASHSCOPE_MAX_BATCH_SIZE = 10;
     private static final Logger log = LoggerFactory.getLogger(DocumentEmbeddingService.class);
-
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
@@ -48,6 +46,7 @@ public class DocumentEmbeddingService {
     private final OpenAiCompatibleClient openAiCompatibleClient;
     private final EmbeddingConfigurationStateService embeddingConfigurationStateService;
 
+    /** 注入文档向量化所需依赖。 */
     public DocumentEmbeddingService(KnowledgeBaseRepository knowledgeBaseRepository,
                                     DocumentRepository documentRepository,
                                     DocumentChunkRepository documentChunkRepository,
@@ -84,6 +83,7 @@ public class DocumentEmbeddingService {
         return embedInternal(kbCode, documentCode, true, buildContext(operator, rebuildRunId));
     }
 
+    /** 执行向量化主流程，并按场景决定是否跳过活动任务校验。 */
     private DocumentEmbeddingResponse embedInternal(String kbCode,
                                                     String documentCode,
                                                     boolean allowDuringActiveIndexing,
@@ -94,6 +94,7 @@ public class DocumentEmbeddingService {
 
         DocumentEntity document = documentRepository.findByCodeInKnowledgeBase(documentCode, kbCode)
                 .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
+        // 这里只接受已经完成切块的文档，避免把“无 chunk 可写向量”误当成成功。
         if (document.getStatus() != DocumentStatus.INDEXED) {
             throw new BusinessException("Document must be INDEXED before embedding: " + documentCode);
         }
@@ -153,6 +154,7 @@ public class DocumentEmbeddingService {
                         chunks.stream().map(DocumentChunkEntity::getContent).toList()
                 );
                 if (embeddings.size() != chunks.size()) {
+                    // 远端返回条数和输入条数不一致时，宁可整批失败，也不冒险错位写向量。
                     throw new BusinessException("Embedding result size does not match chunk count");
                 }
                 validateEmbeddingDimensions(embeddings);
@@ -184,6 +186,7 @@ public class DocumentEmbeddingService {
             } catch (RuntimeException ex) {
                 OffsetDateTime failedAt = OffsetDateTime.now();
                 String errorMessage = truncate(ex.getMessage());
+                // 批次内任何一条失败都统一回滚为 FAILED，等待下一次补偿或手工重试。
                 for (DocumentChunkEntity chunk : chunks) {
                     documentChunkRepository.updateEmbeddingState(
                             chunk.getId(),
@@ -245,11 +248,13 @@ public class DocumentEmbeddingService {
     private int normalizeBatchSize(Integer batchSize) {
         int normalized = (batchSize == null || batchSize < 1) ? 10 : batchSize;
         if (usesDashScopeCompatibleEmbeddings()) {
+            // DashScope 兼容接口对批大小更敏感，这里统一收敛到已验证上限。
             return Math.min(normalized, DASHSCOPE_MAX_BATCH_SIZE);
         }
         return normalized;
     }
 
+    /** 校验 embedding 维度是否一致。 */
     private void validateEmbeddingDimensions(List<List<Double>> embeddings) {
         int expectedDimensions = ragEmbeddingProperties.getVectorDimensions() == null ? 0 : ragEmbeddingProperties.getVectorDimensions();
         if (expectedDimensions <= 0) {
@@ -285,7 +290,9 @@ public class DocumentEmbeddingService {
         return message.substring(0, ERROR_MESSAGE_MAX_LENGTH);
     }
 
+    /** 构造 embedding 写入上下文。 */
     private EmbeddingWriteContext buildContext(String operator, Long rebuildRunId) {
+        // fingerprint 和 provider 一起写回 chunk，后续 readiness 与 rebuild 判断都依赖这组元数据。
         return new EmbeddingWriteContext(
                 ragEmbeddingProperties.getProvider(),
                 embeddingConfigurationStateService.getRequiredState().getCurrentConfigFingerprint(),
@@ -294,6 +301,7 @@ public class DocumentEmbeddingService {
         );
     }
 
+    /** 判断当前是否使用 DashScope 兼容 embedding 接口。 */
     private boolean usesDashScopeCompatibleEmbeddings() {
         String provider = ragEmbeddingProperties.getProvider();
         if (provider != null && provider.toLowerCase(Locale.ROOT).contains("aliyun")) {
@@ -303,6 +311,7 @@ public class DocumentEmbeddingService {
         return baseUrl != null && baseUrl.contains("dashscope.aliyuncs.com");
     }
 
+    /** 封装一次 embedding 写入所需的上下文字段。 */
     private record EmbeddingWriteContext(String embeddingProvider,
                                          String embeddingProfileFingerprint,
                                          Long embeddingRebuildRunId,

@@ -28,11 +28,11 @@ import static com.example.rag.config.RequestIdFilter.REQUEST_ID_ATTRIBUTE;
 @RestController
 @RequestMapping("/api/knowledge-bases/{kbCode}/qa")
 public class QuestionAnsweringController {
-
     private final QuestionAnsweringService questionAnsweringService;
     private final QaService qaService;
     private final QaRecordService qaRecordService;
 
+    /** 构造QuestionAnsweringController。 */
     public QuestionAnsweringController(QuestionAnsweringService questionAnsweringService,
                                        QaService qaService,
                                        QaRecordService qaRecordService) {

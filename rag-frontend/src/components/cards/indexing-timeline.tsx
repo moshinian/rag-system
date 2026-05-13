@@ -9,6 +9,7 @@ type IndexingTimelineProps = {
   progress?: number;
 };
 
+/** 渲染界面组件。 */
 export function IndexingTimeline({ task, progress }: IndexingTimelineProps) {
   if (!task) {
     return (

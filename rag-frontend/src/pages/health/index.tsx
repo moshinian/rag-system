@@ -62,11 +62,13 @@ const componentColumns: ColumnsType<HealthComponentRow> = [
   }
 ];
 
+/** 渲染页面内容。 */
 export function HealthPage() {
   const healthQuery = useQuery({
     queryKey: ["health"],
     queryFn: getHealthStatus
   });
+
   const redisQuery = useQuery({
     queryKey: ["redisProbe"],
     queryFn: getRedisProbe
@@ -78,6 +80,7 @@ export function HealthPage() {
       ...component
     })
   );
+
   const downComponents = componentRows.filter((component) => component.status !== "UP");
 
   return (

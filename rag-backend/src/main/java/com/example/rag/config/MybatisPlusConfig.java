@@ -15,7 +15,7 @@ import java.time.OffsetDateTime;
  */
 @Configuration
 public class MybatisPlusConfig {
-
+    /** 配置 MyBatis-Plus 拦截器。 */
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
@@ -23,9 +23,11 @@ public class MybatisPlusConfig {
         return interceptor;
     }
 
+    /** 配置实体自动填充处理器。 */
     @Bean
     public MetaObjectHandler metaObjectHandler() {
         return new MetaObjectHandler() {
+            /** 在新增时自动填充审计字段。 */
             @Override
             public void insertFill(MetaObject metaObject) {
                 OffsetDateTime now = OffsetDateTime.now();
@@ -33,6 +35,7 @@ public class MybatisPlusConfig {
                 strictInsertFill(metaObject, "updatedAt", OffsetDateTime.class, now);
             }
 
+            /** 在更新时自动填充更新时间字段。 */
             @Override
             public void updateFill(MetaObject metaObject) {
                 setFieldValByName("updatedAt", OffsetDateTime.now(), metaObject);

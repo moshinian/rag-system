@@ -33,14 +33,22 @@ import {
   PAGE_SIZE_OPTIONS
 } from "../../utils/pagination";
 
+/** 渲染页面内容。 */
 export function KnowledgeBasesPage() {
   const { message } = App.useApp();
+
   const navigate = useNavigate();
+
   const queryClient = useQueryClient();
+
   const [searchParams, setSearchParams] = useSearchParams();
+
   const currentKbCode = useAppStore((state) => state.currentKbCode);
+
   const setCurrentKbCode = useAppStore((state) => state.setCurrentKbCode);
+
   const [open, setOpen] = useState(false);
+
   const { page, pageSize, normalized } = useMemo(
     () => normalizePaginationParams(searchParams),
     [searchParams]
@@ -110,6 +118,7 @@ export function KnowledgeBasesPage() {
       queryClient.invalidateQueries({ queryKey: ["knowledgeBase", response.kbCode] });
       queryClient.invalidateQueries({ queryKey: ["readiness", response.kbCode] });
       queryClient.invalidateQueries({ queryKey: ["documents", response.kbCode] });
+
       const detail = response.retryFailedIndexingTasks
         ? `并提交 ${response.retriedFailedTaskCount} 个失败索引任务重试`
         : "当前未触发历史失败任务重试";

@@ -50,7 +50,6 @@ public interface DocumentChunkMapper extends BaseMapper<DocumentChunkEntity> {
             """)
     long countEmbeddedChunksWithDifferentDimensions(@Param("knowledgeBaseId") Long knowledgeBaseId,
                                                     @Param("expectedDimensions") int expectedDimensions);
-
     @Select("""
             SELECT EXISTS (
                 SELECT 1
@@ -70,7 +69,6 @@ public interface DocumentChunkMapper extends BaseMapper<DocumentChunkEntity> {
             """)
     boolean existsEmbeddedChunksNeedingRebuild(@Param("currentFingerprint") String currentFingerprint,
                                                @Param("expectedDimensions") int expectedDimensions);
-
     @Select("""
             SELECT dc.embedding_model
             FROM document_chunk dc
@@ -113,7 +111,6 @@ public interface DocumentChunkMapper extends BaseMapper<DocumentChunkEntity> {
     List<RetrievedChunkCandidate> findTopKSimilarChunks(@Param("knowledgeBaseId") Long knowledgeBaseId,
                                                         @Param("queryVectorLiteral") String queryVectorLiteral,
                                                         @Param("topK") int topK);
-
     @Update("""
             UPDATE document_chunk
             SET embedding_status = #{embeddingStatus},
@@ -136,7 +133,6 @@ public interface DocumentChunkMapper extends BaseMapper<DocumentChunkEntity> {
                              @Param("embeddingUpdatedBy") String embeddingUpdatedBy,
                              @Param("embeddingErrorMessage") String embeddingErrorMessage,
                              @Param("embeddingUpdatedAt") OffsetDateTime embeddingUpdatedAt);
-
     @Update("""
             UPDATE document_chunk
             SET embedding_status = #{embeddingStatus},
@@ -160,7 +156,6 @@ public interface DocumentChunkMapper extends BaseMapper<DocumentChunkEntity> {
                               @Param("embeddingUpdatedBy") String embeddingUpdatedBy,
                               @Param("embeddingVectorLiteral") String embeddingVectorLiteral,
                               @Param("embeddingUpdatedAt") OffsetDateTime embeddingUpdatedAt);
-
     @Update("""
             UPDATE document_chunk dc
             SET embedding_status = 'PENDING',

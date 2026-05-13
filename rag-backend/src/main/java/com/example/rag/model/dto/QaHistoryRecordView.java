@@ -11,7 +11,6 @@ import java.time.OffsetDateTime;
 @Getter
 @Setter
 public class QaHistoryRecordView {
-
     private String sessionCode;
     private String sessionName;
     private String messageCode;

@@ -13,6 +13,7 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
     headers: options.headers
   });
 
+  /** 封装后端接口调用。 */
   const payload = (await response.json()) as ApiResponse<T>;
 
   if (!response.ok || payload.code !== "SUCCESS") {

@@ -25,9 +25,7 @@ import java.util.Map;
  */
 @Service
 public class SystemHealthService {
-
     private static final int LLM_HEALTH_PROBE_MAX_TOKENS = 16;
-
     private final Environment environment;
     private final JdbcTemplate jdbcTemplate;
     private final StringRedisTemplate stringRedisTemplate;
@@ -35,6 +33,7 @@ public class SystemHealthService {
     private final RagLlmProperties ragLlmProperties;
     private final OpenAiCompatibleClient openAiCompatibleClient;
 
+    /** 构造SystemHealthService。 */
     public SystemHealthService(Environment environment,
                                JdbcTemplate jdbcTemplate,
                                StringRedisTemplate stringRedisTemplate,
@@ -54,6 +53,7 @@ public class SystemHealthService {
         List<String> activeProfiles = Arrays.asList(environment.getActiveProfiles());
         Map<String, HealthComponentStatusResponse> components = new LinkedHashMap<>();
 
+        // 这里固定输出顺序，便于前端健康页和日志对比时保持稳定展示。
         components.put("postgres", databaseStatus());
         components.put("redis", redisStatus());
         components.put("embedding", embeddingStatus());
@@ -74,6 +74,7 @@ public class SystemHealthService {
         String key = "rag:health:probe";
         String value = "ok-" + Instant.now().truncatedTo(ChronoUnit.MILLIS);
         stringRedisTemplate.opsForValue().set(key, value);
+        // 这里显式回读刚写入的值，验证的不只是连通性，还包括最小读写闭环是否正常。
         String cachedValue = stringRedisTemplate.opsForValue().get(key);
         return new RedisProbeResponse(key, value, cachedValue, value.equals(cachedValue));
     }
@@ -146,6 +147,7 @@ public class SystemHealthService {
     private HealthComponentStatusResponse embeddingStatus() {
         long startedAt = System.nanoTime();
         try {
+            // embedding 健康检查要求真实返回向量，不只检查 HTTP 200。
             openAiCompatibleClient.createEmbedding(
                     ragEmbeddingProperties.getBaseUrl(),
                     ragEmbeddingProperties.getApiKey(),
@@ -184,6 +186,7 @@ public class SystemHealthService {
         long startedAt = System.nanoTime();
         RagLlmProperties.ChatProperties chat = ragLlmProperties.getChat();
         try {
+            // LLM 探针只要求最小 completion 合法返回，避免健康检查本身消耗过多 token。
             openAiCompatibleClient.probeChatCompletion(
                     chat.getBaseUrl(),
                     chat.getApiKey(),
@@ -220,17 +223,21 @@ public class SystemHealthService {
         }
     }
 
+    /** 计算耗时毫秒数。 */
     private long elapsedMillis(long startedAt) {
         return Math.max(1L, (System.nanoTime() - startedAt) / 1_000_000L);
     }
 
+    /** 解析 LLM 探针的最大输出 token 数。 */
     private int resolveLlmProbeMaxTokens(Integer configuredMaxOutputTokens) {
         if (configuredMaxOutputTokens == null || configuredMaxOutputTokens < 1) {
             return LLM_HEALTH_PROBE_MAX_TOKENS;
         }
+        // 健康探针不放大业务配置的输出上限，始终收敛到一个很小的安全值。
         return Math.min(configuredMaxOutputTokens, LLM_HEALTH_PROBE_MAX_TOKENS);
     }
 
+    /** 拼接基础地址和路径。 */
     private String joinUrl(String baseUrl, String path) {
         String normalizedBaseUrl = baseUrl == null ? "" : baseUrl.trim();
         String normalizedPath = path == null ? "" : path.trim();

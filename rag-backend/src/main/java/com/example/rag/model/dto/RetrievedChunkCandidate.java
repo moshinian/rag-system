@@ -9,7 +9,6 @@ import lombok.Setter;
 @Getter
 @Setter
 public class RetrievedChunkCandidate {
-
     private Long id;
     private Long documentId;
     private String documentCode;

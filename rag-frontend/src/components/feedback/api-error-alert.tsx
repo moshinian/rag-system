@@ -5,6 +5,7 @@ type ApiErrorAlertProps = {
   error: unknown;
 };
 
+/** 渲染复用组件。 */
 export function ApiErrorAlert({ error }: ApiErrorAlertProps) {
   return <Alert type="error" showIcon message={getErrorMessage(error)} />;
 }

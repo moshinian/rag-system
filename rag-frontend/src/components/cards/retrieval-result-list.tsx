@@ -5,6 +5,7 @@ type RetrievalResultListProps = {
   items: RetrievedChunk[];
 };
 
+/** 渲染复用组件。 */
 export function RetrievalResultList({ items }: RetrievalResultListProps) {
   return (
     <Card title={`检索命中 (${items.length})`}>

@@ -38,11 +38,9 @@ import java.util.concurrent.RejectedExecutionException;
  */
 @Service
 public class EmbeddingRebuildService {
-
     private static final Logger log = LoggerFactory.getLogger(EmbeddingRebuildService.class);
     private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
     private static final int RECOVERY_SCAN_LIMIT = 10;
-
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final RagEmbeddingProperties ragEmbeddingProperties;
     private final EmbeddingConfigurationStateService embeddingConfigurationStateService;
@@ -55,6 +53,7 @@ public class EmbeddingRebuildService {
     private final Executor indexingExecutor;
     private final CacheManager cacheManager;
 
+    /** 注入全量重嵌入任务所需依赖。 */
     public EmbeddingRebuildService(SnowflakeIdGenerator snowflakeIdGenerator,
                                    RagEmbeddingProperties ragEmbeddingProperties,
                                    EmbeddingConfigurationStateService embeddingConfigurationStateService,
@@ -79,6 +78,7 @@ public class EmbeddingRebuildService {
         this.cacheManager = cacheManager;
     }
 
+    /** 提交一次全量重嵌入任务。 */
     @Transactional
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheNames.QA_READINESS, allEntries = true),
@@ -90,10 +90,12 @@ public class EmbeddingRebuildService {
         if (embeddingRebuildRunRepository.existsActiveRun()) {
             throw new BusinessException("An embedding rebuild run is already active");
         }
+        // 全量重嵌入要求索引链路静止，避免 process/embed 和 rebuild 同时改写 chunk 向量状态。
         if (indexingTaskRepository.existsAnyActiveTask(TASK_TYPE_DOCUMENT_INDEXING)) {
             throw new BusinessException("Document indexing is running. Wait until it finishes before rebuilding embeddings.");
         }
         String currentFingerprint = embeddingConfigurationStateService.calculateCurrentFingerprint();
+        // 当前配置与活动配置完全一致时，不需要重复跑一次重嵌入。
         if (currentFingerprint.equals(embeddingConfigurationStateService.getRequiredState().getActiveConfigFingerprint())) {
             throw new BusinessException("Embedding configuration has not changed");
         }
@@ -116,6 +118,7 @@ public class EmbeddingRebuildService {
         run.setFailedDocumentCount(0);
         embeddingRebuildRunRepository.insert(run);
 
+        // 先把旧 embedding 标记为待重建，再启动后台任务，保证 readiness 会立刻反映不可检索状态。
         documentChunkRepository.resetEmbeddingsForRebuild(
                 ragEmbeddingProperties.getModel(),
                 ragEmbeddingProperties.getProvider(),
@@ -127,6 +130,7 @@ public class EmbeddingRebuildService {
         embeddingConfigurationStateService.markRebuildSubmitted(run.getId(), normalizedOperator);
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            /** 在事务提交后启动异步执行。 */
             @Override
             public void afterCommit() {
                 dispatchRun(run.getId());
@@ -146,6 +150,7 @@ public class EmbeddingRebuildService {
         );
     }
 
+    /** 恢复异常遗留的重嵌入任务。 */
     @Scheduled(
             fixedDelayString = "${rag.indexing.recovery.scan-interval-ms:60000}",
             initialDelayString = "${rag.indexing.recovery.initial-delay-ms:30000}"
@@ -155,6 +160,7 @@ public class EmbeddingRebuildService {
                 List.of(EmbeddingRebuildRunStatus.QUEUED),
                 RECOVERY_SCAN_LIMIT
         );
+        // 这里只接管仍停留在 QUEUED 的任务，RUNNING 任务由其自身心跳负责。
         for (EmbeddingRebuildRunEntity queuedRun : queuedRuns) {
             dispatchRun(queuedRun.getId());
         }
@@ -168,10 +174,12 @@ public class EmbeddingRebuildService {
         }
     }
 
+    /** 异步执行重嵌入任务。 */
     private void runAsync(Long runId) {
         EmbeddingRebuildRunEntity run = embeddingRebuildRunRepository.findById(runId)
                 .orElseThrow(() -> new BusinessException("Embedding rebuild run not found: " + runId));
         if (run.getStatus() != EmbeddingRebuildRunStatus.QUEUED) {
+            // 重复投递或恢复扫描并发命中时，只允许第一条真正消费任务。
             return;
         }
         run.setStatus(EmbeddingRebuildRunStatus.RUNNING);
@@ -183,6 +191,7 @@ public class EmbeddingRebuildService {
         try {
             List<DocumentEntity> documents = documentRepository.findIndexedDocumentsInActiveKnowledgeBases();
             for (DocumentEntity document : documents) {
+                // 重嵌入以“当前仍启用且已索引”的文档集合为准，不强行回放提交时的快照。
                 run.setLastHeartbeatAt(OffsetDateTime.now());
                 embeddingRebuildRunRepository.updateById(run);
                 documentEmbeddingService.embedForRebuild(
@@ -224,16 +233,19 @@ public class EmbeddingRebuildService {
         }
     }
 
+    /** 按知识库 ID 解析知识库编码。 */
     private String resolveKnowledgeBaseCode(Long knowledgeBaseId) {
         return knowledgeBaseRepository.findById(knowledgeBaseId)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found for rebuild: " + knowledgeBaseId))
                 .getKbCode();
     }
 
+    /** 归一化操作人。 */
     private String normalizeOperator(String operator) {
         return operator == null || operator.trim().isBlank() ? "system" : operator.trim();
     }
 
+    /** 截断过长错误消息。 */
     private String truncate(String message) {
         if (message == null || message.isBlank()) {
             return "Unknown rebuild error";
@@ -241,6 +253,7 @@ public class EmbeddingRebuildService {
         return message.length() <= 1024 ? message : message.substring(0, 1024);
     }
 
+    /** 在投递失败后把重嵌入任务标记为失败。 */
     private void markRunDispatchFailed(Long runId, RuntimeException ex) {
         embeddingRebuildRunRepository.findById(runId).ifPresent(run -> {
             run.setStatus(EmbeddingRebuildRunStatus.FAILED);
@@ -248,6 +261,7 @@ public class EmbeddingRebuildService {
             OffsetDateTime now = OffsetDateTime.now();
             run.setFinishedAt(now);
             run.setLastHeartbeatAt(now);
+            // 任务连执行器都没进去时，直接把总量记为失败，便于前端和运维快速判断规模。
             run.setFailedDocumentCount(run.getTotalDocumentCount());
             embeddingRebuildRunRepository.updateById(run);
             embeddingConfigurationStateService.markRebuildFailed(runId);
@@ -259,12 +273,15 @@ public class EmbeddingRebuildService {
         });
     }
 
+    /** 清理重嵌入相关缓存。 */
     private void evictRebuildCaches() {
+        // rebuild 会同时影响 readiness、检索结果和 chunk 详情，直接按 cache name 全量清空更安全。
         evictAll(CacheNames.QA_READINESS);
         evictAll(CacheNames.QA_RETRIEVAL);
         evictAll(CacheNames.DOCUMENT_CHUNKS);
     }
 
+    /** 清理指定缓存的全部条目。 */
     private void evictAll(String cacheName) {
         Cache cache = cacheManager.getCache(Objects.requireNonNull(cacheName, "cacheName must not be null"));
         if (cache != null) {

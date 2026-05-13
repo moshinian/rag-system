@@ -9,12 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Data
 @ConfigurationProperties(prefix = "rag.chunking")
 public class RagChunkingProperties {
-
     private String strategy = "fixed-window";
-
     private Integer maxChunkChars = 600;
-
     private Integer overlapChars = 80;
-
     private Integer minBreakSearchOffset = 240;
 }

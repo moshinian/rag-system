@@ -15,9 +15,9 @@ import java.util.Optional;
  */
 @Repository
 public class KnowledgeBaseRepository {
-
     private final KnowledgeBaseMapper knowledgeBaseMapper;
 
+    /** 构造KnowledgeBaseRepository。 */
     public KnowledgeBaseRepository(KnowledgeBaseMapper knowledgeBaseMapper) {
         this.knowledgeBaseMapper = knowledgeBaseMapper;
     }

@@ -7,9 +7,11 @@ type RetryActionBarProps = {
   onRetry: () => void;
 };
 
+/** 渲染界面组件。 */
 export function RetryActionBar({ task, loading, onRetry }: RetryActionBarProps) {
   if (!task || task.status !== "FAILED") return null;
 
+  /** 渲染界面组件。 */
   const exceeded = (task.retryCount ?? 0) >= (task.maxRetryCount ?? 0);
 
   return (

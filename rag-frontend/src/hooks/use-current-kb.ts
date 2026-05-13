@@ -2,9 +2,12 @@ import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useAppStore } from "../app/store";
 
+/** 读取当前选中的知识库编码。 */
 export function useCurrentKb() {
   const params = useParams();
+
   const currentKbCode = useAppStore((state) => state.currentKbCode);
+
   const setCurrentKbCode = useAppStore((state) => state.setCurrentKbCode);
 
   useEffect(() => {

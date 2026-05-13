@@ -20,14 +20,13 @@ import java.util.List;
  */
 @Service
 public class QaService {
-
     private static final Logger log = LoggerFactory.getLogger(QaService.class);
-
     private final QuestionAnsweringService questionAnsweringService;
     private final PromptBuilder promptBuilder;
     private final ChatClient chatClient;
     private final QaRecordService qaRecordService;
 
+    /** 构造QaService。 */
     public QaService(QuestionAnsweringService questionAnsweringService,
                      PromptBuilder promptBuilder,
                      ChatClient chatClient,
@@ -47,6 +46,7 @@ public class QaService {
                 .field("topK", topK)
                 .field("questionLength", question == null ? 0 : question.trim().length())
                 .build());
+        // 问答编排始终复用 retrieval 结果，不再单独构造另一份 sources 之外的证据来源。
         QuestionRetrievalResponse retrievalResponse = questionAnsweringService.retrieve(kbCode, question, topK);
         PromptBuilder.PromptPayload promptPayload = promptBuilder.build(
                 retrievalResponse.question(),

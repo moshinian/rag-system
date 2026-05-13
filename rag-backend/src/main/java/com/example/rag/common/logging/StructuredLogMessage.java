@@ -7,17 +7,19 @@ import java.util.Map;
  * 简单结构化日志消息构造器。
  */
 public final class StructuredLogMessage {
-
     private final Map<String, Object> fields = new LinkedHashMap<>();
 
+    /** 构造StructuredLogMessage。 */
     private StructuredLogMessage(String event) {
         field("event", event);
     }
 
+    /** 创建结构化日志消息构建器。 */
     public static StructuredLogMessage of(String event) {
         return new StructuredLogMessage(event);
     }
 
+    /** 追加结构化日志字段。 */
     public StructuredLogMessage field(String key, Object value) {
         if (key == null || key.isBlank() || value == null) {
             return this;
@@ -26,6 +28,7 @@ public final class StructuredLogMessage {
         return this;
     }
 
+    /** 构造结构化日志消息。 */
     public String build() {
         StringBuilder builder = new StringBuilder();
         boolean first = true;
@@ -39,11 +42,13 @@ public final class StructuredLogMessage {
         return builder.toString();
     }
 
+    /** 直接返回构造后的结构化日志文本。 */
     @Override
     public String toString() {
         return build();
     }
 
+    /** 按需为日志字段值补充引号，避免空格和特殊字符破坏日志可读性。 */
     private String quoteIfNeeded(Object value) {
         String text = String.valueOf(value);
         if (text.isBlank()) {

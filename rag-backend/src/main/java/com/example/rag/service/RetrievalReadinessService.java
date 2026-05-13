@@ -28,6 +28,7 @@ public class RetrievalReadinessService {
     private final RagEmbeddingProperties ragEmbeddingProperties;
     private final RagRetrievalProperties ragRetrievalProperties;
 
+    /** 注入检索就绪度判定所需依赖。 */
     public RetrievalReadinessService(KnowledgeBaseRepository knowledgeBaseRepository,
                                      DocumentChunkRepository documentChunkRepository,
                                      EmbeddingConfigurationStateService embeddingConfigurationStateService,
@@ -42,6 +43,7 @@ public class RetrievalReadinessService {
         this.ragRetrievalProperties = ragRetrievalProperties;
     }
 
+    /** 查询问答链路就绪状态。 */
     @Transactional(readOnly = true)
     public QuestionAnsweringReadinessResponse getReadiness(String kbCode) {
         KnowledgeBaseEntity knowledgeBase = getKnowledgeBase(kbCode);
@@ -66,6 +68,7 @@ public class RetrievalReadinessService {
         );
     }
 
+    /** 校验指定知识库当前是否允许执行检索。 */
     @Transactional(readOnly = true)
     public void assertRetrievalReady(String kbCode) {
         KnowledgeBaseEntity knowledgeBase = getKnowledgeBase(kbCode);
@@ -75,6 +78,7 @@ public class RetrievalReadinessService {
         }
     }
 
+    /** 评估知识库当前的检索就绪快照。 */
     private ReadinessSnapshot evaluate(KnowledgeBaseEntity knowledgeBase) {
         long indexedChunkCount = documentChunkRepository.countAvailableIndexedChunks(knowledgeBase.getId());
         long embeddedChunkCount = documentChunkRepository.countAvailableEmbeddedChunks(knowledgeBase.getId());
@@ -104,6 +108,7 @@ public class RetrievalReadinessService {
         return new ReadinessSnapshot(indexedChunkCount, embeddedChunkCount, reembedInProgress, ready, nextStep, state);
     }
 
+    /** 根据各项前置条件生成下一步提示文案。 */
     private String resolveNextStep(boolean knowledgeBaseActive,
                                    long indexedChunkCount,
                                    long embeddedChunkCount,
@@ -137,11 +142,13 @@ public class RetrievalReadinessService {
         return "Retrieval prerequisites are ready.";
     }
 
+    /** 读取指定知识库，不存在时直接失败。 */
     private KnowledgeBaseEntity getKnowledgeBase(String kbCode) {
         return knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
     }
 
+    /** 封装一次 readiness 评估得到的中间结果。 */
     private record ReadinessSnapshot(long indexedChunkCount,
                                      long embeddedChunkCount,
                                      boolean reembedInProgress,

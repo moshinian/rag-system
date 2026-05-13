@@ -15,6 +15,7 @@ type DocumentTableProps = {
   onEnable?: (documentCode: string) => void;
 };
 
+/** 渲染复用组件。 */
 export function DocumentTable({
   kbCode,
   data,

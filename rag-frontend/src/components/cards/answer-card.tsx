@@ -5,6 +5,7 @@ type AnswerCardProps = {
   answer: QaAnswerResponse;
 };
 
+/** 渲染复用组件。 */
 export function AnswerCard({ answer }: AnswerCardProps) {
   return (
     <Card title="答案">

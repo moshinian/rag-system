@@ -18,9 +18,9 @@ import static com.example.rag.config.RequestIdFilter.REQUEST_ID_ATTRIBUTE;
 @RestController
 @RequestMapping("/api/admin/embeddings")
 public class EmbeddingAdminController {
-
     private final EmbeddingRebuildService embeddingRebuildService;
 
+    /** 构造EmbeddingAdminController。 */
     public EmbeddingAdminController(EmbeddingRebuildService embeddingRebuildService) {
         this.embeddingRebuildService = embeddingRebuildService;
     }

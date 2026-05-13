@@ -17,6 +17,7 @@ type AppProvidersProps = {
   router: ComponentProps<typeof RouterProvider>["router"];
 };
 
+/** 组装全局主题、QueryClient 和路由 Provider。 */
 export function AppProviders({ router }: AppProvidersProps) {
   return (
     <ConfigProvider

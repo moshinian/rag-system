@@ -9,12 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Data
 @ConfigurationProperties(prefix = "rag.qa")
 public class RagQaProperties {
-
     private String defaultCreatedBy = "qa-service";
-
     private String messageType = "QA";
-
     private String promptTemplate = "qa-default-v1";
-
     private Integer sessionNameMaxLength = 80;
 }

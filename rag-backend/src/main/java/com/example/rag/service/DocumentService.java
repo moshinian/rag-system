@@ -47,7 +47,6 @@ import java.util.Set;
  */
 @Service
 public class DocumentService {
-
     private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
     private static final Set<String> SUPPORTED_FILE_TYPES = Set.of("md", "txt", "pdf");
     private static final long DEFAULT_PAGE_NO = 1;
@@ -63,7 +62,6 @@ public class DocumentService {
             "binary/octet-stream"
     );
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
-
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final DocumentRepository documentRepository;
@@ -71,6 +69,7 @@ public class DocumentService {
     private final LocalFileStorageService localFileStorageService;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
+    /** 构造DocumentService。 */
     public DocumentService(KnowledgeBaseRepository knowledgeBaseRepository,
                            DocumentChunkRepository documentChunkRepository,
                            DocumentRepository documentRepository,
@@ -106,6 +105,7 @@ public class DocumentService {
 
         String fileName = sanitizeFileName(file.getOriginalFilename());
         String fileType = extractExtension(fileName);
+        // mediaType 既用于后续展示，也给解析器选择和运维排障提供辅助上下文。
         String mediaType = resolveMediaType(file, fileType);
         String contentHash = calculateSha256(file);
 
@@ -166,6 +166,7 @@ public class DocumentService {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
 
+        // 分页参数和状态过滤统一在服务层归一化，避免 repository 承担业务口径判断。
         long normalizedPageNo = normalizePageNo(pageNo);
         long normalizedPageSize = normalizePageSize(pageSize);
         DocumentStatus documentStatus = parseStatus(status);
@@ -210,9 +211,11 @@ public class DocumentService {
         if (document.getStatus() == DocumentStatus.DISABLED) {
             return toDetailResponse(document, knowledgeBase.getKbCode());
         }
+        // 活跃索引任务可能正在修改文档状态和 chunk，禁用动作必须等后台链路结束。
         if (indexingTaskRepository.existsActiveTask(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
             throw new BusinessException("Document has an active indexing task and cannot be disabled: " + documentCode);
         }
+        // 保留禁用前状态，恢复时优先回到用户真正禁用前的业务阶段。
         document.setDisabledFromStatus(document.getStatus());
         document.setStatus(DocumentStatus.DISABLED);
         documentRepository.updateById(document);
@@ -236,6 +239,7 @@ public class DocumentService {
         if (document.getStatus() != DocumentStatus.DISABLED) {
             return toDetailResponse(document, knowledgeBase.getKbCode());
         }
+        // 恢复期间同样不允许和后台索引并发，避免状态回推和处理链路互相覆盖。
         if (indexingTaskRepository.existsActiveTask(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
             throw new BusinessException("Document has an active indexing task and cannot be enabled: " + documentCode);
         }
@@ -463,10 +467,12 @@ public class DocumentService {
         );
     }
 
+    /** 计算文档恢复后的状态。 */
     private DocumentStatus resolveRestoredStatus(DocumentEntity document) {
         if (document.getDisabledFromStatus() != null && document.getDisabledFromStatus() != DocumentStatus.DISABLED) {
             return document.getDisabledFromStatus();
         }
+        // 兼容历史老数据：早期没有 disabledFromStatus，只能根据现存结果推回最接近的状态。
         if (!documentChunkRepository.findByDocumentIdOrderByChunkIndex(document.getId()).isEmpty()) {
             return DocumentStatus.INDEXED;
         }

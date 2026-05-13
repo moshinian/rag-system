@@ -14,30 +14,38 @@ import { StatusBadge } from "../../components/status/status-badge";
 import { WizardStepper } from "../../components/wizard/wizard-stepper";
 import { useCurrentKb } from "../../hooks/use-current-kb";
 
+/** 渲染页面内容。 */
 export function DashboardPage() {
   const { message } = App.useApp();
+
   const queryClient = useQueryClient();
+
   const kbCode = useCurrentKb();
+
   const kbQuery = useQuery({
     queryKey: ["knowledgeBase", kbCode],
     queryFn: () => getKnowledgeBase(kbCode!),
     enabled: !!kbCode
   });
+
   const readinessQuery = useQuery({
     queryKey: ["readiness", kbCode],
     queryFn: () => getReadiness(kbCode!),
     enabled: !!kbCode
   });
+
   const docsQuery = useQuery({
     queryKey: ["documents", kbCode, "dashboard"],
     queryFn: () => listDocuments(kbCode!, { pageNo: 1, pageSize: 100 }),
     enabled: !!kbCode
   });
+
   const failedDocsQuery = useQuery({
     queryKey: ["documents", kbCode, "FAILED", "dashboard"],
     queryFn: () => listDocuments(kbCode!, { status: "FAILED", pageNo: 1, pageSize: 6 }),
     enabled: !!kbCode
   });
+
   const disabledDocsQuery = useQuery({
     queryKey: ["documents", kbCode, "DISABLED", "dashboard"],
     queryFn: () => listDocuments(kbCode!, { status: "DISABLED", pageNo: 1, pageSize: 1 }),
@@ -65,6 +73,7 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["knowledgeBases"] });
       queryClient.invalidateQueries({ queryKey: ["readiness", response.kbCode] });
       queryClient.invalidateQueries({ queryKey: ["documents", response.kbCode] });
+
       const summary = response.retryFailedIndexingTasks
         ? `并提交 ${response.retriedFailedTaskCount} 个失败任务重试`
         : "未触发失败任务重试";
@@ -87,10 +96,15 @@ export function DashboardPage() {
   }
 
   const failedDocuments = failedDocsQuery.data?.records.map((document) => document.documentCode) ?? [];
+
   const failedDocumentsCount = failedDocsQuery.data?.total ?? 0;
+
   const disabledDocumentsCount = disabledDocsQuery.data?.total ?? 0;
+
   const kbInactive = kbQuery.data?.status === "INACTIVE";
+
   const reembedRequired = readinessQuery.data?.reembedRequired ?? false;
+
   const reembedInProgress = readinessQuery.data?.reembedInProgress ?? false;
 
   return (

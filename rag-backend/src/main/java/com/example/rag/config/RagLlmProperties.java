@@ -9,12 +9,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Data
 @ConfigurationProperties(prefix = "rag.llm")
 public class RagLlmProperties {
-
     private ChatProperties chat = new ChatProperties();
 
     @Data
     public static class ChatProperties {
-
         private String baseUrl = "https://api.deepseek.com";
         private String apiKey = "${DEEPSEEK_API_KEY}";
         private String model = "deepseek-v4-pro";

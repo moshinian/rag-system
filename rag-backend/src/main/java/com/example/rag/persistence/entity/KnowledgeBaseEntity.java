@@ -24,11 +24,8 @@ public class KnowledgeBaseEntity {
 
     @TableField("kb_code")
     private String kbCode;
-
     private String name;
-
     private String description;
-
     private KnowledgeBaseStatus status = KnowledgeBaseStatus.ACTIVE;
 
     @TableField("created_by")

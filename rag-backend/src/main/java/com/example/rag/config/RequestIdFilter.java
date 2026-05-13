@@ -27,7 +27,6 @@ import com.example.rag.common.logging.StructuredLogMessage;
  */
 @Component
 public class RequestIdFilter extends OncePerRequestFilter {
-
     public static final String REQUEST_ID_ATTRIBUTE = "requestId";
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final Logger log = LoggerFactory.getLogger(RequestIdFilter.class);
@@ -42,6 +41,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
     );
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
+    /** 构造RequestIdFilter。 */
     public RequestIdFilter(SnowflakeIdGenerator snowflakeIdGenerator) {
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
@@ -54,6 +54,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
         long startedAt = System.currentTimeMillis();
         String requestId = request.getHeader(REQUEST_ID_HEADER);
         if (requestId == null || requestId.isBlank()) {
+            // 没有外部 requestId 时统一在入口生成，保证后续日志和异常响应都能串起来。
             requestId = snowflakeIdGenerator.nextId("REQ-");
         }
 
@@ -85,6 +86,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
         }
     }
 
+    /** 配置requestLogThreadFactory相关组件。 */
     private static ThreadFactory requestLogThreadFactory() {
         return runnable -> {
             Thread thread = new Thread(runnable, "rag-request-log");
@@ -99,6 +101,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
      */
     private void logAsync(String message) {
         try {
+            // 请求日志异步落盘，避免慢终端或阻塞输出反向拖慢接口响应。
             REQUEST_LOG_EXECUTOR.execute(() -> log.info(message));
         } catch (RejectedExecutionException ignored) {
             // 请求日志允许降级丢弃，优先保证请求线程不被阻塞。

@@ -16,9 +16,9 @@ import java.util.Optional;
  */
 @Repository
 public class DocumentRepository {
-
     private final DocumentMapper documentMapper;
 
+    /** 构造DocumentRepository。 */
     public DocumentRepository(DocumentMapper documentMapper) {
         this.documentMapper = documentMapper;
     }

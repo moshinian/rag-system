@@ -25,9 +25,9 @@ import static com.example.rag.config.RequestIdFilter.REQUEST_ID_ATTRIBUTE;
 @RestController
 @RequestMapping("/api/knowledge-bases")
 public class KnowledgeBaseController {
-
     private final KnowledgeBaseService knowledgeBaseService;
 
+    /** 构造KnowledgeBaseController。 */
     public KnowledgeBaseController(KnowledgeBaseService knowledgeBaseService) {
         this.knowledgeBaseService = knowledgeBaseService;
     }

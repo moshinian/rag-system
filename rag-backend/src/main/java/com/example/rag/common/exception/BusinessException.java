@@ -10,7 +10,6 @@ import lombok.Getter;
  */
 @Getter
 public class BusinessException extends RuntimeException {
-
     private final ErrorCode errorCode;
 
     /** 使用默认业务错误码构造异常。 */

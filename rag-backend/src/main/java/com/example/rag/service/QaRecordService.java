@@ -32,11 +32,9 @@ import java.util.List;
  */
 @Service
 public class QaRecordService {
-
     private static final long DEFAULT_PAGE_NO = 1;
     private static final long DEFAULT_PAGE_SIZE = 20;
     private static final long MAX_PAGE_SIZE = 100;
-
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -44,6 +42,7 @@ public class QaRecordService {
     private final ObjectMapper objectMapper;
     private final RagQaProperties ragQaProperties;
 
+    /** 构造QaRecordService。 */
     public QaRecordService(KnowledgeBaseRepository knowledgeBaseRepository,
                            ChatSessionRepository chatSessionRepository,
                            ChatMessageRepository chatMessageRepository,
@@ -84,6 +83,7 @@ public class QaRecordService {
         message.setMessageType(messageType());
         message.setQuestion(answerResponse.question());
         message.setAnswer(answerResponse.answer());
+        // retrievalResults 和 sources 都按问答发生时的快照持久化，避免后续数据变化影响历史回放。
         message.setRetrievedChunks(toJson(answerResponse.retrievalResults()));
         message.setSources(toJson(answerResponse.sources()));
         message.setPromptTemplate(promptTemplate());

@@ -11,6 +11,7 @@ const items = [
   { title: "检索问答", description: "召回、回答、看来源" }
 ];
 
+/** 渲染复用组件。 */
 export function WizardStepper({ current }: WizardStepperProps) {
   return (
     <Card>

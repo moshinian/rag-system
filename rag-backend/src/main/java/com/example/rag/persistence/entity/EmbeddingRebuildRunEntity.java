@@ -21,7 +21,6 @@ public class EmbeddingRebuildRunEntity {
 
     @TableId(type = IdType.INPUT)
     private Long id;
-
     private EmbeddingRebuildRunStatus status = EmbeddingRebuildRunStatus.QUEUED;
 
     @TableField("target_fingerprint")

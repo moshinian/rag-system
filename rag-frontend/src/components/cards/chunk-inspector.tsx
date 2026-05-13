@@ -7,12 +7,14 @@ import { StatusBadge } from "../status/status-badge";
 const { useBreakpoint } = Grid;
 
 const DESKTOP_INSPECTOR_HEIGHT = 560;
+
 const MOBILE_LIST_HEIGHT = 420;
 
 type ChunkInspectorProps = {
   chunks: DocumentChunk[];
 };
 
+/** 格式化切块元数据 JSON。 */
 function formatMetadata(metadataJson?: string) {
   if (!metadataJson) {
     return undefined;
@@ -25,6 +27,7 @@ function formatMetadata(metadataJson?: string) {
   }
 }
 
+/** 渲染切块详情视图。 */
 function renderChunkDetails(chunk?: DocumentChunk) {
   if (!chunk) {
     return <Empty description="请选择一个 Chunk 查看详情" />;
@@ -100,12 +103,16 @@ function renderChunkDetails(chunk?: DocumentChunk) {
   );
 }
 
+/** 渲染界面组件。 */
 export function ChunkInspector({ chunks }: ChunkInspectorProps) {
   const screens = useBreakpoint();
+
   const isDesktop = !!screens.lg;
+
   const [selectedChunkIndex, setSelectedChunkIndex] = useState<number | undefined>(
     chunks[0]?.chunkIndex
   );
+
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
@@ -132,6 +139,7 @@ export function ChunkInspector({ chunks }: ChunkInspectorProps) {
     [chunks, selectedChunkIndex]
   );
 
+  /** 渲染界面组件。 */
   const handleSelect = (chunkIndex: number) => {
     setSelectedChunkIndex(chunkIndex);
     if (!isDesktop) {
@@ -139,6 +147,7 @@ export function ChunkInspector({ chunks }: ChunkInspectorProps) {
     }
   };
 
+  /** 渲染界面组件。 */
   const listContent = (
     <List
       dataSource={chunks}

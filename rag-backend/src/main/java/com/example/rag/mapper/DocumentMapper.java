@@ -25,7 +25,6 @@ public interface DocumentMapper extends BaseMapper<DocumentEntity> {
             """)
     DocumentEntity selectByCodeInKnowledgeBase(@Param("documentCode") String documentCode,
                                                @Param("kbCode") String kbCode);
-
     @Select("""
             SELECT d.*
             FROM document d

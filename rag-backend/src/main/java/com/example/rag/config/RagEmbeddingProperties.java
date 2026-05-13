@@ -14,11 +14,18 @@ public class RagEmbeddingProperties {
      * 当前默认约定本地 embedding 服务暴露 OpenAI-compatible /embeddings 接口。
      */
     private String provider = "local-openai-compatible";
+
     private String baseUrl = "http://localhost:8001/v1";
+
     private String apiKey = "";
+
     private String model = "bge-small-zh-v1.5";
+
     private Integer vectorDimensions = 512;
+
     private String distanceMetric = "cosine";
+
     private String embeddingPath = "/embeddings";
+
     private Integer batchSize = 10;
 }

@@ -7,6 +7,7 @@ type ReadinessCardProps = {
   readiness: Readiness;
 };
 
+/** 渲染复用组件。 */
 export function ReadinessCard({ kbCode, readiness }: ReadinessCardProps) {
   const progress =
     readiness.indexedChunkCount > 0

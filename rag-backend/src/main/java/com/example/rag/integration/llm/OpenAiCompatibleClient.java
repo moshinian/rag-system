@@ -24,12 +24,12 @@ import java.util.List;
  */
 @Component
 public class OpenAiCompatibleClient {
-
     private static final int CONNECT_TIMEOUT_MILLIS = 5_000;
     private static final int READ_TIMEOUT_MILLIS = 30_000;
     private static final Logger log = LoggerFactory.getLogger(OpenAiCompatibleClient.class);
     private final ObjectMapper objectMapper;
 
+    /** 构造OpenAiCompatibleClient。 */
     public OpenAiCompatibleClient(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
@@ -64,6 +64,7 @@ public class OpenAiCompatibleClient {
             if (response == null || response.data() == null || response.data().isEmpty()) {
                 throw new BusinessException("Embedding response is empty");
             }
+            // 兼容接口返回顺序理论上应与输入一致，这里仍按 index 重排，避免供应商实现差异带来错位。
             return response.data().stream()
                     .sorted((left, right) -> Integer.compare(left.index(), right.index()))
                     .map(EmbeddingData::embedding)
@@ -187,6 +188,7 @@ public class OpenAiCompatibleClient {
             int statusCode = connection.getResponseCode();
             String responseBody = readResponseBody(connection, statusCode);
             if (statusCode < 200 || statusCode >= 300) {
+                // 这里把远端返回体拼进业务异常，便于直接从服务日志定位供应商报错原因。
                 throw new BusinessException(statusCode + " " + responseBody);
             }
             return objectMapper.readValue(responseBody, responseType);
@@ -218,6 +220,7 @@ public class OpenAiCompatibleClient {
         if (normalizedPath.isEmpty()) {
             throw new BusinessException("Request path must not be blank");
         }
+        // 这里统一吸收首尾斜杠差异，避免不同配置写法导致 URL 拼接错误。
         if (normalizedBaseUrl.endsWith("/") && normalizedPath.startsWith("/")) {
             return normalizedBaseUrl.substring(0, normalizedBaseUrl.length() - 1) + normalizedPath;
         }

@@ -9,7 +9,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Data
 @ConfigurationProperties(prefix = "rag.retrieval")
 public class RagRetrievalProperties {
-
     private String vectorStore = "pgvector";
     private Integer defaultTopK = 5;
     private Integer maxTopK = 10;

@@ -14,27 +14,31 @@ import java.util.Optional;
  */
 @Repository
 public class EmbeddingRebuildRunRepository {
-
     private final EmbeddingRebuildRunMapper mapper;
 
+    /** 构造EmbeddingRebuildRunRepository。 */
     public EmbeddingRebuildRunRepository(EmbeddingRebuildRunMapper mapper) {
         this.mapper = mapper;
     }
 
+    /** 新增数据记录。 */
     public EmbeddingRebuildRunEntity insert(EmbeddingRebuildRunEntity entity) {
         mapper.insert(entity);
         return entity;
     }
 
+    /** 更新数据记录。 */
     public EmbeddingRebuildRunEntity updateById(EmbeddingRebuildRunEntity entity) {
         mapper.updateById(entity);
         return entity;
     }
 
+    /** 按条件查询数据。 */
     public Optional<EmbeddingRebuildRunEntity> findById(Long id) {
         return Optional.ofNullable(mapper.selectById(id));
     }
 
+    /** 判断数据是否存在。 */
     public boolean existsActiveRun() {
         LambdaQueryWrapper<EmbeddingRebuildRunEntity> query = new LambdaQueryWrapper<EmbeddingRebuildRunEntity>()
                 .in(EmbeddingRebuildRunEntity::getStatus, List.of(
@@ -45,6 +49,7 @@ public class EmbeddingRebuildRunRepository {
         return mapper.selectCount(query) > 0;
     }
 
+    /** 按条件查询数据。 */
     public List<EmbeddingRebuildRunEntity> findByStatuses(List<EmbeddingRebuildRunStatus> statuses, int limit) {
         LambdaQueryWrapper<EmbeddingRebuildRunEntity> query = new LambdaQueryWrapper<EmbeddingRebuildRunEntity>()
                 .in(EmbeddingRebuildRunEntity::getStatus, statuses)

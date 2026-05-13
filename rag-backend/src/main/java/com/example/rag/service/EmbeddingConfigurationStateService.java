@@ -26,6 +26,7 @@ public class EmbeddingConfigurationStateService {
     private final EmbeddingConfigurationStateRepository repository;
     private final DocumentChunkRepository documentChunkRepository;
 
+    /** 注入 embedding 配置状态管理所需依赖。 */
     public EmbeddingConfigurationStateService(RagEmbeddingProperties ragEmbeddingProperties,
                                               EmbeddingConfigurationStateRepository repository,
                                               DocumentChunkRepository documentChunkRepository) {
@@ -34,6 +35,7 @@ public class EmbeddingConfigurationStateService {
         this.documentChunkRepository = documentChunkRepository;
     }
 
+    /** 同步当前 embedding 配置快照。 */
     @PostConstruct
     @Transactional
     public void syncCurrentConfiguration() {
@@ -60,6 +62,7 @@ public class EmbeddingConfigurationStateService {
             state.setReembedRequired(false);
         }
         if (!Objects.equals(state.getCurrentConfigFingerprint(), currentFingerprint)) {
+            // 启动配置变化只更新 current，不直接覆盖 active，避免把旧向量误标为可安全检索。
             state.setCurrentConfigFingerprint(currentFingerprint);
             state.setReembedRequired(true);
             state.setReembedFinishedAt(null);
@@ -68,6 +71,7 @@ public class EmbeddingConfigurationStateService {
                 && Objects.equals(state.getCurrentConfigFingerprint(), currentFingerprint)
                 && !Boolean.TRUE.equals(state.getReembedRequired())
                 && Objects.equals(state.getActiveConfigFingerprint(), currentFingerprint)) {
+            // 这里处理“配置没变但库里仍有旧向量”的历史补偿场景，强制重新进入重嵌入流程。
             state.setActiveConfigFingerprint(LEGACY_ACTIVE_FINGERPRINT);
             state.setActiveEmbeddingModel(resolveActiveEmbeddingModel(true));
             state.setReembedRequired(true);
@@ -76,13 +80,16 @@ public class EmbeddingConfigurationStateService {
         repository.upsert(state);
     }
 
+    /** 读取当前必需的 embedding 配置状态。 */
     @Transactional(readOnly = true)
     public EmbeddingConfigurationStateEntity getRequiredState() {
         return repository.getSingleton().orElseThrow(() -> new IllegalStateException("Embedding configuration state is not initialized"));
     }
 
+    /** 计算当前 embedding 配置指纹。 */
     @Transactional(readOnly = true)
     public String calculateCurrentFingerprint() {
+        // profile 指纹代表“当前向量契约”，任何参与检索兼容性的字段变化都必须进入摘要。
         String raw = String.join("|",
                 normalize(ragEmbeddingProperties.getProvider()),
                 normalize(ragEmbeddingProperties.getBaseUrl()),
@@ -99,10 +106,12 @@ public class EmbeddingConfigurationStateService {
         }
     }
 
+    /** 标记重嵌入任务已提交。 */
     @Transactional
     public EmbeddingConfigurationStateEntity markRebuildSubmitted(Long rebuildRunId, String operator) {
         EmbeddingConfigurationStateEntity state = getRequiredState();
         OffsetDateTime now = OffsetDateTime.now();
+        // 一旦确认提交 rebuild，就立刻把系统视图切到“需要重建/重建中”。
         state.setReembedRequired(true);
         state.setRebuildRunId(rebuildRunId);
         state.setReembedConfirmedBy(operator);
@@ -113,10 +122,12 @@ public class EmbeddingConfigurationStateService {
         return state;
     }
 
+    /** 标记重嵌入任务已完成。 */
     @Transactional
     public void markRebuildCompleted() {
         EmbeddingConfigurationStateEntity state = getRequiredState();
         OffsetDateTime now = OffsetDateTime.now();
+        // 只有全量任务成功后，activeConfigFingerprint 才能追平 currentConfigFingerprint。
         state.setActiveConfigFingerprint(state.getCurrentConfigFingerprint());
         state.setActiveEmbeddingModel(ragEmbeddingProperties.getModel());
         state.setReembedRequired(false);
@@ -125,6 +136,7 @@ public class EmbeddingConfigurationStateService {
         repository.upsert(state);
     }
 
+    /** 标记重嵌入任务已失败。 */
     @Transactional
     public void markRebuildFailed(Long rebuildRunId) {
         EmbeddingConfigurationStateEntity state = getRequiredState();
@@ -134,10 +146,12 @@ public class EmbeddingConfigurationStateService {
         repository.upsert(state);
     }
 
+    /** 归一化配置字符串，避免空值参与指纹计算时报错。 */
     private String normalize(String value) {
         return value == null ? "" : value.trim();
     }
 
+    /** 判断库内是否仍存在需要重嵌入的历史向量数据。 */
     private boolean detectLegacyActiveEmbeddings(String currentFingerprint) {
         int expectedDimensions = ragEmbeddingProperties.getVectorDimensions() == null ? 0 : ragEmbeddingProperties.getVectorDimensions();
         if (expectedDimensions <= 0) {
@@ -146,6 +160,7 @@ public class EmbeddingConfigurationStateService {
         return documentChunkRepository.existsEmbeddedChunksNeedingRebuild(currentFingerprint, expectedDimensions);
     }
 
+    /** 解析当前应展示为生效中的 embedding 模型名。 */
     private String resolveActiveEmbeddingModel(boolean legacyEmbeddingsDetected) {
         if (!legacyEmbeddingsDetected) {
             return ragEmbeddingProperties.getModel();

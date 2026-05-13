@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getDocument, listDocumentChunks, listIndexingTasks } from "../api/document";
 
+/** 轮询文档详情、切块和索引任务状态。 */
 export function useDocumentMonitor(kbCode: string, documentCode: string, enabled = true) {
   const tasksQuery = useQuery({
     queryKey: ["indexingTasks", kbCode, documentCode],
@@ -9,6 +10,7 @@ export function useDocumentMonitor(kbCode: string, documentCode: string, enabled
     enabled,
     refetchInterval: (query) => {
       const tasks = query.state.data ?? [];
+
       const current = tasks[0];
       if (!current) return false;
       return current.status === "QUEUED" || current.status === "RUNNING" ? 3000 : false;

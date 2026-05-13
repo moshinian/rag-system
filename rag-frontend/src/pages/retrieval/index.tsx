@@ -12,13 +12,16 @@ type FormValues = {
   topK?: number;
 };
 
+/** 渲染页面内容。 */
 export function RetrievalPage() {
   const kbCode = useCurrentKb();
+
   const readinessQuery = useQuery({
     queryKey: ["readiness", kbCode, "retrieval"],
     queryFn: () => getReadiness(kbCode!),
     enabled: !!kbCode
   });
+
   const mutation = useMutation({
     mutationFn: (values: FormValues) => retrieve(kbCode!, values)
   });

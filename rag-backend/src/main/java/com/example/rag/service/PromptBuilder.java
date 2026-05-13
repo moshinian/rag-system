@@ -11,9 +11,9 @@ import java.util.List;
  */
 @Component
 public class PromptBuilder {
-
     private final RagRetrievalProperties ragRetrievalProperties;
 
+    /** 注入问答 prompt 构建所需配置。 */
     public PromptBuilder(RagRetrievalProperties ragRetrievalProperties) {
         this.ragRetrievalProperties = ragRetrievalProperties;
     }
@@ -31,6 +31,7 @@ public class PromptBuilder {
         );
     }
 
+    /** 基于问题和召回结果构造用户提示词。 */
     private String buildUserPrompt(String question, List<RetrievedChunkResponse> retrievalResults) {
         StringBuilder contextBuilder = new StringBuilder();
         int maxContextChars = resolveMaxContextChars();
@@ -71,15 +72,18 @@ public class PromptBuilder {
                 """.formatted(question, context);
     }
 
+    /** 解析问答上下文长度上限。 */
     private int resolveMaxContextChars() {
         Integer configured = ragRetrievalProperties.getMaxContextChars();
         return configured == null || configured < 200 ? 6000 : configured;
     }
 
+    /** 把空值转换为空字符串。 */
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
     }
 
+    /** 封装一次问答调用所需的 system 与 user prompt。 */
     public record PromptPayload(
             String systemPrompt,
             String userPrompt

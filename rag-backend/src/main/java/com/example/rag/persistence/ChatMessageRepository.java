@@ -18,9 +18,9 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class ChatMessageRepository {
-
     private final ChatMessageMapper chatMessageMapper;
 
+    /** 构造ChatMessageRepository。 */
     public ChatMessageRepository(ChatMessageMapper chatMessageMapper) {
         this.chatMessageMapper = chatMessageMapper;
     }

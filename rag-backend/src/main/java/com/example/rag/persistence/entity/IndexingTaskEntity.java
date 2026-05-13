@@ -37,7 +37,6 @@ public class IndexingTaskEntity {
 
     @TableField("task_type")
     private String taskType;
-
     private IndexingTaskStatus status = IndexingTaskStatus.QUEUED;
 
     @TableField("task_stage")

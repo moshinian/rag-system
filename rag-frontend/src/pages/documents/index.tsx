@@ -12,12 +12,18 @@ import {
   PAGE_SIZE_OPTIONS
 } from "../../utils/pagination";
 
+/** 渲染页面内容。 */
 export function DocumentsPage() {
   const { message } = App.useApp();
+
   const kbCode = useCurrentKb();
+
   const queryClient = useQueryClient();
+
   const [searchParams, setSearchParams] = useSearchParams();
+
   const [status, setStatus] = useState<string>();
+
   const { page, pageSize, normalized } = useMemo(
     () => normalizePaginationParams(searchParams),
     [searchParams]
@@ -39,13 +45,17 @@ export function DocumentsPage() {
     queryFn: () => listDocuments(kbCode!, { status, pageNo: page, pageSize }),
     enabled: !!kbCode
   });
+
   const [togglingDocumentCode, setTogglingDocumentCode] = useState<string>();
+
+  /** 渲染页面内容。 */
   const refreshDocumentQueries = (documentCode: string) => {
     queryClient.invalidateQueries({ queryKey: ["documents", kbCode] });
     queryClient.invalidateQueries({ queryKey: ["documentDetail", kbCode, documentCode] });
     queryClient.invalidateQueries({ queryKey: ["documentChunks", kbCode, documentCode] });
     queryClient.invalidateQueries({ queryKey: ["readiness", kbCode] });
   };
+
   const disableMutation = useMutation({
     mutationFn: (documentCode: string) => {
       setTogglingDocumentCode(documentCode);
@@ -57,6 +67,7 @@ export function DocumentsPage() {
     },
     onSettled: () => setTogglingDocumentCode(undefined)
   });
+
   const enableMutation = useMutation({
     mutationFn: (documentCode: string) => {
       setTogglingDocumentCode(documentCode);
@@ -68,6 +79,7 @@ export function DocumentsPage() {
     },
     onSettled: () => setTogglingDocumentCode(undefined)
   });
+
   const pagination = useMemo(
     () => ({
       current: page,

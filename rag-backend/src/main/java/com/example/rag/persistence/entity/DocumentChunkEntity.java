@@ -36,9 +36,7 @@ public class DocumentChunkEntity {
 
     @TableField("chunk_type")
     private String chunkType;
-
     private String title;
-
     private String content;
 
     @TableField("content_length")

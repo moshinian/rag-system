@@ -15,13 +15,16 @@ type FormValues = {
   topK?: number;
 };
 
+/** 渲染页面内容。 */
 export function QaPage() {
   const kbCode = useCurrentKb();
+
   const readinessQuery = useQuery({
     queryKey: ["readiness", kbCode, "qa"],
     queryFn: () => getReadiness(kbCode!),
     enabled: !!kbCode
   });
+
   const mutation = useMutation({
     mutationFn: (values: FormValues) => ask(kbCode!, values)
   });

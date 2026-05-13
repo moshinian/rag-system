@@ -15,9 +15,9 @@ import java.util.List;
  */
 @Component
 public class FixedWindowChunker {
-
     private final RagChunkingProperties ragChunkingProperties;
 
+    /** 构造FixedWindowChunker。 */
     public FixedWindowChunker(RagChunkingProperties ragChunkingProperties) {
         this.ragChunkingProperties = ragChunkingProperties;
     }
@@ -128,21 +128,25 @@ public class FixedWindowChunker {
         return end;
     }
 
+    /** 返回当前切块策略名称。 */
     public String strategyName() {
         String configured = ragChunkingProperties.getStrategy();
         return configured == null || configured.isBlank() ? "fixed-window" : configured.trim();
     }
 
+    /** 返回当前切块重叠字符数。 */
     public int overlapChars() {
         Integer configured = ragChunkingProperties.getOverlapChars();
         return configured == null || configured < 0 ? 80 : configured;
     }
 
+    /** 读取最大切块字符数配置。 */
     private int maxChunkChars() {
         Integer configured = ragChunkingProperties.getMaxChunkChars();
         return configured == null || configured < 100 ? 600 : configured;
     }
 
+    /** 读取最小断点搜索偏移量配置。 */
     private int minBreakSearchOffset() {
         Integer configured = ragChunkingProperties.getMinBreakSearchOffset();
         return configured == null || configured < 50 ? 240 : configured;

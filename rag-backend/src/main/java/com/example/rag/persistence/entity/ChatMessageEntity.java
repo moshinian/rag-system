@@ -29,14 +29,11 @@ public class ChatMessageEntity {
 
     @TableField("message_type")
     private String messageType;
-
     private String question;
-
     private String answer;
 
     @TableField("retrieved_chunks")
     private String retrievedChunks;
-
     private String sources;
 
     @TableField("prompt_template")

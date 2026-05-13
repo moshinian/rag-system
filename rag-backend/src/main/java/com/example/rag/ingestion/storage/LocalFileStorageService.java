@@ -18,9 +18,9 @@ import java.nio.file.StandardCopyOption;
  */
 @Service
 public class LocalFileStorageService {
-
     private final RagStorageProperties ragStorageProperties;
 
+    /** 构造LocalFileStorageService。 */
     public LocalFileStorageService(RagStorageProperties ragStorageProperties) {
         this.ragStorageProperties = ragStorageProperties;
     }
@@ -58,12 +58,14 @@ public class LocalFileStorageService {
             return;
         }
         Files.walkFileTree(targetDirectory, new SimpleFileVisitor<>() {
+            /** 删除目录时同步删除遍历到的文件。 */
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 Files.deleteIfExists(file);
                 return FileVisitResult.CONTINUE;
             }
 
+            /** 删除目录时在子项清理后删除当前目录。 */
             @Override
             public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
                 if (exc != null) {

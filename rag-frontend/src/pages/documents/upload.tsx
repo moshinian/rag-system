@@ -16,8 +16,10 @@ type UploadForm = {
   operator?: string;
 };
 
+/** 渲染页面内容。 */
 export function UploadPage() {
   const kbCode = useCurrentKb();
+
   const navigate = useNavigate();
 
   const mutation = useMutation({
@@ -26,6 +28,7 @@ export function UploadPage() {
       if (!file || !kbCode) {
         throw new Error("请选择文件和知识库");
       }
+
       const uploaded = await uploadDocument(kbCode, {
         file,
         documentName: values.documentName,

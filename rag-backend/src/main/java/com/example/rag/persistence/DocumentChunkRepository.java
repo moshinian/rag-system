@@ -17,9 +17,9 @@ import java.util.Optional;
  */
 @Repository
 public class DocumentChunkRepository {
-
     private final DocumentChunkMapper documentChunkMapper;
 
+    /** 构造DocumentChunkRepository。 */
     public DocumentChunkRepository(DocumentChunkMapper documentChunkMapper) {
         this.documentChunkMapper = documentChunkMapper;
     }

@@ -15,9 +15,9 @@ import java.util.Optional;
  */
 @Repository
 public class IndexingTaskRepository {
-
     private final IndexingTaskMapper indexingTaskMapper;
 
+    /** 构造IndexingTaskRepository。 */
     public IndexingTaskRepository(IndexingTaskMapper indexingTaskMapper) {
         this.indexingTaskMapper = indexingTaskMapper;
     }

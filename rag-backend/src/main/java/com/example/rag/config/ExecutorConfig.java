@@ -13,9 +13,9 @@ import java.util.concurrent.Executor;
  */
 @Configuration
 public class ExecutorConfig {
-
     private final RagExecutorProperties ragExecutorProperties;
 
+    /** 构造ExecutorConfig。 */
     public ExecutorConfig(RagExecutorProperties ragExecutorProperties) {
         this.ragExecutorProperties = ragExecutorProperties;
     }
@@ -53,12 +53,10 @@ public class ExecutorConfig {
         executor.initialize();
         return executor;
     }
-
     private int normalizeCorePoolSize() {
         Integer configured = ragExecutorProperties.getCorePoolSize();
         return configured == null || configured < 1 ? 4 : configured;
     }
-
     private int normalizeMaxPoolSize() {
         Integer configured = ragExecutorProperties.getMaxPoolSize();
         int minValue = normalizeCorePoolSize();
@@ -67,17 +65,14 @@ public class ExecutorConfig {
         }
         return configured;
     }
-
     private int normalizeQueueCapacity() {
         Integer configured = ragExecutorProperties.getQueueCapacity();
         return configured == null || configured < 1 ? 100 : configured;
     }
-
     private int normalizeAwaitTerminationSeconds() {
         Integer configured = ragExecutorProperties.getAwaitTerminationSeconds();
         return configured == null || configured < 1 ? 30 : configured;
     }
-
     private String normalizeThreadNamePrefix() {
         String configured = ragExecutorProperties.getThreadNamePrefix();
         return configured == null || configured.isBlank() ? "rag-indexing-" : configured.trim();

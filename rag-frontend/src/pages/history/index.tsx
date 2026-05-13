@@ -13,9 +13,12 @@ import {
   PAGE_SIZE_OPTIONS
 } from "../../utils/pagination";
 
+/** 渲染页面内容。 */
 export function HistoryPage() {
   const kbCode = useCurrentKb();
+
   const [searchParams, setSearchParams] = useSearchParams();
+
   const { page, pageSize, normalized } = useMemo(
     () => normalizePaginationParams(searchParams),
     [searchParams]
@@ -37,6 +40,7 @@ export function HistoryPage() {
     queryFn: () => listQaHistory(kbCode!, page, pageSize),
     enabled: !!kbCode
   });
+
   const pagination = useMemo(
     () => ({
       current: page,

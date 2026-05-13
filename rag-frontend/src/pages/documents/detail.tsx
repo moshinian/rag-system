@@ -12,15 +12,23 @@ import { useCurrentKb } from "../../hooks/use-current-kb";
 import { useDocumentMonitor } from "../../hooks/use-polling-task";
 import { formatDateTime, formatFileSize } from "../../utils/format";
 
+/** 渲染页面内容。 */
 export function DocumentDetailPage() {
   const { message } = App.useApp();
+
   const kbCode = useCurrentKb();
+
   const { documentCode } = useParams();
+
   const queryClient = useQueryClient();
+
   const monitor = useDocumentMonitor(kbCode!, documentCode!, !!kbCode && !!documentCode);
+
   const task = monitor.tasksQuery.data?.[0];
+
   const detail = monitor.detailQuery.data;
 
+  /** 渲染页面内容。 */
   const refreshQueries = () => {
     queryClient.invalidateQueries({ queryKey: ["indexingTasks", kbCode, documentCode] });
     queryClient.invalidateQueries({ queryKey: ["documentDetail", kbCode, documentCode] });
@@ -35,6 +43,7 @@ export function DocumentDetailPage() {
       refreshQueries();
     }
   });
+
   const disableMutation = useMutation({
     mutationFn: () => disableDocument(kbCode!, documentCode!),
     onSuccess: () => {
@@ -42,6 +51,7 @@ export function DocumentDetailPage() {
       message.success("文档已禁用，当前不会参与检索和问答。");
     }
   });
+
   const enableMutation = useMutation({
     mutationFn: () => enableDocument(kbCode!, documentCode!),
     onSuccess: () => {

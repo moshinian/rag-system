@@ -34,12 +34,10 @@ import java.util.Locale;
  */
 @Service
 public class KnowledgeBaseService {
-
     private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
     private static final long DEFAULT_PAGE_NO = 1;
     private static final long DEFAULT_PAGE_SIZE = 20;
     private static final long MAX_PAGE_SIZE = 100;
-
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
@@ -50,6 +48,7 @@ public class KnowledgeBaseService {
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final DocumentIndexingService documentIndexingService;
 
+    /** 构造KnowledgeBaseService。 */
     public KnowledgeBaseService(KnowledgeBaseRepository knowledgeBaseRepository,
                                 DocumentRepository documentRepository,
                                 DocumentChunkRepository documentChunkRepository,
@@ -147,6 +146,7 @@ public class KnowledgeBaseService {
     })
     public KnowledgeBaseEnableResponse enable(String kbCode, boolean retryFailedIndexingTasks, String operator) {
         KnowledgeBaseEntity entity = updateStatusEntity(kbCode, KnowledgeBaseStatus.ACTIVE);
+        // 恢复知识库和补偿失败任务是两个显式动作，默认只恢复可用性，不自动重放全部失败链路。
         DocumentIndexingService.BatchRetryIndexingResult retrySummary = retryFailedIndexingTasks
                 ? documentIndexingService.retryLatestFailedTasksInKnowledgeBase(kbCode, operator)
                 : new DocumentIndexingService.BatchRetryIndexingResult(0, 0, 0, 0, List.of());
@@ -167,6 +167,7 @@ public class KnowledgeBaseService {
     public KnowledgeBaseResponse delete(String kbCode) {
         KnowledgeBaseEntity entity = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
+        // 删除要求知识库内没有活跃索引任务，避免后台线程继续访问已被级联删掉的数据。
         if (indexingTaskRepository.existsActiveTaskInKnowledgeBase(entity.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
             throw new BusinessException("Knowledge base has active indexing tasks and cannot be deleted: " + kbCode);
         }
@@ -177,6 +178,7 @@ public class KnowledgeBaseService {
         if (!sessionIds.isEmpty()) {
             chatMessageRepository.deleteBySessionIds(sessionIds);
         }
+        // 这里按“消息 -> 会话 -> 任务/chunk/文档 -> 知识库”的顺序级联，尽量减少脏数据风险。
         chatSessionRepository.deleteByKnowledgeBaseId(entity.getId());
         indexingTaskRepository.deleteByKnowledgeBaseId(entity.getId());
         documentChunkRepository.deleteByKnowledgeBaseId(entity.getId());
@@ -249,6 +251,7 @@ public class KnowledgeBaseService {
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
         if (status == KnowledgeBaseStatus.INACTIVE
                 && indexingTaskRepository.existsActiveTaskInKnowledgeBase(entity.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
+            // 禁用不是强停后台任务；当前实现要求先等索引链路自然结束，再切知识库状态。
             throw new BusinessException("Knowledge base has active indexing tasks and cannot be disabled: " + kbCode);
         }
         entity.setStatus(status);
@@ -300,6 +303,7 @@ public class KnowledgeBaseService {
             return;
         }
         try {
+            // 物料目录按知识库整体删除，避免逐文件清理与数据库级联范围不一致。
             localFileStorageService.deleteKnowledgeBaseDirectory(kbCode);
         } catch (IOException ex) {
             throw new BusinessException("Failed to delete knowledge base materials: " + ex.getMessage());

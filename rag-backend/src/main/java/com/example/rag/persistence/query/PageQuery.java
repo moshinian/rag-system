@@ -7,7 +7,7 @@ public record PageQuery(
         long pageNo,
         long pageSize
 ) {
-
+    /** 计算当前分页查询的偏移量。 */
     public long offset() {
         return (pageNo - 1) * pageSize;
     }

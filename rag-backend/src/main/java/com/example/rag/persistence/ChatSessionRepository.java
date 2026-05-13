@@ -13,9 +13,9 @@ import java.util.List;
  */
 @Repository
 public class ChatSessionRepository {
-
     private final ChatSessionMapper chatSessionMapper;
 
+    /** 构造ChatSessionRepository。 */
     public ChatSessionRepository(ChatSessionMapper chatSessionMapper) {
         this.chatSessionMapper = chatSessionMapper;
     }

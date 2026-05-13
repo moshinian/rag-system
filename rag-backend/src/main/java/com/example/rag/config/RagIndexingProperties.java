@@ -9,14 +9,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Data
 @ConfigurationProperties(prefix = "rag.indexing")
 public class RagIndexingProperties {
-
     private int maxRetryCount = 3;
-
     private Recovery recovery = new Recovery();
 
     @Data
     public static class Recovery {
-
         private boolean enabled = true;
         private long staleAfterSeconds = 600;
         private int scanLimit = 20;

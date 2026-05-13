@@ -18,6 +18,7 @@ type StatusBadgeProps =
   | { type: "embedding"; status: EmbeddingStatus }
   | { type: "task"; status: IndexingTaskStatus; stage: IndexingTaskStage };
 
+/** 渲染复用组件。 */
 export function StatusBadge(props: StatusBadgeProps) {
   const meta =
     props.type === "knowledgeBase"

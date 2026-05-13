@@ -38,12 +38,10 @@ import java.util.concurrent.locks.LockSupport;
  */
 @Service
 public class DocumentIndexingService {
-
     private static final String TASK_TYPE_DOCUMENT_INDEXING = "DOCUMENT_INDEXING";
     private static final int TASK_LOOKUP_MAX_ATTEMPTS = 5;
     private static final long TASK_LOOKUP_RETRY_NANOS = 50_000_000L;
     private static final Logger log = LoggerFactory.getLogger(DocumentIndexingService.class);
-
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentRepository documentRepository;
     private final IndexingTaskRepository indexingTaskRepository;
@@ -53,6 +51,7 @@ public class DocumentIndexingService {
     private final RagIndexingProperties ragIndexingProperties;
     private final Executor indexingExecutor;
 
+    /** 构造DocumentIndexingService。 */
     public DocumentIndexingService(KnowledgeBaseRepository knowledgeBaseRepository,
                                    DocumentRepository documentRepository,
                                    IndexingTaskRepository indexingTaskRepository,
@@ -79,9 +78,11 @@ public class DocumentIndexingService {
 
         DocumentEntity document = documentRepository.findByCodeInKnowledgeBase(documentCode, kbCode)
                 .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
+        // 已被手工下线的文档不应再进入后台索引流程。
         if (document.getStatus() == DocumentStatus.DISABLED) {
             throw new BusinessException("Document is disabled and cannot be indexed: " + documentCode);
         }
+        // 这里先做一次显式校验，给调用方稳定的业务错误；真正兜底仍依赖数据库唯一约束。
         if (indexingTaskRepository.existsActiveTask(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
             throw new BusinessException("An active indexing task already exists for document: " + documentCode);
         }
@@ -117,6 +118,7 @@ public class DocumentIndexingService {
         ensureKnowledgeBaseActive(knowledgeBase);
         DocumentEntity document = documentRepository.findByCodeInKnowledgeBase(documentCode, kbCode)
                 .orElseThrow(() -> new BusinessException("Document not found in knowledge base: " + documentCode));
+        // 重试遵循当前文档可用性，而不是历史失败时的旧状态。
         if (document.getStatus() == DocumentStatus.DISABLED) {
             throw new BusinessException("Document is disabled and cannot be re-indexed: " + documentCode);
         }
@@ -167,6 +169,7 @@ public class DocumentIndexingService {
                 skippedDisabledDocumentCount++;
                 continue;
             }
+            // 恢复补偿只补最近一次失败任务，避免对同一文档堆积多条活跃任务。
             if (indexingTaskRepository.existsActiveTask(document.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
                 skippedActiveTaskDocumentCount++;
                 continue;
@@ -222,6 +225,7 @@ public class DocumentIndexingService {
         if (!ragIndexingProperties.getRecovery().isEnabled()) {
             return;
         }
+        // staleAfterSeconds 允许配置得过小，这里仍保留一个 30s 下限，避免误扫刚提交的任务。
         OffsetDateTime cutoff = OffsetDateTime.now()
                 .minusSeconds(Math.max(30, ragIndexingProperties.getRecovery().getStaleAfterSeconds()));
         int limit = Math.max(1, ragIndexingProperties.getRecovery().getScanLimit());
@@ -252,6 +256,7 @@ public class DocumentIndexingService {
 
     /** 对单条卡住任务执行恢复判断，并在必要时创建新的恢复任务。 */
     private void recoverStaleTask(IndexingTaskEntity staleTask) {
+        // 如果同文档已经有别的活跃任务，就说明这条旧任务不该再被恢复。
         if (indexingTaskRepository.existsOtherActiveTask(staleTask.getDocumentId(), TASK_TYPE_DOCUMENT_INDEXING, staleTask.getId())) {
             log.info(StructuredLogMessage.of("indexing.recovery.skipped")
                     .field("taskId", staleTask.getId())
@@ -264,6 +269,7 @@ public class DocumentIndexingService {
                 .orElseThrow(() -> new BusinessException("Document not found for indexing task: " + staleTask.getId()));
         if (staleTask.getRetryCount() != null && staleTask.getMaxRetryCount() != null
                 && staleTask.getRetryCount() >= staleTask.getMaxRetryCount()) {
+            // 恢复扫描和手动重试共用同一套最大重试边界，避免后台无限自旋。
             staleTask.setStatus(IndexingTaskStatus.FAILED);
             staleTask.setErrorMessage(truncate("Task exceeded max retry count during recovery"));
             staleTask.setFinishedAt(OffsetDateTime.now());
@@ -293,6 +299,7 @@ public class DocumentIndexingService {
 
     /** 在线程池中执行实际索引流程，并持续更新任务状态。 */
     private void runAsync(Long taskId) {
+        // 提交和消费不在同一事务里，短暂轮询是为了规避“任务刚插入但读还未可见”的窗口。
         IndexingTaskEntity task = waitForTaskRecord(taskId)
                 .orElseThrow(() -> new BusinessException("Indexing task not found after dispatch: " + taskId));
         try {
@@ -324,6 +331,7 @@ public class DocumentIndexingService {
             );
             task.setParserName(processResponse.parserName());
             task.setChunkCount(processResponse.chunkCount());
+            // 处理阶段成功后立刻刷新心跳，避免长时间 embedding 被恢复扫描误判为卡住。
             task.setTaskStage(IndexingTaskStage.DOCUMENT_EMBEDDING);
             touchHeartbeat(task, null);
 
@@ -477,6 +485,7 @@ public class DocumentIndexingService {
         }
     }
 
+    /** 轮询等待任务记录可见。 */
     private java.util.Optional<IndexingTaskEntity> waitForTaskRecord(Long taskId) {
         for (int attempt = 1; attempt <= TASK_LOOKUP_MAX_ATTEMPTS; attempt++) {
             java.util.Optional<IndexingTaskEntity> task = indexingTaskRepository.findById(taskId);
@@ -490,6 +499,7 @@ public class DocumentIndexingService {
         return java.util.Optional.empty();
     }
 
+    /** 在投递失败后把任务标记为失败。 */
     private void markTaskFailedAfterDispatch(Long taskId, RuntimeException ex) {
         indexingTaskRepository.findById(taskId).ifPresent(task -> {
             task.setStatus(IndexingTaskStatus.FAILED);
