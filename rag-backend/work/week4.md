@@ -162,12 +162,12 @@ Week 4 完成后，理想状态下应该形成下面这条新闭环：
 接下来建议继续按下面顺序推进：
 
 1. Day 22：明确 hybrid retrieval 技术方案与接口影响面
-2. Day 23：完成 keyword retrieval 与融合排序第一版实现
-3. Day 24：打通 `qa/retrieve` 与 `qa/ask` 的 hybrid retrieval 主链路
-4. Day 25：补齐 dense vs hybrid 的评测样本与对比口径
-5. Day 26：完成第一轮真实对比评测并记录结果
-6. Day 27：补齐检索与问答关键日志/指标
-7. Day 28：统一收口 README、状态文档、Week 4 结论与面试表达素材
+2. 后续工作：补齐 keyword retrieval 与融合排序第一版实现
+3. 后续工作：打通 `qa/retrieve` 与 `qa/ask` 的 hybrid retrieval 主链路
+4. 后续工作：补齐 dense vs hybrid 的评测样本与对比口径
+5. 后续工作：完成第一轮真实对比评测并记录结果
+6. 后续工作：补齐检索与问答关键日志/指标
+7. 后续工作：统一收口 README、状态文档、Week 4 结论与面试表达素材
 
 ## Week 4 结束后的预期收益
 
