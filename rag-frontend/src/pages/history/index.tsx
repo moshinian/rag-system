@@ -6,7 +6,9 @@ import { listQaHistory } from "../../api/qa";
 import { ApiErrorAlert } from "../../components/feedback/api-error-alert";
 import { SourceList } from "../../components/source-viewer/source-list";
 import { useCurrentKb } from "../../hooks/use-current-kb";
+import type { RetrievalMode } from "../../types/qa";
 import { formatDateTime, truncateText } from "../../utils/format";
+import { formatFusionStrategy, formatRetrievalMode } from "../../utils/format";
 import {
   DEFAULT_PAGE,
   normalizePaginationParams,
@@ -81,6 +83,12 @@ export function HistoryPage() {
                         <Descriptions size="small" column={2}>
                           <Descriptions.Item label="模型">{record.chatModel}</Descriptions.Item>
                           <Descriptions.Item label="TopK">{record.topK}</Descriptions.Item>
+                          <Descriptions.Item label="检索模式">
+                            {formatRetrievalMode(record.retrievalMode)}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="融合策略">
+                            {formatFusionStrategy(record.fusionStrategy)}
+                          </Descriptions.Item>
                           <Descriptions.Item label="耗时">{record.latencyMs ?? "-"} ms</Descriptions.Item>
                           <Descriptions.Item label="创建时间">
                             {formatDateTime(record.createdAt)}
@@ -110,6 +118,11 @@ export function HistoryPage() {
             {
               title: "模型",
               dataIndex: "chatModel"
+            },
+            {
+              title: "模式",
+              dataIndex: "retrievalMode",
+              render: (value: string) => formatRetrievalMode(value as RetrievalMode)
             },
             {
               title: "来源数",

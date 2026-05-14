@@ -1,10 +1,16 @@
 import { apiClient } from "./client";
 import type { PageResponse } from "../types/api";
-import type { QaAnswerResponse, QaHistoryRecord, RetrievalResponse } from "../types/qa";
+import type {
+  QaAnswerResponse,
+  QaHistoryRecord,
+  RetrievalMode,
+  RetrievalResponse
+} from "../types/qa";
 
 type AskPayload = {
   question: string;
   topK?: number;
+  retrievalMode?: RetrievalMode;
 };
 
 /** 调用检索接口。 */

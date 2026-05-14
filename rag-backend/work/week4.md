@@ -298,11 +298,18 @@ Week 4 完成后，理想状态下应该形成下面这条新闭环：
 6. `/qa/retrieve` 与 `/qa/ask` 已支持可选 `retrievalMode`
 7. `QuestionRetrievalResponse / QaAnswerResponse` 已补入 `retrievalMode / fusionStrategy`
 
+截至 Day 24，Week 4 又补齐了两层重要收口：
+
+1. `qa/history` 已支持回放 `retrievalMode / fusionStrategy`
+2. 新历史记录会把检索快照一起持久化，老数组格式继续兼容
+3. 前端 retrieval / qa / history 页面已适配模式选择与字段展示
+4. 已完成一次真实前后端联调，验证了后端直连、Vite 代理、`DENSE/HYBRID retrieve`、`HYBRID ask` 和 history 回放
+
 当前仍然没有完成的部分也要明确保留：
 
 1. 还没有做真实环境 dense vs hybrid 对比评测
-2. 还没有补 `/qa/history` 的 retrieval mode 回放口径
-3. 还没有补完整的 retrieval 子阶段日志与指标收口
+2. 还没有补完整的 retrieval 子阶段日志与指标收口
+3. 还没有完成真实环境 dense vs hybrid 对比评测结果整理
 4. 还没有完成 README、状态文档之外的全部 Week 4 最终验收材料
 
 ## Week 4 结束后的预期收益

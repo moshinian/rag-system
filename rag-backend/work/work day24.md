@@ -116,3 +116,25 @@ Day 24 结束时，至少要能回答清楚下面几个问题：
 Day 24 的任务不是继续证明 hybrid retrieval 理论上可行，而是把它变成仓库里真正可调用、可对比、可继续迭代的接口能力。
 
 如果 Day 24 能把这一步站稳，Day 25 和 Day 26 才能开始做有意义的 dense vs hybrid 对比，而不是继续围绕接口口径反复返工。
+
+## 今日实际完成
+
+今天已经完成：
+
+1. `qa/retrieve` 与 `qa/ask` 继续统一复用同一套 `retrievalMode` 主链路
+2. `QaAnswerResponse` 已稳定带出 `retrievalMode / fusionStrategy`
+3. `qa/history` 已补入 `retrievalMode / fusionStrategy` 回放能力
+4. 新写入的历史记录会把 `retrievalMode / fusionStrategy / retrievalResults` 一起持久化为检索快照
+5. 老历史记录仍兼容原来的 `retrievedChunks` 数组 JSON，不需要数据库迁移即可回放
+6. `QaRecordServiceTest` 已补齐新快照格式与老数组格式的兼容验证
+7. 前端 retrieval / qa / history 页面已适配 `retrievalMode / fusionStrategy` 展示与模式切换
+8. 已完成真实前后端联调，验证了后端直连、Vite 代理、`DENSE/HYBRID retrieve`、`HYBRID ask` 与 history 回放
+
+## 当前边界
+
+Day 24 完成后，下面这些内容仍然留给后续日期：
+
+1. 还没有完成真实环境 dense vs hybrid 的对比评测
+2. 还没有补完整的 retrieval 子阶段日志与指标收口
+3. 还没有决定默认模式是否从 `DENSE` 切到 `HYBRID`
+4. 还没有形成真实环境 dense vs hybrid 的正式评测结果记录

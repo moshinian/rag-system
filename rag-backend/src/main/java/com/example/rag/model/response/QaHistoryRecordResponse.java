@@ -1,5 +1,7 @@
 package com.example.rag.model.response;
 
+import com.example.rag.model.enums.RetrievalMode;
+
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -14,6 +16,8 @@ public record QaHistoryRecordResponse(
         String answer,
         String chatModel,
         Integer topK,
+        RetrievalMode retrievalMode,
+        String fusionStrategy,
         Long latencyMs,
         String promptTemplate,
         List<RetrievedChunkResponse> retrievalResults,

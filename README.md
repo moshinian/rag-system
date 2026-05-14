@@ -50,6 +50,8 @@
 25. `qa/retrieve` 已支持 `DENSE / HYBRID` 两种检索模式，第一版 `HYBRID` 采用 `dense recall + keyword recall + RRF fusion`
 26. `rag.retrieval` 已补入 `defaultMode / denseCandidateLimit / keywordCandidateLimit / fusionK / keywordMinTokenLength`
 27. 检索结果缓存 key 已纳入 `retrievalMode`，避免 dense 与 hybrid 串缓存
+28. `qa/history` 已支持回放 `retrievalMode / fusionStrategy`，并兼容老的 `retrievedChunks` 数组快照
+29. 前端 retrieval / qa / history 页面已适配 `retrievalMode / fusionStrategy` 展示与模式切换
 
 ### 已完成验证
 
@@ -69,12 +71,14 @@
 14. Redis 不可反序列化缓存值已完成真实自愈验证，不再因为脏缓存直接返回 500
 15. 评测数据集、切块实验样本和 PDF 样本测试路径已统一收口，`mvn test` 已在当前仓库状态下全量通过
 16. `QuestionAnsweringServiceTest / QaServiceTest / QaRecordServiceTest / RedisCacheConfigTest` 已通过 Day 23 改动验证
-17. Week 4 已进入第一版 hybrid retrieval 代码实现，但尚未新增真实环境对比评测结果
+17. `qa/history` 新旧快照兼容测试已通过，前端生产构建已通过
+18. 已完成一次真实前后端联调：后端直连、Vite 代理、`DENSE/HYBRID retrieve`、`HYBRID ask` 与 history 回放都已验证
+19. Week 4 已进入第一版 hybrid retrieval 代码实现，但尚未新增真实环境 dense vs hybrid 对比评测结果
 
 ### 当前边界
 
 1. 还没有做多实例任务协调、任务取消和批量索引编排
-2. 第一版 hybrid retrieval 已经起步，但还没有完成真实评测、history 收口和更细的召回抑制
+2. 第一版 hybrid retrieval 已经起步，并完成了 history 收口与前端适配，但还没有完成真实对比评测和更细的召回抑制
 3. 还没有做 session 复用与多轮对话
 4. 还没有补齐完整监控、指标和 tracing
 5. 评测集还处在第一版，规模和覆盖度都需要继续扩展
@@ -122,6 +126,7 @@
 1. `week4.md` 已明确以混合检索为主线
 2. `work day22.md` 已完成 Week 4 起步与影响面说明
 3. Day 23 已完成 keyword retrieval、RRF fusion、retrievalMode 配置和缓存键修正的第一版实现
+4. Day 24 已完成 `qa/history` 快照兼容、前端适配与真实前后端联调
 
 ## 技术选型
 

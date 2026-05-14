@@ -4,6 +4,8 @@ import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.config.RagQaProperties;
 import com.example.rag.model.dto.QaHistoryRecordView;
+import com.example.rag.model.dto.RetrievedChunksSnapshot;
+import com.example.rag.model.enums.RetrievalMode;
 import com.example.rag.model.response.PageResponse;
 import com.example.rag.model.response.QaAnswerResponse;
 import com.example.rag.model.response.QaHistoryRecordResponse;
@@ -83,8 +85,12 @@ public class QaRecordService {
         message.setMessageType(messageType());
         message.setQuestion(answerResponse.question());
         message.setAnswer(answerResponse.answer());
-        // retrievalResults 和 sources 都按问答发生时的快照持久化，避免后续数据变化影响历史回放。
-        message.setRetrievedChunks(toJson(answerResponse.retrievalResults()));
+        // retrievalResults 与检索模式一起按快照持久化，避免后续历史回放无法判断当时跑的是 dense 还是 hybrid。
+        message.setRetrievedChunks(toJson(new RetrievedChunksSnapshot(
+                answerResponse.retrievalMode(),
+                answerResponse.fusionStrategy(),
+                answerResponse.retrievalResults()
+        )));
         message.setSources(toJson(answerResponse.sources()));
         message.setPromptTemplate(promptTemplate());
         message.setModelName(answerResponse.chatModel());
@@ -118,6 +124,7 @@ public class QaRecordService {
 
     /** 把历史查询视图对象映射成接口返回结构。 */
     private QaHistoryRecordResponse toHistoryResponse(QaHistoryRecordView view) {
+        RetrievedChunksSnapshot retrievalSnapshot = retrievalSnapshot(view.getRetrievedChunks());
         return new QaHistoryRecordResponse(
                 view.getSessionCode(),
                 view.getSessionName(),
@@ -126,9 +133,11 @@ public class QaRecordService {
                 view.getAnswer(),
                 view.getModelName(),
                 view.getTopK(),
+                retrievalSnapshot.retrievalMode(),
+                retrievalSnapshot.fusionStrategy(),
                 view.getLatencyMs(),
                 view.getPromptTemplate(),
-                fromRetrievedChunksJson(view.getRetrievedChunks()),
+                retrievalSnapshot.chunks(),
                 fromSourcesJson(view.getSources()),
                 view.getCreatedAt()
         );
@@ -152,16 +161,31 @@ public class QaRecordService {
         }
     }
 
-    /** 反序列化历史记录中的召回结果。 */
-    private List<RetrievedChunkResponse> fromRetrievedChunksJson(String json) {
+    /** 反序列化历史记录中的召回快照，兼容老数组格式与新对象格式。 */
+    private RetrievedChunksSnapshot retrievalSnapshot(String json) {
         try {
             if (json == null || json.isBlank()) {
-                return List.of();
+                return new RetrievedChunksSnapshot(RetrievalMode.DENSE, "NONE", List.of());
             }
-            return objectMapper.readValue(json, new TypeReference<List<RetrievedChunkResponse>>() {
+            String normalizedJson = json.trim();
+            if (normalizedJson.startsWith("[")) {
+                List<RetrievedChunkResponse> chunks = objectMapper.readValue(
+                        normalizedJson,
+                        new TypeReference<List<RetrievedChunkResponse>>() {
+                        }
+                );
+                return new RetrievedChunksSnapshot(RetrievalMode.DENSE, "NONE", chunks);
+            }
+            RetrievedChunksSnapshot snapshot = objectMapper.readValue(normalizedJson, new TypeReference<RetrievedChunksSnapshot>() {
             });
+            RetrievalMode retrievalMode = snapshot.retrievalMode() == null ? RetrievalMode.DENSE : snapshot.retrievalMode();
+            String fusionStrategy = snapshot.fusionStrategy() == null || snapshot.fusionStrategy().isBlank()
+                    ? "NONE"
+                    : snapshot.fusionStrategy();
+            List<RetrievedChunkResponse> chunks = snapshot.chunks() == null ? List.of() : snapshot.chunks();
+            return new RetrievedChunksSnapshot(retrievalMode, fusionStrategy, chunks);
         } catch (JsonProcessingException ex) {
-            throw new BusinessException("Failed to deserialize retrieved chunks: " + ex.getMessage());
+            throw new BusinessException("Failed to deserialize retrieval snapshot: " + ex.getMessage());
         }
     }
 

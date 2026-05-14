@@ -1,5 +1,7 @@
 import type { BackendLongId } from "./backend-id";
 
+export type RetrievalMode = "DENSE" | "HYBRID";
+
 export type RetrievedChunk = {
   chunkId: BackendLongId;
   documentId: BackendLongId;
@@ -30,6 +32,10 @@ export type RetrievalResponse = {
   question: string;
   embeddingModel: string;
   topK: number;
+  retrievalMode: RetrievalMode;
+  fusionStrategy: string;
+  denseHitCount: number;
+  keywordHitCount: number;
   hitCount: number;
   chunks: RetrievedChunk[];
 };
@@ -39,6 +45,8 @@ export type QaAnswerResponse = {
   answer: string;
   topK: number;
   chatModel: string;
+  retrievalMode: RetrievalMode;
+  fusionStrategy: string;
   retrievalResults: RetrievedChunk[];
   sources: QaSource[];
 };
@@ -51,6 +59,8 @@ export type QaHistoryRecord = {
   answer: string;
   chatModel: string;
   topK: number;
+  retrievalMode: RetrievalMode;
+  fusionStrategy: string;
   latencyMs?: number;
   promptTemplate?: string;
   retrievalResults: RetrievedChunk[];

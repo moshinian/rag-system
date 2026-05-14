@@ -20,6 +20,7 @@
 14. Day 21 的 Week 3 验收与文档收口
 15. Day 22 的 Week 4 规划文档起步
 16. Day 23 的第一版 hybrid retrieval 内核实现起步
+17. Day 24 的 history 收口、前端适配与前后端联调完成
 
 当前项目已经不再停留在“能上传、能切块”的阶段，而是：
 
@@ -27,7 +28,7 @@
 
 当前已经开始整理 Week 4，但要特别说明一件事：
 
-**Week 4 已经进入第一版代码实现阶段，但当前只完成了 hybrid retrieval 内核起步；真实评测、history 收口和观测补强还没有完成。**
+**Week 4 已经进入第一版代码实现阶段；当前已完成 hybrid retrieval 内核起步、history 收口和前端适配，但真实对比评测与观测补强还没有完成。**
 
 ## 已完成
 
@@ -115,6 +116,8 @@
 39. `work day22.md` 已补入 Week 4 规划说明
 40. `RetrievalMode`、第一版 keyword retrieval、`RRF fusion`、retrieval 配置扩展和 retrieval cache key 修正已落地
 41. `/qa/retrieve` 与 `/qa/ask` 已支持可选 `retrievalMode`，并在响应中返回 `retrievalMode / fusionStrategy`
+42. `qa/history` 已支持回放 `retrievalMode / fusionStrategy`，新历史记录按检索快照持久化，老数组格式继续兼容
+43. 前端 retrieval / qa / history 页面已适配 `retrievalMode / fusionStrategy` 展示与模式切换
 
 ## 已验证
 
@@ -153,7 +156,10 @@
 31. `QaEvaluationDatasetTest` 已验证 Day 20 中文评测数据完整性
 32. `day20-cn-kb` 已完成 6 条中文问题的真实问答评测，其中 5 条可回答问题命中预期文档
 33. `mvn -q -Dtest=QuestionAnsweringServiceTest,QaServiceTest,QaRecordServiceTest,RedisCacheConfigTest test` 已通过 Day 23 改动验证
-34. Week 4 已进入第一版 hybrid retrieval 代码实现，但尚未新增真实环境 dense vs hybrid 对比结果
+34. `mvn -q -Dtest=QaRecordServiceTest,QaServiceTest,QuestionAnsweringServiceTest test` 已通过 Day 24 改动验证
+35. `npm run build` 已验证前端适配改动可正常构建
+36. 已完成真实前后端联调：`DENSE/HYBRID retrieve`、`HYBRID ask`、`qa/history` 回放和 `5173` 代理路径均已验证
+37. Week 4 已进入第一版 hybrid retrieval 代码实现，但尚未新增真实环境 dense vs hybrid 对比结果整理
 
 ## 当前未完成
 
@@ -167,7 +173,7 @@
 1. 异步索引任务编排已完成第一版起步，失败重试与恢复已落地，但任务取消和批量编排仍未开始
 2. OpenAPI / Swagger 未开始
 3. 更完整的日志采集、指标和 tracing 仍未开始
-4. 第一版 hybrid retrieval 已起步，但真实环境评测、history 收口和更细的召回抑制仍未完成
+4. 第一版 hybrid retrieval 已起步，并完成了 history 收口和前端适配，但真实环境对比评测和更细的召回抑制仍未完成
 5. 当前检索结果缓存采用整缓存清理策略，后续可以细化到知识库级别
 6. Week 4 评测集扩展与 dense vs hybrid 对比口径仍未落地
 
@@ -189,8 +195,9 @@
 12. Day 21 已完成 README、状态文档与 Week 3 验收口径收口
 13. Day 22 已补入 Week 4 的混合检索、评测体系与可观测性规划说明
 14. Day 23 已完成第一版 hybrid retrieval 内核起步，包括 keyword retrieval、RRF fusion 和 retrievalMode 缓存隔离
-15. 当前系统已经具备最小可用的 RAG 问答闭环，并开始进入 Week 4 的检索增强阶段
-16. 当前 Week 4 还没有完成真实对比评测与最终收口，因此还不能把 hybrid 视为完全验收完成能力
+15. Day 24 已完成 history 快照兼容、前端适配和真实前后端联调，`retrieve / ask / history` 三条链路对 `retrievalMode / fusionStrategy` 的表达已经统一
+16. 当前系统已经具备最小可用的 RAG 问答闭环，并开始进入 Week 4 的检索增强阶段
+17. 当前 Week 4 还没有完成真实对比评测与最终收口，因此还不能把 hybrid 视为完全验收完成能力
 
 ## 后续方向
 
