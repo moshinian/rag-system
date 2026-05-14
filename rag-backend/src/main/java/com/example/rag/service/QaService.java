@@ -2,6 +2,7 @@ package com.example.rag.service;
 
 import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.integration.llm.ChatClient;
+import com.example.rag.model.enums.RetrievalMode;
 import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.model.response.QaAnswerResponse;
 import com.example.rag.model.response.QaSourceResponse;
@@ -40,14 +41,21 @@ public class QaService {
     /** 执行一次完整的问答闭环。 */
     @Transactional
     public QaAnswerResponse ask(String kbCode, String question, Integer topK) {
+        return ask(kbCode, question, topK, null);
+    }
+
+    /** 执行一次完整的问答闭环。 */
+    @Transactional
+    public QaAnswerResponse ask(String kbCode, String question, Integer topK, RetrievalMode retrievalMode) {
         long startedAt = System.currentTimeMillis();
         log.info(StructuredLogMessage.of("qa.ask.started")
                 .field("kbCode", kbCode)
                 .field("topK", topK)
+                .field("requestedRetrievalMode", retrievalMode == null ? "AUTO" : retrievalMode.name())
                 .field("questionLength", question == null ? 0 : question.trim().length())
                 .build());
         // 问答编排始终复用 retrieval 结果，不再单独构造另一份 sources 之外的证据来源。
-        QuestionRetrievalResponse retrievalResponse = questionAnsweringService.retrieve(kbCode, question, topK);
+        QuestionRetrievalResponse retrievalResponse = questionAnsweringService.retrieve(kbCode, question, topK, retrievalMode);
         PromptBuilder.PromptPayload promptPayload = promptBuilder.build(
                 retrievalResponse.question(),
                 retrievalResponse.chunks()
@@ -62,6 +70,8 @@ public class QaService {
                 answer,
                 retrievalResponse.topK(),
                 chatClient.getChatModel(),
+                retrievalResponse.retrievalMode(),
+                retrievalResponse.fusionStrategy(),
                 retrievalResponse.chunks(),
                 sources
         );
@@ -69,6 +79,8 @@ public class QaService {
         log.info(StructuredLogMessage.of("qa.ask.completed")
                 .field("kbCode", kbCode)
                 .field("topK", retrievalResponse.topK())
+                .field("retrievalMode", retrievalResponse.retrievalMode().name())
+                .field("fusionStrategy", retrievalResponse.fusionStrategy())
                 .field("retrievedChunkCount", retrievalResponse.hitCount())
                 .field("chatModel", chatClient.getChatModel())
                 .field("answerLength", answer.length())

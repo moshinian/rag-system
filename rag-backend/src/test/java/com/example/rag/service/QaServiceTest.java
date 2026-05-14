@@ -1,6 +1,7 @@
 package com.example.rag.service;
 
 import com.example.rag.integration.llm.ChatClient;
+import com.example.rag.model.enums.RetrievalMode;
 import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.model.response.QaAnswerResponse;
 import com.example.rag.model.response.RetrievedChunkResponse;
@@ -44,6 +45,10 @@ class QaServiceTest {
                 "这份文档主要讲了什么？",
                 "bge-small-zh-v1.5",
                 3,
+                RetrievalMode.DENSE,
+                "NONE",
+                1,
+                0,
                 1,
                 List.of(new RetrievedChunkResponse(
                         1L,
@@ -64,7 +69,7 @@ class QaServiceTest {
                 "user prompt"
         );
 
-        when(questionAnsweringService.retrieve("day6-kb", "这份文档主要讲了什么？", 3))
+        when(questionAnsweringService.retrieve("day6-kb", "这份文档主要讲了什么？", 3, null))
                 .thenReturn(retrievalResponse);
         when(promptBuilder.build(eq("这份文档主要讲了什么？"), eq(retrievalResponse.chunks())))
                 .thenReturn(promptPayload);
@@ -78,6 +83,8 @@ class QaServiceTest {
         assertThat(response.answer()).isEqualTo("这是基于检索内容生成的回答。");
         assertThat(response.topK()).isEqualTo(3);
         assertThat(response.chatModel()).isEqualTo("deepseek-v4-flash");
+        assertThat(response.retrievalMode()).isEqualTo(RetrievalMode.DENSE);
+        assertThat(response.fusionStrategy()).isEqualTo("NONE");
         assertThat(response.retrievalResults()).hasSize(1);
         assertThat(response.sources()).hasSize(1);
         assertThat(response.sources().get(0).documentCode()).isEqualTo("DOC-1");

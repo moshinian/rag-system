@@ -59,7 +59,8 @@ public class QuestionAnsweringController {
         QuestionRetrievalResponse response = questionAnsweringService.retrieve(
                 kbCode,
                 body.question(),
-                body.topK()
+                body.topK(),
+                body.retrievalMode()
         );
         return ApiResponse.success(response, requestId);
     }
@@ -73,7 +74,8 @@ public class QuestionAnsweringController {
         QaAnswerResponse response = qaService.ask(
                 kbCode,
                 body.question(),
-                body.topK()
+                body.topK(),
+                body.retrievalMode()
         );
         return ApiResponse.success(response, requestId);
     }

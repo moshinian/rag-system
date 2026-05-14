@@ -5,6 +5,7 @@ import com.example.rag.config.RagRetrievalProperties;
 import com.example.rag.integration.llm.OpenAiCompatibleClient;
 import com.example.rag.model.dto.RetrievedChunkCandidate;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
+import com.example.rag.model.enums.RetrievalMode;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
@@ -51,7 +52,12 @@ class QuestionAnsweringServiceTest {
 
         RagRetrievalProperties retrievalProperties = new RagRetrievalProperties();
         retrievalProperties.setVectorStore("pgvector");
+        retrievalProperties.setDefaultMode(RetrievalMode.DENSE);
         retrievalProperties.setDefaultTopK(5);
+        retrievalProperties.setDenseCandidateLimit(8);
+        retrievalProperties.setKeywordCandidateLimit(8);
+        retrievalProperties.setFusionK(60);
+        retrievalProperties.setKeywordMinTokenLength(3);
 
         questionAnsweringService = new QuestionAnsweringService(
                 knowledgeBaseRepository,
@@ -174,10 +180,64 @@ class QuestionAnsweringServiceTest {
 
         assertThat(response.knowledgeBaseCode()).isEqualTo("settlement-kb");
         assertThat(response.topK()).isEqualTo(3);
+        assertThat(response.retrievalMode()).isEqualTo(RetrievalMode.DENSE);
+        assertThat(response.fusionStrategy()).isEqualTo("NONE");
+        assertThat(response.denseHitCount()).isEqualTo(1);
+        assertThat(response.keywordHitCount()).isZero();
         assertThat(response.hitCount()).isEqualTo(1);
         assertThat(response.chunks()).hasSize(1);
         assertThat(response.chunks().get(0).documentCode()).isEqualTo("DOC-1");
         assertThat(response.chunks().get(0).score()).isEqualTo(0.91D);
+    }
+
+    @Test
+    void retrieveShouldFuseDenseAndKeywordCandidatesInHybridMode() {
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
+        when(openAiCompatibleClient.createEmbedding(
+                eq("http://localhost:8001/v1"),
+                eq(""),
+                eq("/embeddings"),
+                eq("text-embedding-3-small"),
+                eq("结算异常怎么处理")
+        )).thenReturn(List.of(0.11D, 0.22D));
+        when(documentChunkRepository.findTopKSimilarChunks(
+                eq(100L),
+                eq("[0.110000000000,0.220000000000]"),
+                eq(8)
+        )).thenReturn(List.of(
+                createRetrievedChunkCandidate(1L, "DOC-1", 0.91D),
+                createRetrievedChunkCandidate(3L, "DOC-3", 0.80D)
+        ));
+        when(documentChunkRepository.findTopKeywordChunks(
+                eq(100L),
+                eq("结算异常怎么处理"),
+                org.mockito.ArgumentMatchers.anyList(),
+                eq(8)
+        )).thenReturn(List.of(
+                createRetrievedChunkCandidate(2L, "DOC-2", 2D),
+                createRetrievedChunkCandidate(1L, "DOC-1", 1D)
+        ));
+
+        QuestionRetrievalResponse response = questionAnsweringService.retrieve(
+                "settlement-kb",
+                "结算异常怎么处理",
+                2,
+                RetrievalMode.HYBRID
+        );
+
+        assertThat(response.retrievalMode()).isEqualTo(RetrievalMode.HYBRID);
+        assertThat(response.fusionStrategy()).isEqualTo("RRF");
+        assertThat(response.denseHitCount()).isEqualTo(2);
+        assertThat(response.keywordHitCount()).isEqualTo(2);
+        assertThat(response.hitCount()).isEqualTo(2);
+        assertThat(response.chunks()).extracting("documentCode").containsExactly("DOC-1", "DOC-2");
+        assertThat(response.chunks().get(0).score()).isGreaterThan(response.chunks().get(1).score());
     }
 
     @Test
@@ -210,10 +270,14 @@ class QuestionAnsweringServiceTest {
     }
 
     private RetrievedChunkCandidate createRetrievedChunkCandidate() {
+        return createRetrievedChunkCandidate(1L, "DOC-1", 0.91D);
+    }
+
+    private RetrievedChunkCandidate createRetrievedChunkCandidate(Long id, String documentCode, Double score) {
         RetrievedChunkCandidate candidate = new RetrievedChunkCandidate();
-        candidate.setId(1L);
+        candidate.setId(id);
         candidate.setDocumentId(200L);
-        candidate.setDocumentCode("DOC-1");
+        candidate.setDocumentCode(documentCode);
         candidate.setDocumentName("结算手册");
         candidate.setChunkIndex(0);
         candidate.setChunkType("TEXT");
@@ -221,7 +285,7 @@ class QuestionAnsweringServiceTest {
         candidate.setStartOffset(0);
         candidate.setEndOffset(120);
         candidate.setEmbeddingModel("text-embedding-3-small");
-        candidate.setScore(0.91D);
+        candidate.setScore(score);
         return candidate;
     }
 }

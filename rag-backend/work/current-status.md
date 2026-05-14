@@ -19,6 +19,7 @@
 13. Day 20 的第一版中文问答评测资产与执行夹具
 14. Day 21 的 Week 3 验收与文档收口
 15. Day 22 的 Week 4 规划文档起步
+16. Day 23 的第一版 hybrid retrieval 内核实现起步
 
 当前项目已经不再停留在“能上传、能切块”的阶段，而是：
 
@@ -26,7 +27,7 @@
 
 当前已经开始整理 Week 4，但要特别说明一件事：
 
-**Week 4 当前还处在“计划与文档准备”阶段，混合检索、检索观测和评测扩展还只是后续方向，尚未开始正式实现。**
+**Week 4 已经进入第一版代码实现阶段，但当前只完成了 hybrid retrieval 内核起步；真实评测、history 收口和观测补强还没有完成。**
 
 ## 已完成
 
@@ -112,6 +113,8 @@
 37. README、`week3.md`、`work day21.md` 已完成 Week 3 收口
 38. `week4.md` 已补入 Week 4 计划草案
 39. `work day22.md` 已补入 Week 4 规划说明
+40. `RetrievalMode`、第一版 keyword retrieval、`RRF fusion`、retrieval 配置扩展和 retrieval cache key 修正已落地
+41. `/qa/retrieve` 与 `/qa/ask` 已支持可选 `retrievalMode`，并在响应中返回 `retrievalMode / fusionStrategy`
 
 ## 已验证
 
@@ -149,7 +152,8 @@
 30. `ChunkingExperimentTest` 已完成 `compact / balanced / wide` 三组切块参数对比
 31. `QaEvaluationDatasetTest` 已验证 Day 20 中文评测数据完整性
 32. `day20-cn-kb` 已完成 6 条中文问题的真实问答评测，其中 5 条可回答问题命中预期文档
-33. Week 4 当前仅补入计划文档，尚未新增混合检索真实联调结果
+33. `mvn -q -Dtest=QuestionAnsweringServiceTest,QaServiceTest,QaRecordServiceTest,RedisCacheConfigTest test` 已通过 Day 23 改动验证
+34. Week 4 已进入第一版 hybrid retrieval 代码实现，但尚未新增真实环境 dense vs hybrid 对比结果
 
 ## 当前未完成
 
@@ -163,7 +167,7 @@
 1. 异步索引任务编排已完成第一版起步，失败重试与恢复已落地，但任务取消和批量编排仍未开始
 2. OpenAPI / Swagger 未开始
 3. 更完整的日志采集、指标和 tracing 仍未开始
-4. 混合检索、融合排序和更细的召回抑制仍未开始正式实现
+4. 第一版 hybrid retrieval 已起步，但真实环境评测、history 收口和更细的召回抑制仍未完成
 5. 当前检索结果缓存采用整缓存清理策略，后续可以细化到知识库级别
 6. Week 4 评测集扩展与 dense vs hybrid 对比口径仍未落地
 
@@ -184,8 +188,9 @@
 11. Day 20 已完成第一版中文真实问答评测
 12. Day 21 已完成 README、状态文档与 Week 3 验收口径收口
 13. Day 22 已补入 Week 4 的混合检索、评测体系与可观测性规划说明
-14. 当前系统已经具备最小可用的 RAG 问答闭环，并完成第一版工程化补充
-15. 当前仓库已经开始整理 Week 4，但 Week 4 仍以计划文档为主，尚未进入正式实现阶段
+14. Day 23 已完成第一版 hybrid retrieval 内核起步，包括 keyword retrieval、RRF fusion 和 retrievalMode 缓存隔离
+15. 当前系统已经具备最小可用的 RAG 问答闭环，并开始进入 Week 4 的检索增强阶段
+16. 当前 Week 4 还没有完成真实对比评测与最终收口，因此还不能把 hybrid 视为完全验收完成能力
 
 ## 后续方向
 

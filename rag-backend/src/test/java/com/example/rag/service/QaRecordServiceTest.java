@@ -2,6 +2,7 @@ package com.example.rag.service;
 
 import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.config.RagQaProperties;
+import com.example.rag.model.enums.RetrievalMode;
 import com.example.rag.model.response.QaAnswerResponse;
 import com.example.rag.model.response.QaSourceResponse;
 import com.example.rag.model.response.RetrievedChunkResponse;
@@ -79,6 +80,8 @@ class QaRecordServiceTest {
                 "回答内容",
                 3,
                 "deepseek-v4-pro",
+                RetrievalMode.DENSE,
+                "NONE",
                 List.of(new RetrievedChunkResponse(
                         1L,
                         2L,

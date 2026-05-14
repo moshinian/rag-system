@@ -2,12 +2,12 @@
 
 一个面向企业内部知识库场景的 RAG 系统仓库，包含 Spring Boot 后端、React 前端，以及本地开发用的 PostgreSQL / Redis 依赖编排。当前聚焦结算领域文档的沉淀、检索、问答、来源返回和问答记录。
 
-当前仓库的真实阶段不是“设计中”，而是已经完成了前 3 周的第一版实现；Week 4 当前仅补入计划文档，尚未进入代码实现：
+当前仓库的真实阶段不是“设计中”，而是已经完成了前 3 周的第一版实现；Week 4 已经进入第一天代码实现，但还没有完成真实评测和最终收口：
 
 1. Week 1：文档入库主链路完成
 2. Week 2：检索与问答主链路完成
 3. Week 3：异步索引、恢复、日志、配置和评测完成第一版收口
-4. Week 4：混合检索、评测体系和可观测性已进入规划阶段，但尚未落代码实现
+4. Week 4：混合检索已完成第一版内核起步，评测体系和可观测性仍在继续推进
 
 ## 项目目标
 
@@ -46,7 +46,10 @@
 21. 文档级软禁用/恢复，禁用后历史 chunk 与向量保留但不再参与检索口径
 22. Redis 坏缓存读失败自愈，以及异步索引提交阶段的孤儿 `QUEUED` 任务兜底
 23. 系统健康页已覆盖 PostgreSQL、Redis、embedding 接口和 LLM 接口的可用性检查
-24. Week 4 相关计划文档已补入，后续将围绕 hybrid retrieval、评测扩展和检索观测推进
+24. Week 4 相关计划文档已补入，并已落下第一版 hybrid retrieval 内核起步
+25. `qa/retrieve` 已支持 `DENSE / HYBRID` 两种检索模式，第一版 `HYBRID` 采用 `dense recall + keyword recall + RRF fusion`
+26. `rag.retrieval` 已补入 `defaultMode / denseCandidateLimit / keywordCandidateLimit / fusionK / keywordMinTokenLength`
+27. 检索结果缓存 key 已纳入 `retrievalMode`，避免 dense 与 hybrid 串缓存
 
 ### 已完成验证
 
@@ -65,12 +68,13 @@
 13. 文档禁用/恢复已完成前后端联动，文档恢复后重新计入 readiness 口径
 14. Redis 不可反序列化缓存值已完成真实自愈验证，不再因为脏缓存直接返回 500
 15. 评测数据集、切块实验样本和 PDF 样本测试路径已统一收口，`mvn test` 已在当前仓库状态下全量通过
-16. Week 4 当前仅完成计划文档准备，尚未新增混合检索真实联调或效果对比结果
+16. `QuestionAnsweringServiceTest / QaServiceTest / QaRecordServiceTest / RedisCacheConfigTest` 已通过 Day 23 改动验证
+17. Week 4 已进入第一版 hybrid retrieval 代码实现，但尚未新增真实环境对比评测结果
 
 ### 当前边界
 
 1. 还没有做多实例任务协调、任务取消和批量索引编排
-2. 还没有做混合检索、重排序和更细的召回抑制，Week 4 当前只完成了方案准备
+2. 第一版 hybrid retrieval 已经起步，但还没有完成真实评测、history 收口和更细的召回抑制
 3. 还没有做 session 复用与多轮对话
 4. 还没有补齐完整监控、指标和 tracing
 5. 评测集还处在第一版，规模和覆盖度都需要继续扩展
@@ -117,7 +121,7 @@
 
 1. `week4.md` 已明确以混合检索为主线
 2. `work day22.md` 已完成 Week 4 起步与影响面说明
-3. 当前 Week 4 仍处在计划与文档准备阶段，尚未进入正式实现
+3. Day 23 已完成 keyword retrieval、RRF fusion、retrievalMode 配置和缓存键修正的第一版实现
 
 ## 技术选型
 
@@ -138,7 +142,7 @@
 1. 第一阶段优先用 PostgreSQL 统一承载主数据、任务数据和向量数据
 2. embedding 统一走 OpenAI-compatible HTTP 接口，降低 Java 主服务耦合
 3. 先把单服务版本做完整，再考虑更复杂的编排和检索优化
-4. 在进入混合检索正式实现前，先把评测口径和可观测性准备好，避免实现后难以比较效果
+4. 混合检索先采用 PostgreSQL 内 keyword recall + RRF 的轻量路线，先把效果对比和观测口径站稳，再决定是否继续引入更重基础设施
 
 ## 项目结构
 

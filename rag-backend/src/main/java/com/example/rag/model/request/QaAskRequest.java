@@ -1,5 +1,6 @@
 package com.example.rag.model.request;
 
+import com.example.rag.model.enums.RetrievalMode;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -13,6 +14,8 @@ public record QaAskRequest(
 
         @Min(value = 1, message = "topK must be >= 1")
         @Max(value = 10, message = "topK must be <= 10")
-        Integer topK
+        Integer topK,
+
+        RetrievalMode retrievalMode
 ) {
 }

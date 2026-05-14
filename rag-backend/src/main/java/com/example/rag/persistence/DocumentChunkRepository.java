@@ -169,4 +169,12 @@ public class DocumentChunkRepository {
                                                                int topK) {
         return documentChunkMapper.findTopKSimilarChunks(knowledgeBaseId, queryVectorLiteral, topK);
     }
+
+    /** 按知识库执行第一版关键词召回。 */
+    public List<RetrievedChunkCandidate> findTopKeywordChunks(Long knowledgeBaseId,
+                                                              String questionPhrase,
+                                                              List<String> terms,
+                                                              int limit) {
+        return documentChunkMapper.findTopKeywordChunks(knowledgeBaseId, questionPhrase, terms, limit);
+    }
 }

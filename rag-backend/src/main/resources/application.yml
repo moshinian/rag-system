@@ -78,8 +78,13 @@ rag:
       max-output-tokens: 1200
   retrieval:
     vector-store: pgvector
+    default-mode: DENSE
     default-top-k: 5
     max-top-k: 10
+    dense-candidate-limit: 8
+    keyword-candidate-limit: 8
+    fusion-k: 60
+    keyword-min-token-length: 3
     max-context-chars: 6000
   qa:
     default-created-by: qa-service

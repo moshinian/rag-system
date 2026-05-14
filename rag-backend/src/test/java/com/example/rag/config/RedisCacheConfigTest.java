@@ -1,5 +1,6 @@
 package com.example.rag.config;
 
+import com.example.rag.model.enums.RetrievalMode;
 import com.example.rag.model.response.DocumentDetailResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.model.response.RetrievedChunkResponse;
@@ -49,6 +50,10 @@ class RedisCacheConfigTest {
                 "问题",
                 "bge-small-zh-v1.5",
                 3,
+                RetrievalMode.DENSE,
+                "NONE",
+                1,
+                0,
                 1,
                 List.of(new RetrievedChunkResponse(
                         1L,
