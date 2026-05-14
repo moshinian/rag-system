@@ -3,6 +3,7 @@ package com.example.rag.evaluation;
 import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
+import com.example.rag.model.enums.RetrievalMode;
 import com.example.rag.model.response.DocumentEmbeddingResponse;
 import com.example.rag.model.response.DocumentProcessResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
@@ -37,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class QaRetrievalEvaluationIntegrationTest {
 
     private static final Path DATASET_PATH = backendFile("work/evaluation/day20-qa-eval-cases.json");
+    private static final Path HYBRID_DATASET_PATH = backendFile("work/evaluation/day25-hybrid-eval-cases.json");
 
     @Autowired
     private KnowledgeBaseRepository knowledgeBaseRepository;
@@ -102,6 +104,55 @@ class QaRetrievalEvaluationIntegrationTest {
             if ("SHOULD_ANSWER".equals(expectationType)) {
                 assertThat(retrievalHit).as(caseCode + " should hit expected document").isTrue();
                 assertThat(keywordMatches).as(caseCode + " should match at least one expected keyword").isGreaterThan(0);
+            }
+        }
+
+        System.out.println(String.join("\n", reportLines));
+    }
+
+    @Test
+    void shouldPrintDenseVsHybridComparisonReport() throws IOException {
+        JsonNode dataset = objectMapper.readTree(Files.readString(HYBRID_DATASET_PATH));
+        String kbCode = dataset.path("kbCode").asText() + "-hybrid-itest-" + snowflakeIdGenerator.nextId();
+        int topK = dataset.path("topK").asInt();
+        List<String> documentCodes = new ArrayList<>();
+
+        createKnowledgeBase(kbCode);
+        documentCodes.add(createDocument(kbCode, "结算异常处理指南", backendFile("work/samples/day20-cn-结算异常处理指南.md"), "md", "text/markdown"));
+        documentCodes.add(createDocument(kbCode, "对账常见问题", backendFile("work/samples/day20-cn-对账常见问题.md"), "md", "text/markdown"));
+        documentCodes.add(createDocument(kbCode, "值班巡检清单", backendFile("work/samples/day20-cn-值班巡检清单.txt"), "txt", "text/plain"));
+
+        processAndEmbedAll(kbCode, documentCodes);
+
+        List<String> reportLines = new ArrayList<>();
+        reportLines.add("Dense vs Hybrid Retrieval Evaluation Report");
+        reportLines.add("| caseCode | category | comparisonFocus | denseRetrievalHit | hybridRetrievalHit | denseKeywordMatches | hybridKeywordMatches | denseTopDocuments | hybridTopDocuments |");
+        reportLines.add("| --- | --- | --- | --- | --- | ---: | ---: | --- | --- |");
+
+        for (JsonNode caseNode : dataset.path("cases")) {
+            String caseCode = caseNode.path("caseCode").asText();
+            String category = caseNode.path("category").asText();
+            String comparisonFocus = caseNode.path("comparisonFocus").asText();
+            String question = caseNode.path("question").asText();
+            String expectedDocument = caseNode.path("expectedDocument").asText();
+            String expectationType = caseNode.path("expectationType").asText();
+
+            QuestionRetrievalResponse denseResponse = questionAnsweringService.retrieve(kbCode, question, topK, RetrievalMode.DENSE);
+            QuestionRetrievalResponse hybridResponse = questionAnsweringService.retrieve(kbCode, question, topK, RetrievalMode.HYBRID);
+
+            RetrievalObservation denseObservation = observe(caseNode, expectedDocument, denseResponse);
+            RetrievalObservation hybridObservation = observe(caseNode, expectedDocument, hybridResponse);
+
+            reportLines.add("| " + caseCode + " | " + category + " | " + comparisonFocus + " | "
+                    + denseObservation.retrievalHit() + " | " + hybridObservation.retrievalHit() + " | "
+                    + denseObservation.keywordMatches() + " | " + hybridObservation.keywordMatches() + " | "
+                    + denseObservation.topDocuments() + " | " + hybridObservation.topDocuments() + " |");
+
+            if ("SHOULD_ANSWER".equals(expectationType)) {
+                assertThat(denseObservation.keywordMatches()).as(caseCode + " dense should surface at least one expected keyword")
+                        .isGreaterThan(0);
+                assertThat(hybridObservation.keywordMatches()).as(caseCode + " hybrid should surface at least one expected keyword")
+                        .isGreaterThan(0);
             }
         }
 
@@ -176,5 +227,24 @@ class QaRetrievalEvaluationIntegrationTest {
             }
         }
         return matches;
+    }
+
+    private RetrievalObservation observe(JsonNode caseNode,
+                                         String expectedDocument,
+                                         QuestionRetrievalResponse response) {
+        String mergedContent = response.chunks().stream()
+                .map(chunk -> chunk.documentName() + "\n" + chunk.content())
+                .reduce("", (left, right) -> left + "\n" + right);
+        boolean retrievalHit = !expectedDocument.isBlank() && response.chunks().stream()
+                .anyMatch(chunk -> expectedDocument.equals(chunk.documentName()));
+        long keywordMatches = countKeywordMatches(caseNode.path("expectedKeywords"), mergedContent);
+        String topDocuments = response.chunks().stream()
+                .map(chunk -> chunk.documentName() + "#" + chunk.chunkIndex())
+                .reduce((left, right) -> left + ", " + right)
+                .orElse("-");
+        return new RetrievalObservation(retrievalHit, keywordMatches, topDocuments);
+    }
+
+    private record RetrievalObservation(boolean retrievalHit, long keywordMatches, String topDocuments) {
     }
 }

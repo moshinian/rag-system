@@ -305,12 +305,24 @@ Week 4 完成后，理想状态下应该形成下面这条新闭环：
 3. 前端 retrieval / qa / history 页面已适配模式选择与字段展示
 4. 已完成一次真实前后端联调，验证了后端直连、Vite 代理、`DENSE/HYBRID retrieve`、`HYBRID ask` 和 history 回放
 
+截至 Day 25，Week 4 的评测资产已经进一步收口：
+
+1. dense vs hybrid 双轨问题集已补齐
+2. 结果模板和 runbook 已固定
+3. Day 26 的真实评测入口已经具备稳定执行口径
+
+截至 Day 26，Week 4 的真实效果结论也已经落地：
+
+1. 基线样本上，`DENSE` 与 `HYBRID` 整体结果接近
+2. 补充样本上，`HYBRID` 已经证明在关键词密集题型上存在明确收益
+3. 当前默认模式仍继续保留 `DENSE`
+
 当前仍然没有完成的部分也要明确保留：
 
-1. 还没有做真实环境 dense vs hybrid 对比评测
-2. 还没有补完整的 retrieval 子阶段日志与指标收口
-3. 还没有完成真实环境 dense vs hybrid 对比评测结果整理
-4. 还没有完成 README、状态文档之外的全部 Week 4 最终验收材料
+1. 还没有补完整的 retrieval 子阶段日志与指标收口
+2. 还没有把 `HYBRID` 的延迟代价纳入正式验收结论
+3. 还没有完成 README、状态文档之外的全部 Week 4 最终验收材料
+4. 还没有决定是否有足够证据把默认模式切到 `HYBRID`
 
 ## Week 4 结束后的预期收益
 

@@ -120,3 +120,24 @@ Day 25 结束时，至少要能回答清楚下面几个问题：
 Day 25 的任务不是继续做功能，而是为 Day 26 的真实评测建立一套稳定、可回看、可解释的跑法。
 
 如果 Day 25 能把样本和口径站稳，Day 26 的结果才会真正有说服力。
+
+## 今日实际完成
+
+今天已经完成：
+
+1. 新增 `work/evaluation/day25-hybrid-eval-cases.json`，把 Day 20 单轨问题集升级成 `DENSE vs HYBRID` 双轨评测问题集
+2. 在 Day 20 原有 6 条基线问题上，补到 10 条 case，新增了 `comparisonFocus`
+3. 新 case 重点覆盖 `FIELD_NAME / PROCESS_KEYWORD / ASCII_TERM / NO_ANSWER`
+4. 新增 `work/evaluation/day25-hybrid-eval-results-template.md`，固定 `denseRetrievalHit / hybridRetrievalHit / denseAnswerAcceptable / hybridAnswerAcceptable / denseSourceStable / hybridSourceStable`
+5. 新增 `work/evaluation/day25-hybrid-eval-runbook.md`，把 Day 26 的执行顺序固定为先 `DENSE`、后 `HYBRID`，先 retrieval、后 answer/source
+6. `QaEvaluationDatasetTest` 已补齐 Day 25 数据集校验，保证双轨评测资产不再靠人工记忆维持
+7. `QaRetrievalEvaluationIntegrationTest` 已补入一条 `DENSE vs HYBRID` 对比夹具，可直接输出对比表骨架
+
+## 当前边界
+
+Day 25 完成后，下面这些内容仍然留给 Day 26 以后：
+
+1. 还没有回填真实环境的 dense vs hybrid 正式结果
+2. 还没有把 answer/source 的半人工判断自动化
+3. 还没有把延迟字段接进最终结果模板
+4. 还没有根据真实结果决定默认模式是否从 `DENSE` 切到 `HYBRID`

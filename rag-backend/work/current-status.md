@@ -21,6 +21,8 @@
 15. Day 22 的 Week 4 规划文档起步
 16. Day 23 的第一版 hybrid retrieval 内核实现起步
 17. Day 24 的 history 收口、前端适配与前后端联调完成
+18. Day 25 的 dense vs hybrid 双轨评测资产收口
+19. Day 26 的真实 dense vs hybrid 对比评测与补充样本验证完成
 
 当前项目已经不再停留在“能上传、能切块”的阶段，而是：
 
@@ -28,7 +30,7 @@
 
 当前已经开始整理 Week 4，但要特别说明一件事：
 
-**Week 4 已经进入第一版代码实现阶段；当前已完成 hybrid retrieval 内核起步、history 收口和前端适配，但真实对比评测与观测补强还没有完成。**
+**Week 4 已经完成第一版实现与真实评测；当前已确认 hybrid 在关键词密集题型上存在明确收益，但默认模式仍保持 `DENSE`，观测补强也还没有完成。**
 
 ## 已完成
 
@@ -118,6 +120,8 @@
 41. `/qa/retrieve` 与 `/qa/ask` 已支持可选 `retrievalMode`，并在响应中返回 `retrievalMode / fusionStrategy`
 42. `qa/history` 已支持回放 `retrievalMode / fusionStrategy`，新历史记录按检索快照持久化，老数组格式继续兼容
 43. 前端 retrieval / qa / history 页面已适配 `retrievalMode / fusionStrategy` 展示与模式切换
+44. Day 25 已补入 dense vs hybrid 双轨评测问题集、结果模板和 runbook
+45. Day 26 已完成两轮真实 dense vs hybrid 对比评测，并补入关键词密集补充样本
 
 ## 已验证
 
@@ -159,7 +163,8 @@
 34. `mvn -q -Dtest=QaRecordServiceTest,QaServiceTest,QuestionAnsweringServiceTest test` 已通过 Day 24 改动验证
 35. `npm run build` 已验证前端适配改动可正常构建
 36. 已完成真实前后端联调：`DENSE/HYBRID retrieve`、`HYBRID ask`、`qa/history` 回放和 `5173` 代理路径均已验证
-37. Week 4 已进入第一版 hybrid retrieval 代码实现，但尚未新增真实环境 dense vs hybrid 对比结果整理
+37. Day 26 已完成真实环境 dense vs hybrid 对比结果整理，并确认补充样本上存在明确收益
+38. Day 26 补充样本中，`HYBRID` 在 `4/4` 关键词密集问题上完成正确召回与回答，`DENSE` 只有 `1/4` retrieval hit、`0/4` answer acceptable
 
 ## 当前未完成
 
@@ -173,9 +178,9 @@
 1. 异步索引任务编排已完成第一版起步，失败重试与恢复已落地，但任务取消和批量编排仍未开始
 2. OpenAPI / Swagger 未开始
 3. 更完整的日志采集、指标和 tracing 仍未开始
-4. 第一版 hybrid retrieval 已起步，并完成了 history 收口和前端适配，但真实环境对比评测和更细的召回抑制仍未完成
+4. 第一版 hybrid retrieval 已完成真实环境对比评测，但更细的召回抑制、延迟对比和默认模式切换仍未完成
 5. 当前检索结果缓存采用整缓存清理策略，后续可以细化到知识库级别
-6. Week 4 评测集扩展与 dense vs hybrid 对比口径仍未落地
+6. Week 4 评测集已经扩展并完成两轮对比，但还需要继续扩大到专有名词、接口名和错误码样本
 
 ## 当前判断
 
@@ -197,14 +202,14 @@
 14. Day 23 已完成第一版 hybrid retrieval 内核起步，包括 keyword retrieval、RRF fusion 和 retrievalMode 缓存隔离
 15. Day 24 已完成 history 快照兼容、前端适配和真实前后端联调，`retrieve / ask / history` 三条链路对 `retrievalMode / fusionStrategy` 的表达已经统一
 16. 当前系统已经具备最小可用的 RAG 问答闭环，并开始进入 Week 4 的检索增强阶段
-17. 当前 Week 4 还没有完成真实对比评测与最终收口，因此还不能把 hybrid 视为完全验收完成能力
+17. 当前 Week 4 已完成真实对比评测与补充样本验证，可以把 hybrid 视为“已完成第一版验收，但默认模式仍保守保留为 `DENSE`”的能力
 
 ## 后续方向
 
 如果后续继续推进，建议按下面顺序继续：
 
 1. 完成第一版 hybrid retrieval，实现 dense + keyword 双路召回
-2. 扩大评测集并沉淀 dense vs hybrid 的稳定对比口径
+2. 继续扩大评测集，并重点补专有名词、接口名、错误码和更长字段名样本
 3. 补齐检索与问答链路的关键日志、指标和耗时观测
 4. 优化召回质量、无答案场景抑制和答案质量
 5. 增加 session 复用与多轮对话
