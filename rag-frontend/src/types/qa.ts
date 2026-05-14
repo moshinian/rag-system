@@ -37,6 +37,10 @@ export type RetrievalResponse = {
   denseHitCount: number;
   keywordHitCount: number;
   hitCount: number;
+  denseDurationMs: number;
+  keywordDurationMs: number;
+  fusionDurationMs: number;
+  totalDurationMs: number;
   chunks: RetrievedChunk[];
 };
 
@@ -47,6 +51,14 @@ export type QaAnswerResponse = {
   chatModel: string;
   retrievalMode: RetrievalMode;
   fusionStrategy: string;
+  denseHitCount: number;
+  keywordHitCount: number;
+  hitCount: number;
+  denseDurationMs: number;
+  keywordDurationMs: number;
+  fusionDurationMs: number;
+  llmDurationMs: number;
+  totalDurationMs: number;
   retrievalResults: RetrievedChunk[];
   sources: QaSource[];
 };

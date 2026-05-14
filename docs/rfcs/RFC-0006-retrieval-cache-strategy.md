@@ -2,12 +2,12 @@
 
 - Status: Accepted
 - Created: 2026-05-11
-- Last Updated: 2026-05-11
+- Last Updated: 2026-05-14
 - Owners: RAG Team
 
 ## Summary
 
-本 RFC 记录当前 Redis 业务缓存如何覆盖知识库、文档、chunk、`qa/readiness` 与检索结果，以及为什么系统优先选择“短 TTL + 写路径失效 + 必要时全量清理”的一致性优先策略。核心结论是：缓存当前只服务读路径加速，不承担复杂协调职责；一旦底层状态可能变化，系统宁可多清缓存，也不冒险返回过期检索结论。
+本 RFC 记录当前 Redis 业务缓存如何覆盖知识库、文档、chunk、`qa/readiness` 与检索结果，以及为什么系统优先选择“短 TTL + 写路径失效 + 必要时全量清理”的一致性优先策略。核心结论是：缓存当前只服务读路径加速，不承担复杂协调职责；一旦底层状态可能变化，系统宁可多清缓存，也不冒险返回过期检索结论。Week 4 之后，`qaRetrieval` 还必须显式区分 `DENSE` 与 `HYBRID` 的缓存口径，避免不同检索模式串缓存。
 
 ## Context
 
@@ -37,6 +37,7 @@ Week 3 之前，Redis 在项目里更多承担连通性验证和健康探针作�
 4. 写路径发生状态变更时，主动执行 `@CacheEvict`。
 5. 对难以细粒度定位影响范围的场景，允许直接 `allEntries=true`。
 6. embedding rebuild 完成或失败后，允许对相关缓存执行全量清理。
+7. `qaRetrieval` 的缓存 key 必须纳入 `retrievalMode`，避免 dense 与 hybrid 请求互相污染。
 
 ## Historical Evolution
 
@@ -97,6 +98,19 @@ Week 3 之前，Redis 在项目里更多承担连通性验证和健康探针作�
 2. `qaRetrieval`
    用于相同问题和 `topK` 下的短 TTL 检索结果复用。
 
+Week 4 之后，`qaRetrieval` 的缓存 key 已扩展为：
+
+1. `kbCode`
+2. 标准化后的 `question`
+3. `topK`
+4. `retrievalMode`
+
+这样做的原因很直接：
+
+1. `DENSE` 与 `HYBRID` 的召回路径不同；
+2. `HYBRID` 会额外引入 keyword recall 与 `RRF fusion`；
+3. 如果不把 `retrievalMode` 纳入 key，真实评测和线上调用都会出现 dense/hybrid 串结果的问题。
+
 ## Corruption Recovery
 
 当前系统额外承担一层“坏缓存自愈”职责，原因是 Redis 在真实联调中可能残留旧格式 value、手工注入调试值，或者历史 serializer 写出的脏数据。
@@ -125,6 +139,7 @@ Week 3 之前，Redis 在项目里更多承担连通性验证和健康探针作�
 2. 文档上传、禁用、删除后，失效相关 document/detail/chunks/readiness/retrieval 缓存。
 3. 文档处理与向量化完成后，失效 chunk/readiness/retrieval 缓存。
 4. embedding rebuild 提交、完成或失败后，清理 readiness、retrieval 与 chunk 缓存。
+5. Week 4 之后，即使 `qaRetrieval` 已按 `retrievalMode` 分 key，当前系统仍继续保留一致性优先的广失效策略，不为了局部命中率收窄到复杂精确清理。
 
 其中一个刻意的取舍是：`qaRetrieval` 经常使用 `allEntries=true`，而不是做知识库级精确键失效。原因是当前项目更在意“不要读到脏检索结果”，而不是“把缓存键设计到最细”。
 
@@ -149,6 +164,7 @@ Week 3 之前，Redis 在项目里更多承担连通性验证和健康探针作�
 1. `RFC-0002` 的 readiness gate 依赖 `qaReadiness` 缓存，但其结论必须与真实阻断行为保持一致。
 2. `RFC-0004` 的异步索引会触发文档、chunk、readiness 和 retrieval 的缓存失效。
 3. `RFC-0001` 的 embedding rebuild 会触发最激进的一类缓存清理。
+4. `RFC-0007` 的 QA 契约已经把 `retrievalMode / fusionStrategy` 带入问答与历史回放，因此 retrieval cache 的模式隔离必须与对外契约保持一致。
 
 ## Validation
 
@@ -158,6 +174,8 @@ Week 3 之前，Redis 在项目里更多承担连通性验证和健康探针作�
 2. [RedisCacheConfigIntegrationTest.java](../../rag-backend/src/test/java/com/example/rag/config/RedisCacheConfigIntegrationTest.java) 验证 `@Cacheable` 真实经过 Redis、读到坏值、自愈回源和重建缓存的链路。
 3. [README.md](../../README.md) 记录了真实 Redis 联调和缓存写入观察。
 4. [week3.md](../../rag-backend/work/week3.md) 与 [current-status.md](../../rag-backend/work/current-status.md) 记录了缓存接入范围与工程取舍。
+5. [work day22.md](../../rag-backend/work/work%20day22.md) 记录了 Week 4 对 retrieval cache key 纳入 `retrievalMode` 的正式约束。
+6. [work day23.md](../../rag-backend/work/work%20day23.md) 记录了 retrieval cache key 修正的落地。
 
 ## Consequences
 

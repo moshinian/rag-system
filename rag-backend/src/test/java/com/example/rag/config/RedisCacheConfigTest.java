@@ -55,6 +55,10 @@ class RedisCacheConfigTest {
                 1,
                 0,
                 1,
+                11L,
+                0L,
+                0L,
+                11L,
                 List.of(new RetrievedChunkResponse(
                         1L,
                         2L,

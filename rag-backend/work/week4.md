@@ -317,12 +317,34 @@ Week 4 完成后，理想状态下应该形成下面这条新闭环：
 2. 补充样本上，`HYBRID` 已经证明在关键词密集题型上存在明确收益
 3. 当前默认模式仍继续保留 `DENSE`
 
-当前仍然没有完成的部分也要明确保留：
+截至 Day 27，Week 4 的第一版观测口径也已经补齐：
 
-1. 还没有补完整的 retrieval 子阶段日志与指标收口
-2. 还没有把 `HYBRID` 的延迟代价纳入正式验收结论
-3. 还没有完成 README、状态文档之外的全部 Week 4 最终验收材料
-4. 还没有决定是否有足够证据把默认模式切到 `HYBRID`
+1. `qa.retrieve.started / dense.completed / keyword.completed / fusion.completed / completed` 已具备稳定子阶段日志
+2. `qa.ask.started / llm.completed / completed` 已把 retrieval 与 LLM 两层耗时拆开
+3. `QuestionRetrievalResponse / QaAnswerResponse` 已补入 `denseDurationMs / keywordDurationMs / fusionDurationMs / llmDurationMs / totalDurationMs`
+4. 当前已经可以把 Day 26 的关键词收益，与 keyword / fusion 带来的额外耗时放到同一口径下解释
+
+截至 Day 28，Week 4 的文档与表达口径也已经统一收口：
+
+1. README、`current-status.md`、`week4.md` 与相关 RFC 已经吸收 Week 4 的真实实现结果
+2. 当前仓库已经可以用一套稳定说法解释 hybrid 的实现、收益、边界与默认模式取舍
+3. Week 4 已可视为完成第一版阶段验收，不再停留在“继续补说明材料”的状态
+
+Week 4 完成后仍然保留到下一阶段的主题也要明确写清：
+
+1. 还没有把 `HYBRID` 的延迟代价纳入更大样本的正式验收结论
+2. 还没有决定是否有足够证据把默认模式切到 `HYBRID`
+3. 还需要继续扩大到专有名词、接口名、错误码和更长字段名样本
+
+## Week 4 最终结论
+
+到 Day 28 为止，Week 4 可以正式收口为下面结论：
+
+1. 第一版 hybrid retrieval 已完成 `dense recall + keyword recall + RRF fusion` 的真实实现；
+2. `qa/retrieve / qa/ask / qa/history` 已形成统一 retrieval 契约，并能稳定回放 `retrievalMode / fusionStrategy` 与检索证据；
+3. 两轮真实 `DENSE vs HYBRID` 对比评测已经确认：hybrid 在关键词密集题型上存在明确净收益；
+4. 检索与问答链路已经具备第一版最小可观测性，可以拆分 dense、keyword、fusion、LLM 与 total 耗时；
+5. 当前默认模式继续保留 `DENSE`，因为更大样本和延迟成本还未进入下一阶段正式验收。
 
 ## Week 4 结束后的预期收益
 

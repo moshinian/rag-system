@@ -23,14 +23,16 @@
 17. Day 24 的 history 收口、前端适配与前后端联调完成
 18. Day 25 的 dense vs hybrid 双轨评测资产收口
 19. Day 26 的真实 dense vs hybrid 对比评测与补充样本验证完成
+20. Day 27 的 hybrid retrieval 关键日志与最小耗时口径补齐
+21. Day 28 的 Week 4 README、状态文档、RFC 与最终表达口径收口完成
 
 当前项目已经不再停留在“能上传、能切块”的阶段，而是：
 
 **本地 embedding 服务已跑通，`pgvector` 已就绪，Java 侧第一版问答链路已经完成真实端到端验收，Week 3 也已经完成第一版工程化收口。**
 
-当前已经开始整理 Week 4，但要特别说明一件事：
+当前 Week 4 已经完成收口，但要特别说明一件事：
 
-**Week 4 已经完成第一版实现与真实评测；当前已确认 hybrid 在关键词密集题型上存在明确收益，但默认模式仍保持 `DENSE`，观测补强也还没有完成。**
+**Week 4 已经完成第一版实现、真实评测、最小观测与文档/RFC 收口；当前已确认 hybrid 在关键词密集题型上存在明确收益，但默认模式仍保持 `DENSE`。**
 
 ## 已完成
 
@@ -122,6 +124,8 @@
 43. 前端 retrieval / qa / history 页面已适配 `retrievalMode / fusionStrategy` 展示与模式切换
 44. Day 25 已补入 dense vs hybrid 双轨评测问题集、结果模板和 runbook
 45. Day 26 已完成两轮真实 dense vs hybrid 对比评测，并补入关键词密集补充样本
+46. Day 27 已补齐 `qa.retrieve` 子阶段日志、`qa.ask.llm.completed` 和 retrieval / LLM / total 耗时字段
+47. Day 28 已完成 README、`week4.md`、`current-status.md`、相关 RFC 与最终表达口径收口
 
 ## 已验证
 
@@ -165,6 +169,8 @@
 36. 已完成真实前后端联调：`DENSE/HYBRID retrieve`、`HYBRID ask`、`qa/history` 回放和 `5173` 代理路径均已验证
 37. Day 26 已完成真实环境 dense vs hybrid 对比结果整理，并确认补充样本上存在明确收益
 38. Day 26 补充样本中，`HYBRID` 在 `4/4` 关键词密集问题上完成正确召回与回答，`DENSE` 只有 `1/4` retrieval hit、`0/4` answer acceptable
+39. `mvn -q -Dtest=QuestionAnsweringServiceTest,QaServiceTest,QaRecordServiceTest,RedisCacheConfigTest test` 已通过 Day 27 日志与响应字段改动验证
+40. `mvn spring-boot:run` 已验证后端本地日志会自动写入 `rag-backend/logs/rag-service.log`
 
 ## 当前未完成
 
@@ -177,8 +183,8 @@
 
 1. 异步索引任务编排已完成第一版起步，失败重试与恢复已落地，但任务取消和批量编排仍未开始
 2. OpenAPI / Swagger 未开始
-3. 更完整的日志采集、指标和 tracing 仍未开始
-4. 第一版 hybrid retrieval 已完成真实环境对比评测，但更细的召回抑制、延迟对比和默认模式切换仍未完成
+3. 更完整的日志采集、指标平台和 tracing 仍未开始，目前只完成了最小可排障口径
+4. 第一版 hybrid retrieval 已完成真实环境对比评测与最小观测收口，但更细的召回抑制、延迟对比和默认模式切换仍未完成
 5. 当前检索结果缓存采用整缓存清理策略，后续可以细化到知识库级别
 6. Week 4 评测集已经扩展并完成两轮对比，但还需要继续扩大到专有名词、接口名和错误码样本
 
@@ -201,16 +207,17 @@
 13. Day 22 已补入 Week 4 的混合检索、评测体系与可观测性规划说明
 14. Day 23 已完成第一版 hybrid retrieval 内核起步，包括 keyword retrieval、RRF fusion 和 retrievalMode 缓存隔离
 15. Day 24 已完成 history 快照兼容、前端适配和真实前后端联调，`retrieve / ask / history` 三条链路对 `retrievalMode / fusionStrategy` 的表达已经统一
-16. 当前系统已经具备最小可用的 RAG 问答闭环，并开始进入 Week 4 的检索增强阶段
-17. 当前 Week 4 已完成真实对比评测与补充样本验证，可以把 hybrid 视为“已完成第一版验收，但默认模式仍保守保留为 `DENSE`”的能力
+16. Day 27 已完成 `retrieve / ask` 的关键阶段日志与最小耗时字段，当前已经可以把 retrieval 与 LLM 两层代价拆开观察
+17. Day 28 已完成 Week 4 README、状态文档、RFC 与最终表达口径收口，当前项目资料已与真实代码状态重新对齐
+18. 当前系统已经具备最小可用的 RAG 问答闭环，并开始进入 Week 4 之后的检索增强阶段
+19. 当前 Week 4 已完成真实对比评测、补充样本验证与最小观测收口，可以把 hybrid 视为“已完成第一版验收，但默认模式仍保守保留为 `DENSE`”的能力
 
 ## 后续方向
 
 如果后续继续推进，建议按下面顺序继续：
 
-1. 完成第一版 hybrid retrieval，实现 dense + keyword 双路召回
-2. 继续扩大评测集，并重点补专有名词、接口名、错误码和更长字段名样本
-3. 补齐检索与问答链路的关键日志、指标和耗时观测
-4. 优化召回质量、无答案场景抑制和答案质量
-5. 增加 session 复用与多轮对话
-6. 继续补齐任务取消、批量编排、日志和观测能力
+1. 继续扩大评测集，并重点补专有名词、接口名、错误码和更长字段名样本
+2. 基于当前最小观测口径补真实延迟对比，并决定是否有条件切默认模式
+3. 优化召回质量、无答案场景抑制和答案质量
+4. 增加 session 复用与多轮对话
+5. 继续补齐任务取消、批量编排、日志平台和 tracing 能力

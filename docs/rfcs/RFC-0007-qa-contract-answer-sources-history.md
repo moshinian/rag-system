@@ -2,12 +2,12 @@
 
 - Status: Accepted
 - Created: 2026-05-11
-- Last Updated: 2026-05-11
+- Last Updated: 2026-05-14
 - Owners: RAG Team
 
 ## Summary
 
-本 RFC 记录当前问答接口的结果契约，包括 `answer`、`retrievalResults`、`sources` 和 `/qa/history` 的关系。核心结论是：系统把“检索证据”和“回答展示”明确分层；`retrievalResults` 保留完整召回上下文，`sources` 提供更适合前端展示和追溯的精简来源结构，历史记录则按单问单答持久化这两层结果，以便回放和解释。
+本 RFC 记录当前问答接口的结果契约，包括 `answer`、`retrievalResults`、`sources` 和 `/qa/history` 的关系。核心结论是：系统把“检索证据”和“回答展示”明确分层；`retrievalResults` 保留完整召回上下文，`sources` 提供更适合前端展示和追溯的精简来源结构，历史记录则按单问单答持久化这两层结果，以便回放和解释。Week 4 之后，这个契约还需要稳定表达一次问答到底跑的是 `DENSE` 还是 `HYBRID`，以及当前检索链路的最小观测字段。
 
 ## Context
 
@@ -36,7 +36,7 @@ Week 2 的目标不是只返回一段模型文本，而是形成一个最小可�
 同时，`/qa/history` 会持久化并返回：
 
 1. 问题与答案。
-2. 模型名、`topK`、延迟、`promptTemplate`。
+2. 模型名、`topK`、`retrievalMode`、`fusionStrategy`、延迟、`promptTemplate`。
 3. 当时的 `retrievalResults`。
 4. 当时的 `sources`。
 
@@ -75,8 +75,12 @@ Week 2 的目标不是只返回一段模型文本，而是形成一个最小可�
 2. `answer`
 3. `topK`
 4. `chatModel`
-5. `retrievalResults`
-6. `sources`
+5. `retrievalMode`
+6. `fusionStrategy`
+7. `denseHitCount / keywordHitCount / hitCount`
+8. `denseDurationMs / keywordDurationMs / fusionDurationMs / llmDurationMs / totalDurationMs`
+9. `retrievalResults`
+10. `sources`
 
 其中 `sources` 的字段位于 [QaSourceResponse.java](../../rag-backend/src/main/java/com/example/rag/model/response/QaSourceResponse.java)，当前包含：
 
@@ -120,11 +124,13 @@ Week 2 的目标不是只返回一段模型文本，而是形成一个最小可�
 5. `answer`
 6. `chatModel`
 7. `topK`
-8. `latencyMs`
-9. `promptTemplate`
-10. `retrievalResults`
-11. `sources`
-12. `createdAt`
+8. `retrievalMode`
+9. `fusionStrategy`
+10. `latencyMs`
+11. `promptTemplate`
+12. `retrievalResults`
+13. `sources`
+14. `createdAt`
 
 这意味着历史接口不是简单“查文本”，而是查回一次问答的完整证据快照。
 
@@ -137,7 +143,8 @@ Week 2 的目标不是只返回一段模型文本，而是形成一个最小可�
 1. 问答页会同时展示答案、检索结果和来源。
 2. 来源抽屉会基于 `sources` 做证据回看。
 3. 历史页会展示 `sessionCode / sessionName / question / answer / sources`。
-4. 当前前端被明确要求不要先按“连续聊天线程”设计，因为后端还没有 session 复用。
+4. retrieval / qa / history 页面都已支持展示 `retrievalMode / fusionStrategy`，前端可以明确知道当前一次记录跑的是 dense 还是 hybrid。
+5. 当前前端被明确要求不要先按“连续聊天线程”设计，因为后端还没有 session 复用。
 
 因此，`sources` 和 `/qa/history` 已经是明确的前后端共享契约，而不是后端内部附加字段。
 
@@ -150,6 +157,7 @@ Day 20 评测里出现的 `retrievalHit`、`answerAcceptable`、`sourceStable` �
 1. `retrievalHit` 依赖检索结果是否命中正确文档。
 2. `answerAcceptable` 依赖最终 `answer`。
 3. `sourceStable` 依赖 `sources` 是否与回答一致。
+4. Week 4 的 `dense vs hybrid` 对比还依赖 `retrievalMode / fusionStrategy` 与检索候选计数、阶段耗时字段保持稳定可读。
 
 所以这个契约不仅服务产品展示，也服务效果验证。
 
@@ -159,7 +167,9 @@ Day 20 评测里出现的 `retrievalHit`、`answerAcceptable`、`sourceStable` �
 
 1. [QaServiceTest.java](../../rag-backend/src/test/java/com/example/rag/service/QaServiceTest.java) 验证 `sources` 映射结果。
 2. [QaRecordServiceTest.java](../../rag-backend/src/test/java/com/example/rag/service/QaRecordServiceTest.java) 验证问答记录持久化、配置和 sessionName 处理。
-3. [week2.md](../../rag-backend/work/week2.md)、[work day12.md](../../rag-backend/work/work%20day12.md)、[work day13.md](../../rag-backend/work/work%20day13.md) 记录了契约落地过程。
+3. [week2.md](../../rag-backend/work/week2.md)、[work day12.md](../../rag-backend/work/work%20day12.md)、[work day13.md](../../rag-backend/work/work%20day13.md) 记录了契约初次落地过程。
+4. [work day24.md](../../rag-backend/work/work%20day24.md) 记录了 `retrievalMode / fusionStrategy` 与历史快照兼容的 Week 4 收口。
+5. [work day27.md](../../rag-backend/work/work%20day27.md) 记录了问答链路最小耗时字段与 `qa.ask.llm.completed` 观测口径。
 
 ## Consequences
 

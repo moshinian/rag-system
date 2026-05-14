@@ -78,7 +78,14 @@ export function QaPage() {
                 items={mutation.data.retrievalResults}
                 retrieval={{
                   retrievalMode: mutation.data.retrievalMode,
-                  fusionStrategy: mutation.data.fusionStrategy
+                  fusionStrategy: mutation.data.fusionStrategy,
+                  denseHitCount: mutation.data.denseHitCount,
+                  keywordHitCount: mutation.data.keywordHitCount,
+                  hitCount: mutation.data.hitCount,
+                  denseDurationMs: mutation.data.denseDurationMs,
+                  keywordDurationMs: mutation.data.keywordDurationMs,
+                  fusionDurationMs: mutation.data.fusionDurationMs,
+                  totalDurationMs: mutation.data.totalDurationMs
                 }}
               />
             </Space>

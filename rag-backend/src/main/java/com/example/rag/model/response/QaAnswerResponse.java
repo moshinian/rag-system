@@ -12,6 +12,14 @@ public record QaAnswerResponse(
         String chatModel,
         RetrievalMode retrievalMode,
         String fusionStrategy,
+        int denseHitCount,
+        int keywordHitCount,
+        int hitCount,
+        long denseDurationMs,
+        long keywordDurationMs,
+        long fusionDurationMs,
+        long llmDurationMs,
+        long totalDurationMs,
         List<RetrievedChunkResponse> retrievalResults,
         List<QaSourceResponse> sources
 ) {

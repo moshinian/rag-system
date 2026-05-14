@@ -15,6 +15,10 @@ public record QuestionRetrievalResponse(
         int denseHitCount,
         int keywordHitCount,
         int hitCount,
+        long denseDurationMs,
+        long keywordDurationMs,
+        long fusionDurationMs,
+        long totalDurationMs,
         List<RetrievedChunkResponse> chunks
 ) {
 }

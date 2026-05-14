@@ -37,6 +37,9 @@ management:
         include: health,info
 
 logging:
+  file:
+    path: ./logs
+    name: rag-service.log
   level:
     root: INFO
     "[com.example.rag]": INFO

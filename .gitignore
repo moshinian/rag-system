@@ -4,6 +4,7 @@ target/
 .codex
 maven-settings.xml
 data/
+rag-backend/logs/
 *.iml
 .DS_Store
 __pycache__/

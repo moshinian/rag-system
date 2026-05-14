@@ -87,6 +87,7 @@ public class QuestionAnsweringService {
                                               String question,
                                               Integer topK,
                                               RetrievalMode retrievalMode) {
+        long retrievalStartedAt = System.currentTimeMillis();
         KnowledgeBaseEntity knowledgeBase = getKnowledgeBase(kbCode);
         // cache 命中前后都必须与同一套 readiness gate 保持一致，避免页面显示可用但检索真实不可用。
         retrievalReadinessService.assertRetrievalReady(kbCode);
@@ -162,17 +163,19 @@ public class QuestionAnsweringService {
                     .toList();
         }
 
+        long totalDurationMs = System.currentTimeMillis() - retrievalStartedAt;
         log.info(StructuredLogMessage.of("qa.retrieve.completed")
                 .field("kbCode", kbCode)
                 .field("topK", resolvedTopK)
                 .field("retrievalMode", resolvedRetrievalMode.name())
                 .field("fusionStrategy", fusionStrategy)
-                .field("denseHitCount", denseCandidates.size())
-                .field("keywordHitCount", keywordCandidates.size())
+                .field("denseCandidateCount", denseCandidates.size())
+                .field("keywordCandidateCount", keywordCandidates.size())
+                .field("finalHitCount", chunks.size())
                 .field("denseDurationMs", denseDurationMs)
                 .field("keywordDurationMs", keywordDurationMs)
                 .field("fusionDurationMs", fusionDurationMs)
-                .field("retrievedChunkCount", chunks.size())
+                .field("totalDurationMs", totalDurationMs)
                 .field("embeddingModel", ragEmbeddingProperties.getModel())
                 .build());
 
@@ -186,6 +189,10 @@ public class QuestionAnsweringService {
                 denseCandidates.size(),
                 keywordCandidates.size(),
                 chunks.size(),
+                denseDurationMs,
+                keywordDurationMs,
+                fusionDurationMs,
+                totalDurationMs,
                 chunks
         );
     }

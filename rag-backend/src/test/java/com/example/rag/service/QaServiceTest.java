@@ -50,6 +50,10 @@ class QaServiceTest {
                 1,
                 0,
                 1,
+                12L,
+                0L,
+                0L,
+                12L,
                 List.of(new RetrievedChunkResponse(
                         1L,
                         2L,
@@ -85,6 +89,14 @@ class QaServiceTest {
         assertThat(response.chatModel()).isEqualTo("deepseek-v4-flash");
         assertThat(response.retrievalMode()).isEqualTo(RetrievalMode.DENSE);
         assertThat(response.fusionStrategy()).isEqualTo("NONE");
+        assertThat(response.denseHitCount()).isEqualTo(1);
+        assertThat(response.keywordHitCount()).isZero();
+        assertThat(response.hitCount()).isEqualTo(1);
+        assertThat(response.denseDurationMs()).isEqualTo(12L);
+        assertThat(response.keywordDurationMs()).isZero();
+        assertThat(response.fusionDurationMs()).isZero();
+        assertThat(response.llmDurationMs()).isGreaterThanOrEqualTo(0L);
+        assertThat(response.totalDurationMs()).isGreaterThanOrEqualTo(response.llmDurationMs());
         assertThat(response.retrievalResults()).hasSize(1);
         assertThat(response.sources()).hasSize(1);
         assertThat(response.sources().get(0).documentCode()).isEqualTo("DOC-1");

@@ -2,12 +2,12 @@
 
 一个面向企业内部知识库场景的 RAG 系统仓库，包含 Spring Boot 后端、React 前端，以及本地开发用的 PostgreSQL / Redis 依赖编排。当前聚焦结算领域文档的沉淀、检索、问答、来源返回和问答记录。
 
-当前仓库的真实阶段不是“设计中”，而是已经完成了前 3 周的第一版实现；Week 4 已完成第一版 hybrid retrieval 的真实评测与补充样本验证，但可观测性和默认模式收口仍在继续：
+当前仓库的真实阶段不是“设计中”，而是已经完成了前 4 周的第一版实现；Week 4 已完成第一版 hybrid retrieval、真实评测与最小观测收口：
 
 1. Week 1：文档入库主链路完成
 2. Week 2：检索与问答主链路完成
 3. Week 3：异步索引、恢复、日志、配置和评测完成第一版收口
-4. Week 4：混合检索已完成第一版内核、真实评测与补充样本验证，可观测性和默认模式收口仍在继续推进
+4. Week 4：混合检索已完成第一版内核、真实评测、最小观测收口，并形成稳定结论
 
 ## 项目目标
 
@@ -53,6 +53,8 @@
 28. `qa/history` 已支持回放 `retrievalMode / fusionStrategy`，并兼容老的 `retrievedChunks` 数组快照
 29. 前端 retrieval / qa / history 页面已适配 `retrievalMode / fusionStrategy` 展示与模式切换
 30. Day 26 已完成两轮真实 `DENSE vs HYBRID` 对比评测：基线样本整体结果接近，但补充样本已确认 hybrid 在关键词密集题型上存在明确收益
+31. Day 27 已补齐 `qa.retrieve` 子阶段日志、`qa.ask.llm.completed` 和 retrieval / LLM / total 耗时字段
+32. 后端启动与运行日志现已默认落盘到 `rag-backend/logs/`，便于本地长期排障和回看
 
 ### 已完成验证
 
@@ -74,12 +76,12 @@
 16. `QuestionAnsweringServiceTest / QaServiceTest / QaRecordServiceTest / RedisCacheConfigTest` 已通过 Day 23 改动验证
 17. `qa/history` 新旧快照兼容测试已通过，前端生产构建已通过
 18. 已完成一次真实前后端联调：后端直连、Vite 代理、`DENSE/HYBRID retrieve`、`HYBRID ask` 与 history 回放都已验证
-19. Week 4 已完成第一版 hybrid retrieval 的真实对比评测；当前结论是关键词密集题型存在明确收益，但默认模式继续保留 `DENSE`
+19. Week 4 已完成第一版 hybrid retrieval 的真实对比评测与最小观测收口；当前结论是关键词密集题型存在明确收益，但默认模式继续保留 `DENSE`
 
 ### 当前边界
 
 1. 还没有做多实例任务协调、任务取消和批量索引编排
-2. 第一版 hybrid retrieval 已完成真实对比评测，并确认在关键词密集题型上存在收益，但更细的召回抑制和默认模式切换仍未完成
+2. 第一版 hybrid retrieval 已完成真实对比评测与最小观测收口，并确认在关键词密集题型上存在收益，但更细的召回抑制和默认模式切换仍未完成
 3. 还没有做 session 复用与多轮对话
 4. 还没有补齐完整监控、指标和 tracing
 5. 评测集还处在第一版，规模和覆盖度都需要继续扩展
@@ -130,7 +132,18 @@
 4. Day 24 已完成 `qa/history` 快照兼容、前端适配与真实前后端联调
 5. Day 25 已完成 dense vs hybrid 双轨评测问题集、结果模板和执行口径
 6. Day 26 已完成真实对比评测，并通过补充样本确认 hybrid 在关键词密集题型上的收益
-7. `work day27.md` 已补入下一步的日志与最小指标收口计划
+7. Day 27 已完成检索与问答关键日志、最小耗时字段和本地日志落盘
+8. Day 28 已完成 README、状态文档、RFC 与 Week 4 表达口径统一收口
+
+### Week 4 最终结论
+
+Week 4 结束后，当前项目可以稳定表达为：
+
+1. 第一版 `HYBRID` 已采用 `dense recall + keyword recall + RRF fusion` 跑通真实主链路；
+2. `qa/retrieve / qa/ask / qa/history` 已统一表达 `retrievalMode / fusionStrategy` 和检索证据快照；
+3. 两轮真实 `DENSE vs HYBRID` 对比评测已经确认：收益存在，但主要集中在关键词密集、ASCII term、document lookup 题型；
+4. 检索与问答链路已经具备第一版最小观测口径，可区分 dense、keyword、fusion、LLM 各阶段耗时；
+5. 默认模式继续保留 `DENSE`，因为更大样本和延迟成本还没有完成下一阶段正式验收。
 
 ## 技术选型
 
@@ -319,10 +332,26 @@ mvn spring-boot:run
 
 ### 2.1 启动方式建议
 
-1. 本地长期运行后端时，建议把日志重定向到文件或由 IDE 托管控制台，避免无人消费的终端 stdout 长时间阻塞请求日志输出。
+1. 后端启动后会自动把日志写入 `rag-backend/logs/rag-service.log`，并按日期/大小滚动归档到 `rag-backend/logs/archive/`。
 2. 如果只想验证后端是否可用，可以直接检查：
    `curl --noproxy '*' -s http://127.0.0.1:8080/api/health`
 3. 如果 Spring Boot Dashboard 没立刻显示应用，先执行一次 Maven Reload / Java: Clean Java Language Server Workspace，再重开 `rag-system.code-workspace`。
+
+### 2.2 本地日志
+
+默认本地日志策略：
+
+1. 当前活跃日志文件：`rag-backend/logs/rag-service.log`
+2. 历史归档目录：`rag-backend/logs/archive/`
+3. 控制台日志仍然保留，便于开发时实时观察
+4. 历史日志按日期和大小滚动切分，并自动压缩
+
+常用查看命令：
+
+```bash
+cd rag-backend
+tail -f logs/rag-service.log
+```
 
 ### 3. 健康检查
 
@@ -475,6 +504,5 @@ curl --noproxy '*' -s http://127.0.0.1:8080/api/health/redis-probe
 2. [Week 1](/root/workspace/rag-system/rag-backend/work/week1.md)
 3. [Week 2](/root/workspace/rag-system/rag-backend/work/week2.md)
 4. [Week 3](/root/workspace/rag-system/rag-backend/work/week3.md)
-5. [Day 20 评测记录](/root/workspace/rag-system/rag-backend/work/work%20day20.md)
-6. [Day 21 收口说明](/root/workspace/rag-system/rag-backend/work/work%20day21.md)
-7. [前端规划与完成情况](/root/workspace/rag-system/rag-frontend/work/frontend%20plan.md)
+4. [Week 4](/root/workspace/rag-system/rag-backend/work/week4.md)
+5. [前端规划与完成情况](/root/workspace/rag-system/rag-frontend/work/frontend%20plan.md)

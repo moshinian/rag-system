@@ -60,11 +60,22 @@ public class QaService {
                 retrievalResponse.question(),
                 retrievalResponse.chunks()
         );
+        long llmStartedAt = System.currentTimeMillis();
         String answer = chatClient.chat(promptPayload.systemPrompt(), promptPayload.userPrompt());
+        long llmDurationMs = System.currentTimeMillis() - llmStartedAt;
+        log.info(StructuredLogMessage.of("qa.ask.llm.completed")
+                .field("kbCode", kbCode)
+                .field("retrievalMode", retrievalResponse.retrievalMode().name())
+                .field("fusionStrategy", retrievalResponse.fusionStrategy())
+                .field("chatModel", chatClient.getChatModel())
+                .field("llmDurationMs", llmDurationMs)
+                .field("answerLength", answer.length())
+                .build());
         // sources 只保留回答展示和追溯所需字段，避免直接暴露完整检索对象。
         List<QaSourceResponse> sources = retrievalResponse.chunks().stream()
                 .map(this::toQaSourceResponse)
                 .toList();
+        long totalDurationMs = System.currentTimeMillis() - startedAt;
         QaAnswerResponse answerResponse = new QaAnswerResponse(
                 retrievalResponse.question(),
                 answer,
@@ -72,19 +83,33 @@ public class QaService {
                 chatClient.getChatModel(),
                 retrievalResponse.retrievalMode(),
                 retrievalResponse.fusionStrategy(),
+                retrievalResponse.denseHitCount(),
+                retrievalResponse.keywordHitCount(),
+                retrievalResponse.hitCount(),
+                retrievalResponse.denseDurationMs(),
+                retrievalResponse.keywordDurationMs(),
+                retrievalResponse.fusionDurationMs(),
+                llmDurationMs,
+                totalDurationMs,
                 retrievalResponse.chunks(),
                 sources
         );
-        qaRecordService.persist(kbCode, answerResponse, System.currentTimeMillis() - startedAt);
+        qaRecordService.persist(kbCode, answerResponse, totalDurationMs);
         log.info(StructuredLogMessage.of("qa.ask.completed")
                 .field("kbCode", kbCode)
                 .field("topK", retrievalResponse.topK())
                 .field("retrievalMode", retrievalResponse.retrievalMode().name())
                 .field("fusionStrategy", retrievalResponse.fusionStrategy())
-                .field("retrievedChunkCount", retrievalResponse.hitCount())
+                .field("denseCandidateCount", retrievalResponse.denseHitCount())
+                .field("keywordCandidateCount", retrievalResponse.keywordHitCount())
+                .field("finalHitCount", retrievalResponse.hitCount())
+                .field("denseDurationMs", retrievalResponse.denseDurationMs())
+                .field("keywordDurationMs", retrievalResponse.keywordDurationMs())
+                .field("fusionDurationMs", retrievalResponse.fusionDurationMs())
+                .field("llmDurationMs", llmDurationMs)
                 .field("chatModel", chatClient.getChatModel())
                 .field("answerLength", answer.length())
-                .field("durationMs", System.currentTimeMillis() - startedAt)
+                .field("totalDurationMs", totalDurationMs)
                 .build());
         return answerResponse;
     }

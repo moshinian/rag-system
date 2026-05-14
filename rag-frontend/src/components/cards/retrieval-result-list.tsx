@@ -10,6 +10,10 @@ type RetrievalResultListProps = {
     denseHitCount?: number;
     keywordHitCount?: number;
     hitCount?: number;
+    denseDurationMs?: number;
+    keywordDurationMs?: number;
+    fusionDurationMs?: number;
+    totalDurationMs?: number;
   };
 };
 
@@ -21,6 +25,7 @@ export function RetrievalResultList({ items, retrieval }: RetrievalResultListPro
         typeof retrieval.denseHitCount === "number" ? `dense ${retrieval.denseHitCount}` : undefined,
         typeof retrieval.keywordHitCount === "number" ? `keyword ${retrieval.keywordHitCount}` : undefined,
         typeof retrieval.hitCount === "number" ? `final ${retrieval.hitCount}` : undefined,
+        typeof retrieval.totalDurationMs === "number" ? `${retrieval.totalDurationMs} ms` : undefined,
         formatFusionStrategy(retrieval.fusionStrategy)
       ]
         .filter(Boolean)

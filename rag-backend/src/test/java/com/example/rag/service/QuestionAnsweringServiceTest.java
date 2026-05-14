@@ -185,6 +185,10 @@ class QuestionAnsweringServiceTest {
         assertThat(response.denseHitCount()).isEqualTo(1);
         assertThat(response.keywordHitCount()).isZero();
         assertThat(response.hitCount()).isEqualTo(1);
+        assertThat(response.denseDurationMs()).isGreaterThanOrEqualTo(0L);
+        assertThat(response.keywordDurationMs()).isZero();
+        assertThat(response.fusionDurationMs()).isZero();
+        assertThat(response.totalDurationMs()).isGreaterThanOrEqualTo(response.denseDurationMs());
         assertThat(response.chunks()).hasSize(1);
         assertThat(response.chunks().get(0).documentCode()).isEqualTo("DOC-1");
         assertThat(response.chunks().get(0).score()).isEqualTo(0.91D);
@@ -236,6 +240,10 @@ class QuestionAnsweringServiceTest {
         assertThat(response.denseHitCount()).isEqualTo(2);
         assertThat(response.keywordHitCount()).isEqualTo(2);
         assertThat(response.hitCount()).isEqualTo(2);
+        assertThat(response.denseDurationMs()).isGreaterThanOrEqualTo(0L);
+        assertThat(response.keywordDurationMs()).isGreaterThanOrEqualTo(0L);
+        assertThat(response.fusionDurationMs()).isGreaterThanOrEqualTo(0L);
+        assertThat(response.totalDurationMs()).isGreaterThanOrEqualTo(response.denseDurationMs() + response.keywordDurationMs());
         assertThat(response.chunks()).extracting("documentCode").containsExactly("DOC-1", "DOC-2");
         assertThat(response.chunks().get(0).score()).isGreaterThan(response.chunks().get(1).score());
     }

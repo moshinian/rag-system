@@ -2,12 +2,12 @@
 
 - Status: Accepted
 - Created: 2026-05-12
-- Last Updated: 2026-05-12
+- Last Updated: 2026-05-14
 - Owners: RAG Team
 
 ## Summary
 
-本 RFC 记录当前中文问答评测集、验收口径和首轮真实结果。核心结论是：系统已经不再只靠“主观感觉回答还行”来判断质量，而是固定一套最小可用的评测基线，包括中文样本文档、问题集、观察维度、结果模板和测试夹具；后续凡是改动 chunking、embedding、prompt、rerank 或拒答策略，都应该先回到这套基线比较，再决定是否算真正改进。
+本 RFC 记录当前中文问答评测集、验收口径和真实结果。核心结论是：系统已经不再只靠“主观感觉回答还行”来判断质量，而是固定一套最小可用的评测基线，包括中文样本文档、问题集、观察维度、结果模板和测试夹具；Week 4 之后，这套基线还扩展成 `DENSE vs HYBRID` 的双轨对比口径，用来判断混合检索是否真的带来净收益。
 
 ## Context
 
@@ -53,6 +53,16 @@
    - `sourceStable`
    - `notes`
 
+Week 4 之后，dense vs hybrid 对比口径进一步固定为：
+
+1. `denseRetrievalHit`
+2. `hybridRetrievalHit`
+3. `denseAnswerAcceptable`
+4. `hybridAnswerAcceptable`
+5. `denseSourceStable`
+6. `hybridSourceStable`
+7. `notes`
+
 这套基线当前不是“最终评分体系”，而是第一版验收底线。它的目标是让后续效果改动具备可重复、可回看、可对比的最小依据。
 
 ## Historical Evolution
@@ -78,6 +88,15 @@
   - 新增真实检索评测夹具 `QaRetrievalEvaluationIntegrationTest`。
   - 完成 `day20-cn-kb` 首轮真实问答评测。
 
+### Phase 4: 扩展成 Day 25 / Day 26 的 dense vs hybrid 双轨评测
+
+- 时间：Week 4
+- 特征：
+  - 新增双轨问题集 `day25-hybrid-eval-cases.json`
+  - 新增结果模板和执行 runbook
+  - 新增 Day 26 补充样本 `day26-hybrid-supplemental-cases.json`
+  - 完成两轮真实 `DENSE vs HYBRID` 对比，并把“收益集中在关键词密集题型”写成正式结论
+
 ## Implementation
 
 当前评测基线由下面几部分组成：
@@ -92,6 +111,16 @@
    [QaEvaluationDatasetTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaEvaluationDatasetTest.java)
 5. 真实检索评测夹具：
    [QaRetrievalEvaluationIntegrationTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaRetrievalEvaluationIntegrationTest.java)
+6. Week 4 双轨问题集：
+   [day25-hybrid-eval-cases.json](../../rag-backend/work/evaluation/day25-hybrid-eval-cases.json)
+7. Week 4 结果模板：
+   [day25-hybrid-eval-results-template.md](../../rag-backend/work/evaluation/day25-hybrid-eval-results-template.md)
+8. Week 4 执行 runbook：
+   [day25-hybrid-eval-runbook.md](../../rag-backend/work/evaluation/day25-hybrid-eval-runbook.md)
+9. Week 4 真实结果：
+   [day26-hybrid-eval-results.md](../../rag-backend/work/evaluation/day26-hybrid-eval-results.md)
+10. Week 4 补充样本：
+   [day26-hybrid-supplemental-cases.json](../../rag-backend/work/evaluation/day26-hybrid-supplemental-cases.json)
 
 当前数据集的固定事实包括：
 
@@ -108,6 +137,12 @@
 3. `5/5` 可回答问题的来源与回答一致。
 4. `1/1` 无答案问题返回兜底话术，没有直接胡乱编造。
 5. 当前主要剩余问题不在回答生成，而在无答案场景下检索仍会返回弱相关 chunk。
+
+Week 4 的真实 dense vs hybrid 结论则进一步补成：
+
+1. 基线样本上，`DENSE` 与 `HYBRID` 整体结果接近，没有出现足够大的净收益。
+2. 补充样本上，`HYBRID` 在关键词密集、ASCII term、document lookup 题型上出现明确净收益。
+3. 当前收益已经足以证明第一版 hybrid 值得保留，但还不足以支持把默认模式切到 `HYBRID`。
 
 ## Why This Baseline Is Intentionally Small
 
@@ -143,7 +178,7 @@
 1. 最终版自动评分体系。
 2. 复杂的多维 benchmark 平台。
 3. 多轮对话评测。
-4. rerank 或 hybrid retrieval 的最终验收标准。
+4. rerank 的最终验收标准。
 
 ## Open Questions
 
@@ -164,3 +199,8 @@
 8. [day20-qa-eval-results.md](../../rag-backend/work/evaluation/day20-qa-eval-results.md)
 9. [QaEvaluationDatasetTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaEvaluationDatasetTest.java)
 10. [QaRetrievalEvaluationIntegrationTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaRetrievalEvaluationIntegrationTest.java)
+11. [day25-hybrid-eval-cases.json](../../rag-backend/work/evaluation/day25-hybrid-eval-cases.json)
+12. [day25-hybrid-eval-results-template.md](../../rag-backend/work/evaluation/day25-hybrid-eval-results-template.md)
+13. [day25-hybrid-eval-runbook.md](../../rag-backend/work/evaluation/day25-hybrid-eval-runbook.md)
+14. [day26-hybrid-supplemental-cases.json](../../rag-backend/work/evaluation/day26-hybrid-supplemental-cases.json)
+15. [day26-hybrid-eval-results.md](../../rag-backend/work/evaluation/day26-hybrid-eval-results.md)
