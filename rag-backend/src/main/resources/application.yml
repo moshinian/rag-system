@@ -87,7 +87,13 @@ rag:
     dense-candidate-limit: 8
     keyword-candidate-limit: 8
     fusion-k: 60
+    keyword-strategy: POSTGRES_FTS
+    keyword-ts-config: simple
+    keyword-rank-function: ts_rank_cd
     keyword-min-token-length: 3
+    keyword-like-phrase-weight: 3.0
+    keyword-like-title-weight: 1.5
+    keyword-min-hit-threshold: 0.5
     max-context-chars: 6000
   qa:
     default-created-by: qa-service

@@ -4,6 +4,7 @@ import com.example.rag.config.RagEmbeddingProperties;
 import com.example.rag.config.RagRetrievalProperties;
 import com.example.rag.integration.llm.OpenAiCompatibleClient;
 import com.example.rag.model.dto.RetrievedChunkCandidate;
+import com.example.rag.model.enums.KeywordStrategy;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.enums.RetrievalMode;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
@@ -41,6 +42,7 @@ class QuestionAnsweringServiceTest {
     @Mock
     private RetrievalReadinessService retrievalReadinessService;
 
+    private RagRetrievalProperties retrievalProperties;
     private QuestionAnsweringService questionAnsweringService;
 
     @BeforeEach
@@ -50,14 +52,20 @@ class QuestionAnsweringServiceTest {
         embeddingProperties.setModel("text-embedding-3-small");
         embeddingProperties.setVectorDimensions(1536);
 
-        RagRetrievalProperties retrievalProperties = new RagRetrievalProperties();
+        retrievalProperties = new RagRetrievalProperties();
         retrievalProperties.setVectorStore("pgvector");
         retrievalProperties.setDefaultMode(RetrievalMode.DENSE);
         retrievalProperties.setDefaultTopK(5);
         retrievalProperties.setDenseCandidateLimit(8);
         retrievalProperties.setKeywordCandidateLimit(8);
         retrievalProperties.setFusionK(60);
+        retrievalProperties.setKeywordStrategy(KeywordStrategy.LIKE);
+        retrievalProperties.setKeywordTsConfig("simple");
+        retrievalProperties.setKeywordRankFunction("ts_rank_cd");
         retrievalProperties.setKeywordMinTokenLength(3);
+        retrievalProperties.setKeywordLikePhraseWeight(3D);
+        retrievalProperties.setKeywordLikeTitleWeight(1.5D);
+        retrievalProperties.setKeywordMinHitThreshold(0.5D);
 
         questionAnsweringService = new QuestionAnsweringService(
                 knowledgeBaseRepository,
@@ -222,6 +230,9 @@ class QuestionAnsweringServiceTest {
                 eq(100L),
                 eq("结算异常怎么处理"),
                 org.mockito.ArgumentMatchers.anyList(),
+                eq(3D),
+                eq(1.5D),
+                eq(0.5D),
                 eq(8)
         )).thenReturn(List.of(
                 createRetrievedChunkCandidate(2L, "DOC-2", 2D),
@@ -246,6 +257,140 @@ class QuestionAnsweringServiceTest {
         assertThat(response.totalDurationMs()).isGreaterThanOrEqualTo(response.denseDurationMs() + response.keywordDurationMs());
         assertThat(response.chunks()).extracting("documentCode").containsExactly("DOC-1", "DOC-2");
         assertThat(response.chunks().get(0).score()).isGreaterThan(response.chunks().get(1).score());
+    }
+
+    @Test
+    void retrieveShouldUsePostgresFtsKeywordStrategyWhenConfigured() {
+        retrievalProperties.setKeywordStrategy(KeywordStrategy.POSTGRES_FTS);
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
+        when(openAiCompatibleClient.createEmbedding(
+                eq("http://localhost:8001/v1"),
+                eq(""),
+                eq("/embeddings"),
+                eq("text-embedding-3-small"),
+                eq("invoice status code")
+        )).thenReturn(List.of(0.11D, 0.22D));
+        when(documentChunkRepository.findTopKSimilarChunks(
+                eq(100L),
+                eq("[0.110000000000,0.220000000000]"),
+                eq(8)
+        )).thenReturn(List.of(createRetrievedChunkCandidate(1L, "DOC-1", 0.91D)));
+        when(documentChunkRepository.findTopKeywordChunksByFts(
+                eq(100L),
+                eq("\"invoice status code\" OR invoice OR status OR code"),
+                eq("simple"),
+                eq("ts_rank_cd"),
+                eq(8)
+        )).thenReturn(List.of(createRetrievedChunkCandidate(2L, "DOC-2", 0.73D)));
+
+        QuestionRetrievalResponse response = questionAnsweringService.retrieve(
+                "settlement-kb",
+                "invoice status code",
+                2,
+                RetrievalMode.HYBRID
+        );
+
+        assertThat(response.retrievalMode()).isEqualTo(RetrievalMode.HYBRID);
+        assertThat(response.fusionStrategy()).isEqualTo("RRF");
+        assertThat(response.keywordHitCount()).isEqualTo(1);
+        assertThat(response.chunks()).extracting("documentCode").containsExactly("DOC-1", "DOC-2");
+    }
+
+    @Test
+    void retrieveShouldBuildAsciiFocusedFtsQueryForMixedLanguageQuestion() {
+        retrievalProperties.setKeywordStrategy(KeywordStrategy.POSTGRES_FTS);
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
+        when(openAiCompatibleClient.createEmbedding(
+                eq("http://localhost:8001/v1"),
+                eq(""),
+                eq("/embeddings"),
+                eq("text-embedding-3-small"),
+                eq("哪个文档提到 spot check？")
+        )).thenReturn(List.of(0.11D, 0.22D));
+        when(documentChunkRepository.findTopKSimilarChunks(
+                eq(100L),
+                eq("[0.110000000000,0.220000000000]"),
+                eq(8)
+        )).thenReturn(List.of(createRetrievedChunkCandidate(1L, "DOC-1", 0.91D)));
+        when(documentChunkRepository.findTopKeywordChunksByFts(
+                eq(100L),
+                eq("\"spot check\" OR spot OR check"),
+                eq("simple"),
+                eq("ts_rank_cd"),
+                eq(8)
+        )).thenReturn(List.of(createRetrievedChunkCandidate(2L, "DOC-2", 0.73D)));
+
+        QuestionRetrievalResponse response = questionAnsweringService.retrieve(
+                "settlement-kb",
+                "哪个文档提到 spot check？",
+                2,
+                RetrievalMode.HYBRID
+        );
+
+        assertThat(response.keywordHitCount()).isEqualTo(1);
+        assertThat(response.chunks()).extracting("documentCode").containsExactly("DOC-1", "DOC-2");
+    }
+
+    @Test
+    void retrieveShouldFallbackToLikeWhenFtsReturnsNoHitForCjkQuestion() {
+        retrievalProperties.setKeywordStrategy(KeywordStrategy.POSTGRES_FTS);
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
+        when(openAiCompatibleClient.createEmbedding(
+                eq("http://localhost:8001/v1"),
+                eq(""),
+                eq("/embeddings"),
+                eq("text-embedding-3-small"),
+                eq("第二百三十八条的")
+        )).thenReturn(List.of(0.11D, 0.22D));
+        when(documentChunkRepository.findTopKSimilarChunks(
+                eq(100L),
+                eq("[0.110000000000,0.220000000000]"),
+                eq(8)
+        )).thenReturn(List.of(createRetrievedChunkCandidate(1L, "DOC-1", 0.91D)));
+        when(documentChunkRepository.findTopKeywordChunksByFts(
+                eq(100L),
+                eq("第二百三十八条的"),
+                eq("simple"),
+                eq("ts_rank_cd"),
+                eq(8)
+        )).thenReturn(List.of());
+        when(documentChunkRepository.findTopKeywordChunks(
+                eq(100L),
+                eq("第二百三十八条的"),
+                org.mockito.ArgumentMatchers.anyList(),
+                eq(3D),
+                eq(1.5D),
+                eq(0.5D),
+                eq(8)
+        )).thenReturn(List.of(createRetrievedChunkCandidate(2L, "DOC-2", 1.2D)));
+
+        QuestionRetrievalResponse response = questionAnsweringService.retrieve(
+                "settlement-kb",
+                "第二百三十八条的",
+                2,
+                RetrievalMode.HYBRID
+        );
+
+        assertThat(response.keywordHitCount()).isEqualTo(1);
+        assertThat(response.chunks()).extracting("documentCode").containsExactly("DOC-1", "DOC-2");
     }
 
     @Test

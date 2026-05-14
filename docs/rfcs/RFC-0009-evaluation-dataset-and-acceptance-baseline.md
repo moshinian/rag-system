@@ -144,6 +144,15 @@ Week 4 的真实 dense vs hybrid 结论则进一步补成：
 2. 补充样本上，`HYBRID` 在关键词密集、ASCII term、document lookup 题型上出现明确净收益。
 3. 当前收益已经足以证明第一版 hybrid 值得保留，但还不足以支持把默认模式切到 `HYBRID`。
 
+2026-05-14 又补做了一次运行时验证，但这次不是切 `DENSE/HYBRID`，而是切 `HYBRID` 内部的 lexical strategy：
+
+1. 默认 `LIKE` 路径在当前样本上仍能稳定跑通真实 `retrieve / ask`。
+2. 新增的 `POSTGRES_FTS` 路径已经完成真实启动、真实请求和前端代理联调。
+3. 但在当前 `day20-cn-kb` 中文样本与 mixed-term 问句上，`POSTGRES_FTS(simple)` 没有观察到稳定的 `keywordHitCount` 提升。
+4. 对“第二百三十八条的”这类中文条文短语，真实使用中还观察到了 `LIKE` 能命中、`POSTGRES_FTS` 零命中的情况，说明当前 PostgreSQL 默认词法处理对中文法规短语仍然偏弱。
+5. 为避免这种体验倒挂，系统现已在 `POSTGRES_FTS` 的 CJK 零命中场景下自动回退到 `LIKE` keyword recall。
+6. 因此当前评测基线仍以默认 `LIKE` 版 hybrid 作为真实对照口径，而不是把 `POSTGRES_FTS` 直接写进默认验收结论。
+
 ## Why This Baseline Is Intentionally Small
 
 系统当前没有一上来就做复杂自动评分，是刻意控制范围。

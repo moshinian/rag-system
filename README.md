@@ -55,6 +55,9 @@
 30. Day 26 已完成两轮真实 `DENSE vs HYBRID` 对比评测：基线样本整体结果接近，但补充样本已确认 hybrid 在关键词密集题型上存在明确收益
 31. Day 27 已补齐 `qa.retrieve` 子阶段日志、`qa.ask.llm.completed` 和 retrieval / LLM / total 耗时字段
 32. 后端启动与运行日志现已默认落盘到 `rag-backend/logs/`，便于本地长期排障和回看
+33. `rag.retrieval.keywordStrategy` 已支持 `LIKE / POSTGRES_FTS` 两种内部 lexical strategy，默认仍为 `LIKE`
+34. 已完成真实 `POSTGRES_FTS` 运行验证；当前 `day20-cn-kb` 中文样本上尚未观察到稳定 lexical 增益，因此仍不作为默认策略
+35. `POSTGRES_FTS` 在 CJK 查询零命中时会自动回退到 `LIKE` keyword recall`，避免出现“LIKE 可命中、FTS 完全空”的体验倒挂
 
 ### 已完成验证
 
@@ -77,15 +80,19 @@
 17. `qa/history` 新旧快照兼容测试已通过，前端生产构建已通过
 18. 已完成一次真实前后端联调：后端直连、Vite 代理、`DENSE/HYBRID retrieve`、`HYBRID ask` 与 history 回放都已验证
 19. Week 4 已完成第一版 hybrid retrieval 的真实对比评测与最小观测收口；当前结论是关键词密集题型存在明确收益，但默认模式继续保留 `DENSE`
+20. 2026-05-14 已完成一次真实 `POSTGRES_FTS` 联调；运行正常，但在当前中文评测问题上 `keywordHitCount` 未出现稳定收益
+21. 2026-05-14 已补入 `POSTGRES_FTS -> LIKE` 的 CJK 零命中兜底；真实体验结论仍然是默认 `LIKE` 更稳妥
 
 ### 当前边界
 
 1. 还没有做多实例任务协调、任务取消和批量索引编排
 2. 第一版 hybrid retrieval 已完成真实对比评测与最小观测收口，并确认在关键词密集题型上存在收益，但更细的召回抑制和默认模式切换仍未完成
-3. 还没有做 session 复用与多轮对话
-4. 还没有补齐完整监控、指标和 tracing
-5. 评测集还处在第一版，规模和覆盖度都需要继续扩展
-6. 前端已做第一轮拆包优化，但还没有继续做更细的业务级按需加载
+3. `POSTGRES_FTS` 已作为可配置 lexical strategy 接入，但在当前 `simple` 配置和 `day20-cn-kb` 中文样本下仍未证明比默认 `LIKE` 更优
+4. 对“第二百三十八条的”这类中文条文短语，当前 PostgreSQL FTS 默认词法处理仍弱于 `LIKE` 子串匹配，因此 CJK 零命中时已回退到 `LIKE`
+5. 还没有做 session 复用与多轮对话
+6. 还没有补齐完整监控、指标和 tracing
+7. 评测集还处在第一版，规模和覆盖度都需要继续扩展
+8. 前端已做第一轮拆包优化，但还没有继续做更细的业务级按需加载
 
 ## 周进度
 
@@ -134,6 +141,7 @@
 6. Day 26 已完成真实对比评测，并通过补充样本确认 hybrid 在关键词密集题型上的收益
 7. Day 27 已完成检索与问答关键日志、最小耗时字段和本地日志落盘
 8. Day 28 已完成 README、状态文档、RFC 与 Week 4 表达口径统一收口
+9. Day 29 已完成 `LIKE / POSTGRES_FTS` 双 lexical strategy 接入、真实联调、运行时问题修复，以及 CJK 零命中 fallback 收口
 
 ### Week 4 最终结论
 
@@ -144,6 +152,8 @@ Week 4 结束后，当前项目可以稳定表达为：
 3. 两轮真实 `DENSE vs HYBRID` 对比评测已经确认：收益存在，但主要集中在关键词密集、ASCII term、document lookup 题型；
 4. 检索与问答链路已经具备第一版最小观测口径，可区分 dense、keyword、fusion、LLM 各阶段耗时；
 5. 默认模式继续保留 `DENSE`，因为更大样本和延迟成本还没有完成下一阶段正式验收。
+6. `POSTGRES_FTS` 已作为内部可配置 lexical strategy 跑通，但在当前中文评测样本上未观察到稳定 keyword gain，默认 lexical strategy 继续保留 `LIKE`。
+7. 当前更准确的工程判断是：`POSTGRES_FTS` 更适合继续作为实验性同库 lexical 路线保留，而不是替换默认 `LIKE`。
 
 ## 技术选型
 
@@ -165,6 +175,8 @@ Week 4 结束后，当前项目可以稳定表达为：
 2. embedding 统一走 OpenAI-compatible HTTP 接口，降低 Java 主服务耦合
 3. 先把单服务版本做完整，再考虑更复杂的编排和检索优化
 4. 混合检索先采用 PostgreSQL 内 keyword recall + RRF 的轻量路线，先把效果对比和观测口径站稳，再决定是否继续引入更重基础设施
+5. `POSTGRES_FTS` 当前只作为同库内的实验性 lexical strategy；在中文场景收益未被真实评测确认前，不替换默认 `LIKE`
+6. 对中文条文、法规编号后缀变化、短短语 document lookup 等 case，默认 `LIKE` 目前比 `POSTGRES_FTS(simple)` 更稳
 
 ## 项目结构
 

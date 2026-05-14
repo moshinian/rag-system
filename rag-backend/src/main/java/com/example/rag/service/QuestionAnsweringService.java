@@ -7,6 +7,7 @@ import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.config.CacheNames;
 import com.example.rag.integration.llm.OpenAiCompatibleClient;
 import com.example.rag.model.dto.RetrievedChunkCandidate;
+import com.example.rag.model.enums.KeywordStrategy;
 import com.example.rag.model.enums.RetrievalMode;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
@@ -40,6 +41,7 @@ public class QuestionAnsweringService {
     private static final String FUSION_STRATEGY_NONE = "NONE";
     private static final String FUSION_STRATEGY_RRF = "RRF";
     private static final Pattern LATIN_TOKEN_PATTERN = Pattern.compile("[A-Za-z0-9_-]+");
+    private static final Pattern LATIN_PHRASE_PATTERN = Pattern.compile("([A-Za-z0-9_-]+(?:\\s+[A-Za-z0-9_-]+)+)");
     private static final Pattern CJK_SEGMENT_PATTERN = Pattern.compile("[\\u4E00-\\u9FFF]+");
     private static final Logger log = LoggerFactory.getLogger(QuestionAnsweringService.class);
     private final KnowledgeBaseRepository knowledgeBaseRepository;
@@ -81,7 +83,7 @@ public class QuestionAnsweringService {
     @Transactional(readOnly = true)
     @Cacheable(
             cacheNames = CacheNames.QA_RETRIEVAL,
-            key = "#kbCode + ':' + (#question == null ? 'null' : #question.trim()) + ':' + (#topK == null ? 'null' : #topK) + ':' + (#retrievalMode == null ? 'AUTO' : #retrievalMode.name())"
+            key = "#kbCode + ':' + (#question == null ? 'null' : #question.trim()) + ':' + (#topK == null ? 'null' : #topK) + ':' + (#retrievalMode == null ? 'AUTO' : #retrievalMode.name()) + ':' + #root.target.currentKeywordStrategyName()"
     )
     public QuestionRetrievalResponse retrieve(String kbCode,
                                               String question,
@@ -94,11 +96,13 @@ public class QuestionAnsweringService {
         String normalizedQuestion = normalizeQuestion(question);
         int resolvedTopK = resolveTopK(topK);
         RetrievalMode resolvedRetrievalMode = resolveRetrievalMode(retrievalMode);
+        KeywordStrategy keywordStrategy = resolveKeywordStrategy();
         long denseStartedAt = System.currentTimeMillis();
         log.info(StructuredLogMessage.of("qa.retrieve.started")
                 .field("kbCode", kbCode)
                 .field("topK", resolvedTopK)
                 .field("retrievalMode", resolvedRetrievalMode.name())
+                .field("keywordStrategy", resolvedRetrievalMode == RetrievalMode.HYBRID ? keywordStrategy.name() : "NONE")
                 .field("questionLength", normalizedQuestion.length())
                 .build());
 
@@ -130,16 +134,17 @@ public class QuestionAnsweringService {
         List<RetrievedChunkResponse> chunks;
         if (resolvedRetrievalMode == RetrievalMode.HYBRID) {
             long keywordStartedAt = System.currentTimeMillis();
-            keywordCandidates = documentChunkRepository.findTopKeywordChunks(
+            keywordCandidates = findTopKeywordChunks(
                     knowledgeBase.getId(),
                     normalizedQuestion,
-                    extractKeywordTerms(normalizedQuestion),
+                    keywordStrategy,
                     resolveKeywordCandidateLimit(resolvedTopK)
             );
             keywordDurationMs = System.currentTimeMillis() - keywordStartedAt;
             log.info(StructuredLogMessage.of("qa.retrieve.keyword.completed")
                     .field("kbCode", kbCode)
                     .field("retrievalMode", resolvedRetrievalMode.name())
+                    .field("keywordStrategy", keywordStrategy.name())
                     .field("candidateCount", keywordCandidates.size())
                     .field("durationMs", keywordDurationMs)
                     .build());
@@ -151,6 +156,7 @@ public class QuestionAnsweringService {
             log.info(StructuredLogMessage.of("qa.retrieve.fusion.completed")
                     .field("kbCode", kbCode)
                     .field("retrievalMode", resolvedRetrievalMode.name())
+                    .field("keywordStrategy", keywordStrategy.name())
                     .field("denseCandidateCount", denseCandidates.size())
                     .field("keywordCandidateCount", keywordCandidates.size())
                     .field("finalHitCount", chunks.size())
@@ -168,6 +174,7 @@ public class QuestionAnsweringService {
                 .field("kbCode", kbCode)
                 .field("topK", resolvedTopK)
                 .field("retrievalMode", resolvedRetrievalMode.name())
+                .field("keywordStrategy", resolvedRetrievalMode == RetrievalMode.HYBRID ? keywordStrategy.name() : "NONE")
                 .field("fusionStrategy", fusionStrategy)
                 .field("denseCandidateCount", denseCandidates.size())
                 .field("keywordCandidateCount", keywordCandidates.size())
@@ -251,6 +258,79 @@ public class QuestionAnsweringService {
         return configured == null || configured < 1 ? 60 : configured;
     }
 
+    /** 解析 hybrid 使用的 lexical 策略。 */
+    private KeywordStrategy resolveKeywordStrategy() {
+        return ragRetrievalProperties.getKeywordStrategy() == null
+                ? KeywordStrategy.LIKE
+                : ragRetrievalProperties.getKeywordStrategy();
+    }
+
+    /** 暴露给缓存 SpEL 使用的当前 keyword strategy 名称。 */
+    public String currentKeywordStrategyName() {
+        return resolveKeywordStrategy().name();
+    }
+
+    /** 路由到当前配置的 lexical recall 实现。 */
+    private List<RetrievedChunkCandidate> findTopKeywordChunks(Long knowledgeBaseId,
+                                                               String normalizedQuestion,
+                                                               KeywordStrategy keywordStrategy,
+                                                               int limit) {
+        return switch (keywordStrategy) {
+            case POSTGRES_FTS -> findTopKeywordChunksWithFtsFallback(
+                    knowledgeBaseId,
+                    normalizedQuestion,
+                    limit
+            );
+            case LIKE -> documentChunkRepository.findTopKeywordChunks(
+                    knowledgeBaseId,
+                    normalizedQuestion,
+                    extractKeywordTerms(normalizedQuestion),
+                    resolveLikePhraseWeight(),
+                    resolveLikeTitleWeight(),
+                    resolveKeywordMinHitThreshold(),
+                    limit
+            );
+        };
+    }
+
+    /**
+     * PostgreSQL FTS 在当前 simple config 下对中文条文短句支持较弱；
+     * 当 lexical 分支零命中时，退回当前 LIKE 方案，避免出现“LIKE 能命中、FTS 完全空”的明显体验倒挂。
+     */
+    private List<RetrievedChunkCandidate> findTopKeywordChunksWithFtsFallback(Long knowledgeBaseId,
+                                                                              String normalizedQuestion,
+                                                                              int limit) {
+        List<RetrievedChunkCandidate> ftsCandidates = documentChunkRepository.findTopKeywordChunksByFts(
+                knowledgeBaseId,
+                buildFtsQueryText(normalizedQuestion),
+                resolveKeywordTsConfig(),
+                resolveKeywordRankFunction(),
+                limit
+        );
+        if (!ftsCandidates.isEmpty()) {
+            return ftsCandidates;
+        }
+
+        if (!containsCjk(normalizedQuestion)) {
+            return ftsCandidates;
+        }
+
+        log.info(StructuredLogMessage.of("qa.retrieve.keyword.fallback_like")
+                .field("keywordStrategy", KeywordStrategy.POSTGRES_FTS.name())
+                .field("reason", "fts_zero_hit_on_cjk_query")
+                .field("questionLength", normalizedQuestion.length())
+                .build());
+        return documentChunkRepository.findTopKeywordChunks(
+                knowledgeBaseId,
+                normalizedQuestion,
+                extractKeywordTerms(normalizedQuestion),
+                resolveLikePhraseWeight(),
+                resolveLikeTitleWeight(),
+                resolveKeywordMinHitThreshold(),
+                limit
+        );
+    }
+
     /** 提取第一版关键词召回使用的检索 term。 */
     private List<String> extractKeywordTerms(String normalizedQuestion) {
         int minTokenLength = ragRetrievalProperties.getKeywordMinTokenLength() == null
@@ -277,6 +357,64 @@ public class QuestionAnsweringService {
         terms.remove(lowerQuestion);
         terms.remove(normalizedQuestion);
         return new ArrayList<>(terms);
+    }
+
+    /**
+     * 构造 PostgreSQL FTS 使用的查询文本。
+     * 优先抽取 ASCII/mixed term，避免中文提示词把 tsquery 约束得过严导致 mixed-term 检索失效。
+     */
+    private String buildFtsQueryText(String normalizedQuestion) {
+        List<String> latinTokens = new ArrayList<>();
+        Matcher latinMatcher = LATIN_TOKEN_PATTERN.matcher(normalizedQuestion);
+        while (latinMatcher.find()) {
+            latinTokens.add(latinMatcher.group());
+        }
+
+        if (!latinTokens.isEmpty()) {
+            StringBuilder queryBuilder = new StringBuilder();
+            Matcher phraseMatcher = LATIN_PHRASE_PATTERN.matcher(normalizedQuestion);
+            if (phraseMatcher.find()) {
+                queryBuilder.append('"').append(phraseMatcher.group(1).trim()).append('"');
+            }
+            for (String token : new LinkedHashSet<>(latinTokens)) {
+                if (!queryBuilder.isEmpty()) {
+                    queryBuilder.append(" OR ");
+                }
+                queryBuilder.append(token);
+            }
+            return queryBuilder.toString();
+        }
+
+        return normalizedQuestion;
+    }
+
+    private boolean containsCjk(String normalizedQuestion) {
+        return CJK_SEGMENT_PATTERN.matcher(normalizedQuestion).find();
+    }
+
+    private String resolveKeywordTsConfig() {
+        String configured = ragRetrievalProperties.getKeywordTsConfig();
+        return configured == null || configured.isBlank() ? "simple" : configured.trim();
+    }
+
+    private String resolveKeywordRankFunction() {
+        String configured = ragRetrievalProperties.getKeywordRankFunction();
+        return "ts_rank".equalsIgnoreCase(configured) ? "ts_rank" : "ts_rank_cd";
+    }
+
+    private double resolveLikePhraseWeight() {
+        Double configured = ragRetrievalProperties.getKeywordLikePhraseWeight();
+        return configured == null || configured <= 0D ? 3D : configured;
+    }
+
+    private double resolveLikeTitleWeight() {
+        Double configured = ragRetrievalProperties.getKeywordLikeTitleWeight();
+        return configured == null || configured <= 0D ? 1.5D : configured;
+    }
+
+    private double resolveKeywordMinHitThreshold() {
+        Double configured = ragRetrievalProperties.getKeywordMinHitThreshold();
+        return configured == null || configured < 0D ? 0.5D : configured;
     }
 
     /** 为中文连续片段生成有限数量的关键词窗口，避免 term 数量过多。 */

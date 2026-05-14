@@ -174,7 +174,33 @@ public class DocumentChunkRepository {
     public List<RetrievedChunkCandidate> findTopKeywordChunks(Long knowledgeBaseId,
                                                               String questionPhrase,
                                                               List<String> terms,
+                                                              double phraseWeight,
+                                                              double titleWeight,
+                                                              double minHitThreshold,
                                                               int limit) {
-        return documentChunkMapper.findTopKeywordChunks(knowledgeBaseId, questionPhrase, terms, limit);
+        return documentChunkMapper.findTopKeywordChunksByLike(
+                knowledgeBaseId,
+                questionPhrase,
+                terms,
+                phraseWeight,
+                titleWeight,
+                minHitThreshold,
+                limit
+        );
+    }
+
+    /** 按知识库执行 PostgreSQL FTS 词法召回。 */
+    public List<RetrievedChunkCandidate> findTopKeywordChunksByFts(Long knowledgeBaseId,
+                                                                   String queryText,
+                                                                   String tsConfig,
+                                                                   String rankFunction,
+                                                                   int limit) {
+        return documentChunkMapper.findTopKeywordChunksByFts(
+                knowledgeBaseId,
+                queryText,
+                tsConfig,
+                rankFunction,
+                limit
+        );
     }
 }
