@@ -130,8 +130,8 @@
 
 1. [DocumentProcessingServiceTest.java](../../rag-backend/src/test/java/com/example/rag/service/DocumentProcessingServiceTest.java) 验证切块配置已经真实影响处理行为。
 2. [ChunkingExperimentTest.java](../../rag-backend/src/test/java/com/example/rag/ingestion/chunk/ChunkingExperimentTest.java) 验证三组 profile 的统计差异和基本排序关系。
-3. [work day18.md](../../rag-backend/work/work%20day18.md) 记录了参数外置背景。
-4. [work day19.md](../../rag-backend/work/work%20day19.md) 记录了实验方法与第一版结论。
+3. [work day18.md](../work/rag-backend/work%20day18.md) 记录了参数外置背景。
+4. [work day19.md](../work/rag-backend/work%20day19.md) 记录了实验方法与第一版结论。
 
 ## Consequences
 
@@ -165,11 +165,11 @@
 ## References
 
 1. [README.md](../../README.md)
-2. [week1.md](../../rag-backend/work/week1.md)
-3. [week2.md](../../rag-backend/work/week2.md)
-4. [week3.md](../../rag-backend/work/week3.md)
-5. [current-status.md](../../rag-backend/work/current-status.md)
-6. [work day18.md](../../rag-backend/work/work%20day18.md)
-7. [work day19.md](../../rag-backend/work/work%20day19.md)
+2. [week1.md](../work/rag-backend/week1.md)
+3. [week2.md](../work/rag-backend/week2.md)
+4. [week3.md](../work/rag-backend/week3.md)
+5. [current-status.md](../work/rag-backend/current-status.md)
+6. [work day18.md](../work/rag-backend/work%20day18.md)
+7. [work day19.md](../work/rag-backend/work%20day19.md)
 8. Commit `81ff63d` `complete day18 config externalization and day19 chunking experiment`
 9. Commit `686c48d` `fix chunking experiment null-safety and add day20 plan`

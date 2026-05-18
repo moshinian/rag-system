@@ -92,9 +92,7 @@ public class EmbeddingConfigurationStateService {
         // profile 指纹代表“当前向量契约”，任何参与检索兼容性的字段变化都必须进入摘要。
         String raw = String.join("|",
                 normalize(ragEmbeddingProperties.getProvider()),
-                normalize(ragEmbeddingProperties.getBaseUrl()),
                 normalize(ragEmbeddingProperties.getModel()),
-                normalize(ragEmbeddingProperties.getEmbeddingPath()),
                 normalize(ragEmbeddingProperties.getDistanceMetric()),
                 String.valueOf(ragEmbeddingProperties.getVectorDimensions() == null ? 0 : ragEmbeddingProperties.getVectorDimensions())
         );

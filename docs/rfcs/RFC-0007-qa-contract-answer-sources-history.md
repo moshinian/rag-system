@@ -138,7 +138,7 @@ Week 2 的目标不是只返回一段模型文本，而是形成一个最小可�
 
 这个主题已经直接影响前端结构。
 
-从 [frontend plan.md](../../rag-frontend/work/frontend%20plan.md) 可以看出：
+从 [plan.md](../work/rag-frontend/plan.md) 可以看出：
 
 1. 问答页会同时展示答案、检索结果和来源。
 2. 来源抽屉会基于 `sources` 做证据回看。
@@ -167,9 +167,9 @@ Day 20 评测里出现的 `retrievalHit`、`answerAcceptable`、`sourceStable` �
 
 1. [QaServiceTest.java](../../rag-backend/src/test/java/com/example/rag/service/QaServiceTest.java) 验证 `sources` 映射结果。
 2. [QaRecordServiceTest.java](../../rag-backend/src/test/java/com/example/rag/service/QaRecordServiceTest.java) 验证问答记录持久化、配置和 sessionName 处理。
-3. [week2.md](../../rag-backend/work/week2.md)、[work day12.md](../../rag-backend/work/work%20day12.md)、[work day13.md](../../rag-backend/work/work%20day13.md) 记录了契约初次落地过程。
-4. [work day24.md](../../rag-backend/work/work%20day24.md) 记录了 `retrievalMode / fusionStrategy` 与历史快照兼容的 Week 4 收口。
-5. [work day27.md](../../rag-backend/work/work%20day27.md) 记录了问答链路最小耗时字段与 `qa.ask.llm.completed` 观测口径。
+3. [week2.md](../work/rag-backend/week2.md)、[work day12.md](../work/rag-backend/work%20day12.md)、[work day13.md](../work/rag-backend/work%20day13.md) 记录了契约初次落地过程。
+4. [work day24.md](../work/rag-backend/work%20day24.md) 记录了 `retrievalMode / fusionStrategy` 与历史快照兼容的 Week 4 收口。
+5. [work day27.md](../work/rag-backend/work%20day27.md) 记录了问答链路最小耗时字段与 `qa.ask.llm.completed` 观测口径。
 
 ## Consequences
 
@@ -203,12 +203,12 @@ Day 20 评测里出现的 `retrievalHit`、`answerAcceptable`、`sourceStable` �
 ## References
 
 1. [README.md](../../README.md)
-2. [week2.md](../../rag-backend/work/week2.md)
-3. [current-status.md](../../rag-backend/work/current-status.md)
-4. [work day12.md](../../rag-backend/work/work%20day12.md)
-5. [work day13.md](../../rag-backend/work/work%20day13.md)
-6. [work day14.md](../../rag-backend/work/work%20day14.md)
-7. [work day20.md](../../rag-backend/work/work%20day20.md)
-8. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
+2. [week2.md](../work/rag-backend/week2.md)
+3. [current-status.md](../work/rag-backend/current-status.md)
+4. [work day12.md](../work/rag-backend/work%20day12.md)
+5. [work day13.md](../work/rag-backend/work%20day13.md)
+6. [work day14.md](../work/rag-backend/work%20day14.md)
+7. [work day20.md](../work/rag-backend/work%20day20.md)
+8. [plan.md](../work/rag-frontend/plan.md)
 9. Commit `fb4e146` `add qa sources response for day12`
 10. Commit `1750636` `persist qa history for day13 and prepare day14`

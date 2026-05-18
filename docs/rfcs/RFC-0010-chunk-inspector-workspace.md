@@ -159,6 +159,6 @@
 
 1. [README.md](../../README.md)
 2. [RFC Index](./README.md)
-3. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
+3. [plan.md](../work/rag-frontend/plan.md)
 4. [DocumentDetailPage](../../rag-frontend/src/pages/documents/detail.tsx)
 5. [ChunkInspector](../../rag-frontend/src/components/cards/chunk-inspector.tsx)

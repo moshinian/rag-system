@@ -101,26 +101,18 @@ Week 4 之后，dense vs hybrid 对比口径进一步固定为：
 
 当前评测基线由下面几部分组成：
 
-1. 数据集文件：
-   [day20-qa-eval-cases.json](../../rag-backend/work/evaluation/day20-qa-eval-cases.json)
-2. 结果模板：
-   [day20-qa-eval-results-template.md](../../rag-backend/work/evaluation/day20-qa-eval-results-template.md)
-3. 首轮真实结果：
-   [day20-qa-eval-results.md](../../rag-backend/work/evaluation/day20-qa-eval-results.md)
-4. 数据完整性校验：
+1. 本 RFC 记录的固定口径、结果结论和样本维度说明。
+2. 数据完整性校验：
    [QaEvaluationDatasetTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaEvaluationDatasetTest.java)
-5. 真实检索评测夹具：
+3. 真实检索评测夹具：
    [QaRetrievalEvaluationIntegrationTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaRetrievalEvaluationIntegrationTest.java)
-6. Week 4 双轨问题集：
-   [day25-hybrid-eval-cases.json](../../rag-backend/work/evaluation/day25-hybrid-eval-cases.json)
-7. Week 4 结果模板：
-   [day25-hybrid-eval-results-template.md](../../rag-backend/work/evaluation/day25-hybrid-eval-results-template.md)
-8. Week 4 执行 runbook：
-   [day25-hybrid-eval-runbook.md](../../rag-backend/work/evaluation/day25-hybrid-eval-runbook.md)
-9. Week 4 真实结果：
-   [day26-hybrid-eval-results.md](../../rag-backend/work/evaluation/day26-hybrid-eval-results.md)
-10. Week 4 补充样本：
-   [day26-hybrid-supplemental-cases.json](../../rag-backend/work/evaluation/day26-hybrid-supplemental-cases.json)
+4. [week3.md](../work/rag-backend/week3.md) 与 [work day20.md](../work/rag-backend/work%20day20.md) 对 Day 20 基线的阶段收口。
+5. [work day25.md](../work/rag-backend/work%20day25.md) 与 [work day26.md](../work/rag-backend/work%20day26.md) 对 dense vs hybrid 双轨评测的真实记录。
+
+说明：
+
+1. 早期评测 JSON / Markdown 明细文件当前未保留在 `docs/work` 目录中。
+2. 当前仓库里可持续维护的“评测真相源”已经收口为：本 RFC、测试夹具以及对应的 Week / Day 工作记录。
 
 当前数据集的固定事实包括：
 
@@ -200,16 +192,10 @@ Week 4 的真实 dense vs hybrid 结论则进一步补成：
 
 1. [README.md](../../README.md)
 2. [RFC Index](./README.md)
-3. [week3.md](../../rag-backend/work/week3.md)
-4. [current-status.md](../../rag-backend/work/current-status.md)
-5. [work day20.md](../../rag-backend/work/work%20day20.md)
-6. [day20-qa-eval-cases.json](../../rag-backend/work/evaluation/day20-qa-eval-cases.json)
-7. [day20-qa-eval-results-template.md](../../rag-backend/work/evaluation/day20-qa-eval-results-template.md)
-8. [day20-qa-eval-results.md](../../rag-backend/work/evaluation/day20-qa-eval-results.md)
-9. [QaEvaluationDatasetTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaEvaluationDatasetTest.java)
-10. [QaRetrievalEvaluationIntegrationTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaRetrievalEvaluationIntegrationTest.java)
-11. [day25-hybrid-eval-cases.json](../../rag-backend/work/evaluation/day25-hybrid-eval-cases.json)
-12. [day25-hybrid-eval-results-template.md](../../rag-backend/work/evaluation/day25-hybrid-eval-results-template.md)
-13. [day25-hybrid-eval-runbook.md](../../rag-backend/work/evaluation/day25-hybrid-eval-runbook.md)
-14. [day26-hybrid-supplemental-cases.json](../../rag-backend/work/evaluation/day26-hybrid-supplemental-cases.json)
-15. [day26-hybrid-eval-results.md](../../rag-backend/work/evaluation/day26-hybrid-eval-results.md)
+3. [week3.md](../work/rag-backend/week3.md)
+4. [current-status.md](../work/rag-backend/current-status.md)
+5. [work day20.md](../work/rag-backend/work%20day20.md)
+6. [QaEvaluationDatasetTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaEvaluationDatasetTest.java)
+7. [QaRetrievalEvaluationIntegrationTest.java](../../rag-backend/src/test/java/com/example/rag/evaluation/QaRetrievalEvaluationIntegrationTest.java)
+8. [work day25.md](../work/rag-backend/work%20day25.md)
+9. [work day26.md](../work/rag-backend/work%20day26.md)

@@ -116,7 +116,7 @@ Week 2 结束后，系统已经能同步完成文档处理、向量化、检索�
 
 这个 RFC 不只是后端内部实现，因为前端主操作流已经围绕异步索引设计。
 
-从 [frontend plan.md](../../rag-frontend/work/frontend%20plan.md) 可以看到，用户主路径是：
+从 [plan.md](../work/rag-frontend/plan.md) 可以看到，用户主路径是：
 
 1. 上传文档。
 2. 触发 `/index`。
@@ -131,8 +131,8 @@ Week 2 结束后，系统已经能同步完成文档处理、向量化、检索�
 
 1. [DocumentIndexingServiceTest.java](../../rag-backend/src/test/java/com/example/rag/service/DocumentIndexingServiceTest.java) 覆盖提交、重试、并发保护和恢复场景。
 2. 同一测试文件还覆盖“任务记录短暂不可见后可继续执行”和“dispatch 阶段异常会把任务直接落成 `FAILED`”。
-3. [work day15.md](../../rag-backend/work/work%20day15.md) 记录了异步索引起步背景。
-4. [work day16.md](../../rag-backend/work/work%20day16.md) 记录了 retry 与 recovery 的目标和边界。
+3. [work day15.md](../work/rag-backend/work%20day15.md) 记录了异步索引起步背景。
+4. [work day16.md](../work/rag-backend/work%20day16.md) 记录了 retry 与 recovery 的目标和边界。
 
 ## Consequences
 
@@ -167,11 +167,11 @@ Week 2 结束后，系统已经能同步完成文档处理、向量化、检索�
 ## References
 
 1. [README.md](../../README.md)
-2. [week3.md](../../rag-backend/work/week3.md)
-3. [current-status.md](../../rag-backend/work/current-status.md)
-4. [work day15.md](../../rag-backend/work/work%20day15.md)
-5. [work day16.md](../../rag-backend/work/work%20day16.md)
-6. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
+2. [week3.md](../work/rag-backend/week3.md)
+3. [current-status.md](../work/rag-backend/current-status.md)
+4. [work day15.md](../work/rag-backend/work%20day15.md)
+5. [work day16.md](../work/rag-backend/work%20day16.md)
+6. [plan.md](../work/rag-frontend/plan.md)
 7. Commit `9703790` `Add PDF parsing and indexing task tracking`
 8. Commit `8edcf7d` `add async indexing flow for week3 day15`
 9. Commit `b31dc93` `add indexing retry and recovery flow for day16`

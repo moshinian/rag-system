@@ -2,7 +2,7 @@ package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.config.RagEmbeddingProperties;
-import com.example.rag.integration.llm.OpenAiCompatibleClient;
+import com.example.rag.integration.ai.AiGatewayClient;
 import com.example.rag.model.enums.DocumentChunkStatus;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.EmbeddingStatus;
@@ -48,7 +48,7 @@ class DocumentEmbeddingServiceTest {
     private IndexingTaskRepository indexingTaskRepository;
 
     @Mock
-    private OpenAiCompatibleClient openAiCompatibleClient;
+    private AiGatewayClient aiGatewayClient;
 
     @Mock
     private EmbeddingConfigurationStateService embeddingConfigurationStateService;
@@ -58,11 +58,9 @@ class DocumentEmbeddingServiceTest {
     @BeforeEach
     void setUp() {
         RagEmbeddingProperties properties = new RagEmbeddingProperties();
-        properties.setBaseUrl("http://localhost:8001/v1");
-        properties.setApiKey("");
+        properties.setProvider("rag-ai-service");
         properties.setModel("bge-small-zh-v1.5");
         properties.setVectorDimensions(2);
-        properties.setEmbeddingPath("/embeddings");
         properties.setBatchSize(16);
         documentEmbeddingService = new DocumentEmbeddingService(
                 knowledgeBaseRepository,
@@ -70,7 +68,7 @@ class DocumentEmbeddingServiceTest {
                 documentChunkRepository,
                 indexingTaskRepository,
                 properties,
-                openAiCompatibleClient,
+                aiGatewayClient,
                 embeddingConfigurationStateService
         );
     }
@@ -101,20 +99,14 @@ class DocumentEmbeddingServiceTest {
                 .thenReturn(List.of(chunk1, chunk2))
                 .thenReturn(List.of(chunk3))
                 .thenReturn(List.of());
-        when(openAiCompatibleClient.createEmbeddings(
-                eq("http://localhost:8001/v1"),
-                eq(""),
-                eq("/embeddings"),
+        when(aiGatewayClient.createEmbeddings(
                 eq("bge-small-zh-v1.5"),
                 eq(List.of("第一段", "第二段"))
         )).thenReturn(List.of(
                 List.of(0.1D, 0.2D),
                 List.of(0.3D, 0.4D)
         ));
-        when(openAiCompatibleClient.createEmbeddings(
-                eq("http://localhost:8001/v1"),
-                eq(""),
-                eq("/embeddings"),
+        when(aiGatewayClient.createEmbeddings(
                 eq("bge-small-zh-v1.5"),
                 eq(List.of("第三段"))
         )).thenReturn(List.of(
@@ -127,9 +119,9 @@ class DocumentEmbeddingServiceTest {
         assertThat(response.embeddedChunkCount()).isEqualTo(3);
         assertThat(response.failedChunkCount()).isZero();
         assertThat(response.totalEmbeddedChunkCount()).isEqualTo(3L);
-        verify(documentChunkRepository).updateEmbeddingVector(eq(1L), eq(EmbeddingStatus.EMBEDDED), eq("bge-small-zh-v1.5"), eq("local-openai-compatible"), eq("fp-1"), eq(null), eq("system"), eq("[0.100000000000,0.200000000000]"), any());
-        verify(documentChunkRepository).updateEmbeddingVector(eq(2L), eq(EmbeddingStatus.EMBEDDED), eq("bge-small-zh-v1.5"), eq("local-openai-compatible"), eq("fp-1"), eq(null), eq("system"), eq("[0.300000000000,0.400000000000]"), any());
-        verify(documentChunkRepository).updateEmbeddingVector(eq(3L), eq(EmbeddingStatus.EMBEDDED), eq("bge-small-zh-v1.5"), eq("local-openai-compatible"), eq("fp-1"), eq(null), eq("system"), eq("[0.500000000000,0.600000000000]"), any());
+        verify(documentChunkRepository).updateEmbeddingVector(eq(1L), eq(EmbeddingStatus.EMBEDDED), eq("bge-small-zh-v1.5"), eq("rag-ai-service"), eq("fp-1"), eq(null), eq("system"), eq("[0.100000000000,0.200000000000]"), any());
+        verify(documentChunkRepository).updateEmbeddingVector(eq(2L), eq(EmbeddingStatus.EMBEDDED), eq("bge-small-zh-v1.5"), eq("rag-ai-service"), eq("fp-1"), eq(null), eq("system"), eq("[0.300000000000,0.400000000000]"), any());
+        verify(documentChunkRepository).updateEmbeddingVector(eq(3L), eq(EmbeddingStatus.EMBEDDED), eq("bge-small-zh-v1.5"), eq("rag-ai-service"), eq("fp-1"), eq(null), eq("system"), eq("[0.500000000000,0.600000000000]"), any());
     }
 
     @Test
@@ -203,10 +195,7 @@ class DocumentEmbeddingServiceTest {
         }});
         when(documentChunkRepository.findEmbeddableChunksByDocumentId(eq(200L), any(), eq(16)))
                 .thenReturn(List.of(chunk));
-        when(openAiCompatibleClient.createEmbeddings(
-                eq("http://localhost:8001/v1"),
-                eq(""),
-                eq("/embeddings"),
+        when(aiGatewayClient.createEmbeddings(
                 eq("bge-small-zh-v1.5"),
                 eq(List.of("第一段"))
         )).thenReturn(List.of(List.of(0.1D)));
@@ -221,11 +210,8 @@ class DocumentEmbeddingServiceTest {
     void embedShouldClampBatchSizeForDashScopeCompatibleProvider() {
         RagEmbeddingProperties properties = new RagEmbeddingProperties();
         properties.setProvider("aliyun-bailian-openai-compatible");
-        properties.setBaseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1");
-        properties.setApiKey("");
         properties.setModel("text-embedding-v4");
         properties.setVectorDimensions(2);
-        properties.setEmbeddingPath("/embeddings");
         properties.setBatchSize(16);
         documentEmbeddingService = new DocumentEmbeddingService(
                 knowledgeBaseRepository,
@@ -233,7 +219,7 @@ class DocumentEmbeddingServiceTest {
                 documentChunkRepository,
                 indexingTaskRepository,
                 properties,
-                openAiCompatibleClient,
+                aiGatewayClient,
                 embeddingConfigurationStateService
         );
 
@@ -258,10 +244,7 @@ class DocumentEmbeddingServiceTest {
         when(documentChunkRepository.findEmbeddableChunksByDocumentId(eq(200L), any(), eq(10)))
                 .thenReturn(List.of(chunk))
                 .thenReturn(List.of());
-        when(openAiCompatibleClient.createEmbeddings(
-                eq("https://dashscope.aliyuncs.com/compatible-mode/v1"),
-                eq(""),
-                eq("/embeddings"),
+        when(aiGatewayClient.createEmbeddings(
                 eq("text-embedding-v4"),
                 eq(List.of("第一段"))
         )).thenReturn(List.of(List.of(0.1D, 0.2D)));

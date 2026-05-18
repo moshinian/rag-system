@@ -83,10 +83,8 @@ class EmbeddingConfigurationStateServiceTest {
 
     private RagEmbeddingProperties createProperties() {
         RagEmbeddingProperties properties = new RagEmbeddingProperties();
-        properties.setProvider("aliyun");
-        properties.setBaseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1");
+        properties.setProvider("rag-ai-service");
         properties.setModel("text-embedding-v4");
-        properties.setEmbeddingPath("/embeddings");
         properties.setDistanceMetric("cosine");
         properties.setVectorDimensions(1024);
         return properties;

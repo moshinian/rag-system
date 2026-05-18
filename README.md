@@ -2,6 +2,8 @@
 
 一个面向企业内部知识库场景的 RAG 系统仓库，包含 Spring Boot 后端、React 前端，以及本地开发用的 PostgreSQL / Redis 依赖编排。当前聚焦结算领域文档的沉淀、检索、问答、来源返回和问答记录。
 
+当前仓库还新增了独立的 `rag-ai-service` Python FastAPI 模块，作为 Java 主系统前面的最小 AI Gateway，用于统一封装 embeddings 和 chat completions 调用。
+
 当前仓库的真实阶段不是“设计中”，而是已经完成了前 4 周的第一版实现；Week 4 已完成第一版 hybrid retrieval、真实评测与最小观测收口：
 
 1. Week 1：文档入库主链路完成
@@ -168,11 +170,12 @@ Week 4 结束后，当前项目可以稳定表达为：
 - Spring Boot Actuator
 - PDFBox
 - OpenAI-compatible HTTP 集成
+- Python FastAPI AI Gateway
 
 当前设计取舍很明确：
 
 1. 第一阶段优先用 PostgreSQL 统一承载主数据、任务数据和向量数据
-2. embedding 统一走 OpenAI-compatible HTTP 接口，降低 Java 主服务耦合
+2. Java 主服务统一通过 `rag-ai-service` 调用 OpenAI-compatible 模型能力，降低业务系统对具体 provider 的耦合
 3. 先把单服务版本做完整，再考虑更复杂的编排和检索优化
 4. 混合检索先采用 PostgreSQL 内 keyword recall + RRF 的轻量路线，先把效果对比和观测口径站稳，再决定是否继续引入更重基础设施
 5. `POSTGRES_FTS` 当前只作为同库内的实验性 lexical strategy；在中文场景收益未被真实评测确认前，不替换默认 `LIKE`
@@ -208,6 +211,16 @@ rag-system/
 │   │   └── test/                   # 单元测试、集成测试、评测夹具
 │   ├── data/uploads/               # 本地文档上传落盘目录
 │   └── work/                       # 周计划、阶段记录、样本文档、评测结果
+├── rag-ai-service/                 # Python FastAPI AI Gateway
+│   ├── pyproject.toml
+│   ├── Dockerfile
+│   ├── app/
+│   │   ├── api/                    # /health /v1/embeddings /v1/chat/completions
+│   │   ├── clients/                # 上游 OpenAI-compatible provider client
+│   │   ├── core/                   # 配置、异常、requestId middleware
+│   │   ├── models/                 # OpenAI-compatible request/response models
+│   │   └── services/               # gateway 编排与日志
+│   └── tests/                      # FastAPI 接口测试
 ├── rag-frontend/                   # React 前端工程
 │   ├── package.json
 │   ├── vite.config.ts
@@ -221,16 +234,18 @@ rag-system/
 │   │   ├── styles/                 # 全局样式
 │   │   ├── types/                  # 前端类型声明
 │   │   └── utils/                  # 格式化、状态映射
-│   ├── work/frontend plan.md       # 前端规划、完成情况、后续路线
 │   └── dist/                       # 前端生产构建产物
+├── docs/
+│   ├── rfcs/                       # 长期工程决策
+│   └── work/                       # 各板块状态、计划与推进记录
 ```
 
 ### 结构说明
 
 1. 根目录现在保留了聚合 `pom.xml`，目的是让 VS Code Java / Spring Boot Dashboard 在只打开仓库根目录时也能识别 `rag-backend` 模块。
 2. `rag-system.code-workspace` 当前只挂载仓库根目录，避免把根目录和 `rag-backend` / `rag-frontend` 重复加入 workspace 后造成 Java 项目重复导入。
-3. 后端的 `work/` 已迁移到 `rag-backend/work/`，所有周记、评测与样本文档都在这里。
-4. 前端的 `work/frontend plan.md` 记录的是页面规划、当前完成情况与后续可扩展路线，不参与构建。
+3. 各板块的工作文档已统一迁移到 `docs/work/`，按 `README + current-status + plan + history` 组织。
+4. `docs/work/rag-backend/`、`docs/work/rag-frontend/` 和 `docs/work/rag-ai-service/` 现在分别承接各自板块的状态、计划和推进记录。
 
 ## 核心数据
 
@@ -463,11 +478,10 @@ curl --noproxy '*' -s http://127.0.0.1:8080/api/health/redis-probe
 
 这组评测基线当前已经有完整仓库资产支撑：
 
-1. 数据集文件：`rag-backend/work/evaluation/day20-qa-eval-cases.json`
-2. 结果模板与首轮真实结果记录：`rag-backend/work/evaluation/`
-3. 数据完整性测试：`QaEvaluationDatasetTest`
-4. 真实检索评测夹具：`QaRetrievalEvaluationIntegrationTest`
-5. 当前样本与评测测试路径已经统一收口，不再依赖脆弱的相对目录猜测
+1. 评测口径说明：`docs/rfcs/RFC-0009-evaluation-dataset-and-acceptance-baseline.md`
+2. 数据完整性测试：`QaEvaluationDatasetTest`
+3. 真实检索评测夹具：`QaRetrievalEvaluationIntegrationTest`
+4. 当前周记、状态文档和 RFC 已经能共同还原评测结论
 
 ### 2026-05-04 RAG 与 Redis 联调
 
@@ -512,9 +526,12 @@ curl --noproxy '*' -s http://127.0.0.1:8080/api/health/redis-probe
 
 ## 相关文档
 
-1. [当前状态](/root/workspace/rag-system/rag-backend/work/current-status.md)
-2. [Week 1](/root/workspace/rag-system/rag-backend/work/week1.md)
-3. [Week 2](/root/workspace/rag-system/rag-backend/work/week2.md)
-4. [Week 3](/root/workspace/rag-system/rag-backend/work/week3.md)
-4. [Week 4](/root/workspace/rag-system/rag-backend/work/week4.md)
-5. [前端规划与完成情况](/root/workspace/rag-system/rag-frontend/work/frontend%20plan.md)
+1. [当前状态](/root/workspace/rag-system/docs/work/rag-backend/current-status.md)
+2. [后端计划](/root/workspace/rag-system/docs/work/rag-backend/plan.md)
+3. [Week 1](/root/workspace/rag-system/docs/work/rag-backend/week1.md)
+4. [Week 2](/root/workspace/rag-system/docs/work/rag-backend/week2.md)
+5. [Week 3](/root/workspace/rag-system/docs/work/rag-backend/week3.md)
+6. [Week 4](/root/workspace/rag-system/docs/work/rag-backend/week4.md)
+7. [前端当前状态](/root/workspace/rag-system/docs/work/rag-frontend/current-status.md)
+8. [前端计划](/root/workspace/rag-system/docs/work/rag-frontend/plan.md)
+9. [AI Gateway 当前状态](/root/workspace/rag-system/docs/work/rag-ai-service/current-status.md)

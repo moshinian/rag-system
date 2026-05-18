@@ -94,7 +94,7 @@ readiness gate 的一个关键实现点是，它不只是“判断”，还要�
 
 readiness gate 还有一个常被低估的价值：它已经成为前后端共享的操作提示协议。
 
-从 [frontend plan.md](../../rag-frontend/work/frontend%20plan.md) 可以看出，前端工作台、知识库概览页、检索页和问答页都依赖 readiness 返回的 `questionAnsweringReady` 和 `nextStep` 决定 CTA 与页面引导。这意味着 readiness 不只是后端内部防线，还承担了：
+从 [plan.md](../work/rag-frontend/plan.md) 可以看出，前端工作台、知识库概览页、检索页和问答页都依赖 readiness 返回的 `questionAnsweringReady` 和 `nextStep` 决定 CTA 与页面引导。这意味着 readiness 不只是后端内部防线，还承担了：
 
 1. 告诉用户“当前库能不能问答”。
 2. 告诉用户“下一步该上传文档、补索引，还是等待重建完成”。
@@ -131,7 +131,7 @@ readiness gate 还有一个常被低估的价值：它已经成为前后端共�
 ## References
 
 1. [README.md](../../README.md)
-2. [week3.md](../../rag-backend/work/week3.md)
-3. [current-status.md](../../rag-backend/work/current-status.md)
-4. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
+2. [week3.md](../work/rag-backend/week3.md)
+3. [current-status.md](../work/rag-backend/current-status.md)
+4. [plan.md](../work/rag-frontend/plan.md)
 5. Commit `bab81c2` `Add Redis business caching and close week 3`

@@ -63,20 +63,21 @@ rag:
     overlap-chars: 80
     min-break-search-offset: 240
   embedding:
-    provider: aliyun-bailian-openai-compatible
-    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    api-key: ${DASHSCOPE_API_KEY:}
+    provider: rag-ai-service
     model: text-embedding-v4
     vector-dimensions: 1024
     distance-metric: cosine
-    embedding-path: /embeddings
     batch-size: 10
+  ai:
+    gateway:
+      base-url: http://localhost:8001
+      embeddings-path: /v1/embeddings
+      chat-completions-path: /v1/chat/completions
+      connect-timeout-millis: 5000
+      read-timeout-millis: 30000
   llm:
     chat:
-      base-url: https://api.deepseek.com
-      api-key: ${DEEPSEEK_API_KEY:}
       model: deepseek-v4-pro
-      chat-path: /chat/completions
       temperature: 0.2
       max-output-tokens: 1200
   retrieval:
@@ -87,7 +88,7 @@ rag:
     dense-candidate-limit: 8
     keyword-candidate-limit: 8
     fusion-k: 60
-    keyword-strategy: POSTGRES_FTS
+    keyword-strategy: LIKE
     keyword-ts-config: simple
     keyword-rank-function: ts_rank_cd
     keyword-min-token-length: 3
