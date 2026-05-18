@@ -1,8 +1,9 @@
 package com.example.rag.service;
 
+import com.example.rag.config.RagAiGatewayProperties;
 import com.example.rag.config.RagEmbeddingProperties;
 import com.example.rag.config.RagLlmProperties;
-import com.example.rag.integration.llm.OpenAiCompatibleClient;
+import com.example.rag.integration.ai.AiGatewayClient;
 import com.example.rag.model.response.HealthComponentStatusResponse;
 import com.example.rag.model.response.HealthStatusResponse;
 import com.example.rag.model.response.RedisProbeResponse;
@@ -25,13 +26,14 @@ import java.util.Map;
  */
 @Service
 public class SystemHealthService {
-    private static final int LLM_HEALTH_PROBE_MAX_TOKENS = 16;
+    private static final int LLM_HEALTH_PROBE_MAX_TOKENS = 64;
     private final Environment environment;
     private final JdbcTemplate jdbcTemplate;
     private final StringRedisTemplate stringRedisTemplate;
     private final RagEmbeddingProperties ragEmbeddingProperties;
     private final RagLlmProperties ragLlmProperties;
-    private final OpenAiCompatibleClient openAiCompatibleClient;
+    private final RagAiGatewayProperties ragAiGatewayProperties;
+    private final AiGatewayClient aiGatewayClient;
 
     /** 构造SystemHealthService。 */
     public SystemHealthService(Environment environment,
@@ -39,13 +41,15 @@ public class SystemHealthService {
                                StringRedisTemplate stringRedisTemplate,
                                RagEmbeddingProperties ragEmbeddingProperties,
                                RagLlmProperties ragLlmProperties,
-                               OpenAiCompatibleClient openAiCompatibleClient) {
+                               RagAiGatewayProperties ragAiGatewayProperties,
+                               AiGatewayClient aiGatewayClient) {
         this.environment = environment;
         this.jdbcTemplate = jdbcTemplate;
         this.stringRedisTemplate = stringRedisTemplate;
         this.ragEmbeddingProperties = ragEmbeddingProperties;
         this.ragLlmProperties = ragLlmProperties;
-        this.openAiCompatibleClient = openAiCompatibleClient;
+        this.ragAiGatewayProperties = ragAiGatewayProperties;
+        this.aiGatewayClient = aiGatewayClient;
     }
 
     /** 返回服务当前状态及关键依赖组件状态。 */
@@ -148,18 +152,15 @@ public class SystemHealthService {
         long startedAt = System.nanoTime();
         try {
             // embedding 健康检查要求真实返回向量，不只检查 HTTP 200。
-            openAiCompatibleClient.createEmbedding(
-                    ragEmbeddingProperties.getBaseUrl(),
-                    ragEmbeddingProperties.getApiKey(),
-                    ragEmbeddingProperties.getEmbeddingPath(),
+            aiGatewayClient.probeEmbedding(
                     ragEmbeddingProperties.getModel(),
                     "health check"
             );
             return new HealthComponentStatusResponse(
                     "UP",
                     "ai-capability",
-                    joinUrl(ragEmbeddingProperties.getBaseUrl(), ragEmbeddingProperties.getEmbeddingPath()),
-                    ragEmbeddingProperties.getProvider(),
+                    joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getEmbeddingsPath()),
+                    "rag-ai-service",
                     ragEmbeddingProperties.getModel(),
                     elapsedMillis(startedAt),
                     "Embedding request returned a vector",
@@ -170,8 +171,8 @@ public class SystemHealthService {
             return new HealthComponentStatusResponse(
                     "DOWN",
                     "ai-capability",
-                    joinUrl(ragEmbeddingProperties.getBaseUrl(), ragEmbeddingProperties.getEmbeddingPath()),
-                    ragEmbeddingProperties.getProvider(),
+                    joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getEmbeddingsPath()),
+                    "rag-ai-service",
                     ragEmbeddingProperties.getModel(),
                     elapsedMillis(startedAt),
                     "Embedding request failed",
@@ -187,21 +188,18 @@ public class SystemHealthService {
         RagLlmProperties.ChatProperties chat = ragLlmProperties.getChat();
         try {
             // LLM 探针只要求最小 completion 合法返回，避免健康检查本身消耗过多 token。
-            openAiCompatibleClient.probeChatCompletion(
-                    chat.getBaseUrl(),
-                    chat.getApiKey(),
-                    chat.getChatPath(),
+            aiGatewayClient.probeChatCompletion(
                     chat.getModel(),
-                    chat.getTemperature(),
+                    0D,
                     resolveLlmProbeMaxTokens(chat.getMaxOutputTokens()),
-                    "You are a health check endpoint. Return a very short reply.",
+                    "You are a health check endpoint. Reply with exactly pong.",
                     "ping"
             );
             return new HealthComponentStatusResponse(
                     "UP",
                     "ai-capability",
-                    joinUrl(chat.getBaseUrl(), chat.getChatPath()),
-                    "openai-compatible-chat",
+                    joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getChatCompletionsPath()),
+                    "rag-ai-service",
                     chat.getModel(),
                     elapsedMillis(startedAt),
                     "Chat completion request returned a response",
@@ -212,8 +210,8 @@ public class SystemHealthService {
             return new HealthComponentStatusResponse(
                     "DOWN",
                     "ai-capability",
-                    joinUrl(chat.getBaseUrl(), chat.getChatPath()),
-                    "openai-compatible-chat",
+                    joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getChatCompletionsPath()),
+                    "rag-ai-service",
                     chat.getModel(),
                     elapsedMillis(startedAt),
                     "Chat completion request failed",

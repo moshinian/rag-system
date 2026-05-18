@@ -13,10 +13,7 @@ public class RagLlmProperties {
 
     @Data
     public static class ChatProperties {
-        private String baseUrl = "https://api.deepseek.com";
-        private String apiKey = "${DEEPSEEK_API_KEY}";
         private String model = "deepseek-v4-pro";
-        private String chatPath = "/chat/completions";
         private Double temperature = 0.2D;
         private Integer maxOutputTokens = 1200;
     }

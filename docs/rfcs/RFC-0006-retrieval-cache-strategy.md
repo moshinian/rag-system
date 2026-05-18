@@ -173,9 +173,9 @@ Week 4 之后，`qaRetrieval` 的缓存 key 已扩展为：
 1. [RedisCacheConfigTest.java](../../rag-backend/src/test/java/com/example/rag/config/RedisCacheConfigTest.java) 验证 Redis serializer 与配置行为。
 2. [RedisCacheConfigIntegrationTest.java](../../rag-backend/src/test/java/com/example/rag/config/RedisCacheConfigIntegrationTest.java) 验证 `@Cacheable` 真实经过 Redis、读到坏值、自愈回源和重建缓存的链路。
 3. [README.md](../../README.md) 记录了真实 Redis 联调和缓存写入观察。
-4. [week3.md](../../rag-backend/work/week3.md) 与 [current-status.md](../../rag-backend/work/current-status.md) 记录了缓存接入范围与工程取舍。
-5. [work day22.md](../../rag-backend/work/work%20day22.md) 记录了 Week 4 对 retrieval cache key 纳入 `retrievalMode` 的正式约束。
-6. [work day23.md](../../rag-backend/work/work%20day23.md) 记录了 retrieval cache key 修正的落地。
+4. [week3.md](../work/rag-backend/week3.md) 与 [current-status.md](../work/rag-backend/current-status.md) 记录了缓存接入范围与工程取舍。
+5. [work day22.md](../work/rag-backend/work%20day22.md) 记录了 Week 4 对 retrieval cache key 纳入 `retrievalMode` 的正式约束。
+6. [work day23.md](../work/rag-backend/work%20day23.md) 记录了 retrieval cache key 修正的落地。
 
 ## Consequences
 
@@ -210,9 +210,9 @@ Week 4 之后，`qaRetrieval` 的缓存 key 已扩展为：
 ## References
 
 1. [README.md](../../README.md)
-2. [week3.md](../../rag-backend/work/week3.md)
-3. [current-status.md](../../rag-backend/work/current-status.md)
-4. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
+2. [week3.md](../work/rag-backend/week3.md)
+3. [current-status.md](../work/rag-backend/current-status.md)
+4. [plan.md](../work/rag-frontend/plan.md)
 5. Commit `bab81c2` `Add Redis business caching and close week 3`
 6. Commit `3d9cf4d` `Close week 3 review and fix Redis cache config`
 7. Commit `764df97` `Fix indexing state consistency and cache regressions`

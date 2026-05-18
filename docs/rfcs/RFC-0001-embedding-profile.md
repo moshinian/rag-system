@@ -129,9 +129,9 @@
 ## References
 
 1. [README.md](../../README.md)
-2. [week2.md](../../rag-backend/work/week2.md)
-3. [current-status.md](../../rag-backend/work/current-status.md)
-4. [work day9.md](../../rag-backend/work/work%20day9.md)
-5. [work day10.md](../../rag-backend/work/work%20day10.md)
+2. [week2.md](../work/rag-backend/week2.md)
+3. [current-status.md](../work/rag-backend/current-status.md)
+4. [work day9.md](../work/rag-backend/work%20day9.md)
+5. [work day10.md](../work/rag-backend/work%20day10.md)
 6. Commit `5185f87` `Add local embedding pipeline and day 9 docs`
 7. Commit `29507a6` `implement day10 retrieval and prepare day11`

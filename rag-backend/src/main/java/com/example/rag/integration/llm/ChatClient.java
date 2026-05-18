@@ -1,6 +1,7 @@
 package com.example.rag.integration.llm;
 
 import com.example.rag.config.RagLlmProperties;
+import com.example.rag.integration.ai.AiGatewayClient;
 import org.springframework.stereotype.Component;
 
 /**
@@ -11,22 +12,19 @@ import org.springframework.stereotype.Component;
 @Component
 public class ChatClient {
     private final RagLlmProperties ragLlmProperties;
-    private final OpenAiCompatibleClient openAiCompatibleClient;
+    private final AiGatewayClient aiGatewayClient;
 
     /** 构造ChatClient。 */
     public ChatClient(RagLlmProperties ragLlmProperties,
-                      OpenAiCompatibleClient openAiCompatibleClient) {
+                      AiGatewayClient aiGatewayClient) {
         this.ragLlmProperties = ragLlmProperties;
-        this.openAiCompatibleClient = openAiCompatibleClient;
+        this.aiGatewayClient = aiGatewayClient;
     }
 
     /** 调用 OpenAI-compatible chat completion 并返回回答。 */
     public String chat(String systemPrompt, String userPrompt) {
         RagLlmProperties.ChatProperties chat = ragLlmProperties.getChat();
-        return openAiCompatibleClient.createChatCompletion(
-                chat.getBaseUrl(),
-                chat.getApiKey(),
-                chat.getChatPath(),
+        return aiGatewayClient.createChatCompletion(
                 chat.getModel(),
                 chat.getTemperature(),
                 chat.getMaxOutputTokens(),

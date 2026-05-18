@@ -2,7 +2,7 @@ package com.example.rag.service;
 
 import com.example.rag.config.RagEmbeddingProperties;
 import com.example.rag.config.RagRetrievalProperties;
-import com.example.rag.integration.llm.OpenAiCompatibleClient;
+import com.example.rag.integration.ai.AiGatewayClient;
 import com.example.rag.model.dto.RetrievedChunkCandidate;
 import com.example.rag.model.enums.KeywordStrategy;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
@@ -37,7 +37,7 @@ class QuestionAnsweringServiceTest {
     private DocumentChunkRepository documentChunkRepository;
 
     @Mock
-    private OpenAiCompatibleClient openAiCompatibleClient;
+    private AiGatewayClient aiGatewayClient;
 
     @Mock
     private RetrievalReadinessService retrievalReadinessService;
@@ -72,7 +72,7 @@ class QuestionAnsweringServiceTest {
                 documentChunkRepository,
                 embeddingProperties,
                 retrievalProperties,
-                openAiCompatibleClient,
+                aiGatewayClient,
                 retrievalReadinessService
         );
     }
@@ -167,10 +167,7 @@ class QuestionAnsweringServiceTest {
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
         org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
-        when(openAiCompatibleClient.createEmbedding(
-                eq("http://localhost:8001/v1"),
-                eq(""),
-                eq("/embeddings"),
+        when(aiGatewayClient.createEmbedding(
                 eq("text-embedding-3-small"),
                 eq("结算异常怎么处理")
         )).thenReturn(List.of(0.11D, 0.22D));
@@ -211,10 +208,7 @@ class QuestionAnsweringServiceTest {
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
         org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
-        when(openAiCompatibleClient.createEmbedding(
-                eq("http://localhost:8001/v1"),
-                eq(""),
-                eq("/embeddings"),
+        when(aiGatewayClient.createEmbedding(
                 eq("text-embedding-3-small"),
                 eq("结算异常怎么处理")
         )).thenReturn(List.of(0.11D, 0.22D));
@@ -269,10 +263,7 @@ class QuestionAnsweringServiceTest {
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
         org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
-        when(openAiCompatibleClient.createEmbedding(
-                eq("http://localhost:8001/v1"),
-                eq(""),
-                eq("/embeddings"),
+        when(aiGatewayClient.createEmbedding(
                 eq("text-embedding-3-small"),
                 eq("invoice status code")
         )).thenReturn(List.of(0.11D, 0.22D));
@@ -312,10 +303,7 @@ class QuestionAnsweringServiceTest {
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
         org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
-        when(openAiCompatibleClient.createEmbedding(
-                eq("http://localhost:8001/v1"),
-                eq(""),
-                eq("/embeddings"),
+        when(aiGatewayClient.createEmbedding(
                 eq("text-embedding-3-small"),
                 eq("哪个文档提到 spot check？")
         )).thenReturn(List.of(0.11D, 0.22D));
@@ -353,10 +341,7 @@ class QuestionAnsweringServiceTest {
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
         org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
-        when(openAiCompatibleClient.createEmbedding(
-                eq("http://localhost:8001/v1"),
-                eq(""),
-                eq("/embeddings"),
+        when(aiGatewayClient.createEmbedding(
                 eq("text-embedding-3-small"),
                 eq("第二百三十八条的")
         )).thenReturn(List.of(0.11D, 0.22D));

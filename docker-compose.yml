@@ -1,5 +1,22 @@
 services:
 
+  rag-ai-service:
+    build:
+      context: ./rag-ai-service
+    container_name: rag-ai-service
+    restart: unless-stopped
+    environment:
+      EMBEDDING_PROVIDER: aliyun-bailian-openai-compatible
+      EMBEDDING_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
+      EMBEDDING_API_KEY: ${DASHSCOPE_API_KEY:-}
+      EMBEDDING_DEFAULT_MODEL: text-embedding-v4
+      CHAT_PROVIDER: deepseek-openai-compatible
+      CHAT_BASE_URL: https://api.deepseek.com
+      CHAT_API_KEY: ${DEEPSEEK_API_KEY:-}
+      CHAT_DEFAULT_MODEL: deepseek-v4-pro
+    ports:
+      - "8001:8001"
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: rag-postgres

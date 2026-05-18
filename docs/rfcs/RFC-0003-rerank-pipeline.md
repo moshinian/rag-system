@@ -44,8 +44,8 @@
 
 与 rerank 相关的历史信号主要来自文档，而不是现有代码：
 
-1. [work day1.md](../../rag-backend/work/work%20day1.md) 很早就把“重排序”列进能力版图，说明团队从早期就在为它预留概念空间。
-2. [work day22.md](../../rag-backend/work/work%20day22.md) 已明确 Week 4 先固定为 `dense + keyword + RRF`，并刻意把 rerank 留在 RFC 规划范围内。
+1. [work day1.md](../work/rag-backend/work%20day1.md) 很早就把“重排序”列进能力版图，说明团队从早期就在为它预留概念空间。
+2. [work day22.md](../work/rag-backend/work%20day22.md) 已明确 Week 4 先固定为 `dense + keyword + RRF`，并刻意把 rerank 留在 RFC 规划范围内。
 3. [README.md](../../README.md) 现已明确写到：Week 4 完成的是 hybrid retrieval，而不是 rerank。
 
 换句话说，rerank 不是突然冒出来的新需求，而是历史 backlog 中一直存在、但尚未进入已实现范围的主题。
@@ -140,8 +140,8 @@ rerank 真正落地前，至少需要补齐这些决策：
 ## References
 
 1. [README.md](../../README.md)
-2. [week2.md](../../rag-backend/work/week2.md)
-3. [week3.md](../../rag-backend/work/week3.md)
-4. [work day1.md](../../rag-backend/work/work%20day1.md)
-5. [work day19.md](../../rag-backend/work/work%20day19.md)
-6. [work day20.md](../../rag-backend/work/work%20day20.md)
+2. [week2.md](../work/rag-backend/week2.md)
+3. [week3.md](../work/rag-backend/week3.md)
+4. [work day1.md](../work/rag-backend/work%20day1.md)
+5. [work day19.md](../work/rag-backend/work%20day19.md)
+6. [work day20.md](../work/rag-backend/work%20day20.md)

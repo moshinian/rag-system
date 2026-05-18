@@ -4,7 +4,7 @@ import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.config.CacheNames;
 import com.example.rag.config.RagEmbeddingProperties;
-import com.example.rag.integration.llm.OpenAiCompatibleClient;
+import com.example.rag.integration.ai.AiGatewayClient;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.EmbeddingStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
@@ -43,7 +43,7 @@ public class DocumentEmbeddingService {
     private final DocumentChunkRepository documentChunkRepository;
     private final IndexingTaskRepository indexingTaskRepository;
     private final RagEmbeddingProperties ragEmbeddingProperties;
-    private final OpenAiCompatibleClient openAiCompatibleClient;
+    private final AiGatewayClient aiGatewayClient;
     private final EmbeddingConfigurationStateService embeddingConfigurationStateService;
 
     /** 注入文档向量化所需依赖。 */
@@ -52,14 +52,14 @@ public class DocumentEmbeddingService {
                                     DocumentChunkRepository documentChunkRepository,
                                     IndexingTaskRepository indexingTaskRepository,
                                     RagEmbeddingProperties ragEmbeddingProperties,
-                                    OpenAiCompatibleClient openAiCompatibleClient,
+                                    AiGatewayClient aiGatewayClient,
                                     EmbeddingConfigurationStateService embeddingConfigurationStateService) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentRepository = documentRepository;
         this.documentChunkRepository = documentChunkRepository;
         this.indexingTaskRepository = indexingTaskRepository;
         this.ragEmbeddingProperties = ragEmbeddingProperties;
-        this.openAiCompatibleClient = openAiCompatibleClient;
+        this.aiGatewayClient = aiGatewayClient;
         this.embeddingConfigurationStateService = embeddingConfigurationStateService;
     }
 
@@ -146,10 +146,7 @@ public class DocumentEmbeddingService {
             }
 
             try {
-                List<List<Double>> embeddings = openAiCompatibleClient.createEmbeddings(
-                        ragEmbeddingProperties.getBaseUrl(),
-                        ragEmbeddingProperties.getApiKey(),
-                        ragEmbeddingProperties.getEmbeddingPath(),
+                List<List<Double>> embeddings = aiGatewayClient.createEmbeddings(
                         ragEmbeddingProperties.getModel(),
                         chunks.stream().map(DocumentChunkEntity::getContent).toList()
                 );
@@ -304,11 +301,7 @@ public class DocumentEmbeddingService {
     /** 判断当前是否使用 DashScope 兼容 embedding 接口。 */
     private boolean usesDashScopeCompatibleEmbeddings() {
         String provider = ragEmbeddingProperties.getProvider();
-        if (provider != null && provider.toLowerCase(Locale.ROOT).contains("aliyun")) {
-            return true;
-        }
-        String baseUrl = ragEmbeddingProperties.getBaseUrl();
-        return baseUrl != null && baseUrl.contains("dashscope.aliyuncs.com");
+        return provider != null && provider.toLowerCase(Locale.ROOT).contains("aliyun");
     }
 
     /** 封装一次 embedding 写入所需的上下文字段。 */

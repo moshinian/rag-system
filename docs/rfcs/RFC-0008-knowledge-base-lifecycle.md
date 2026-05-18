@@ -164,7 +164,7 @@
 ## References
 
 1. [README.md](../../README.md)
-2. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
+2. [plan.md](../work/rag-frontend/plan.md)
 3. [RFC-0002-readiness-gate.md](./RFC-0002-readiness-gate.md)
 4. [RFC-0004-async-indexing-and-recovery.md](./RFC-0004-async-indexing-and-recovery.md)
 5. [RFC-0006-retrieval-cache-strategy.md](./RFC-0006-retrieval-cache-strategy.md)

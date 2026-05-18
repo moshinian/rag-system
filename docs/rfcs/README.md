@@ -6,9 +6,9 @@
 
 这里的 RFC 不替代：
 
-1. `rag-backend/work/` 里的日记式推进记录。
+1. `docs/work/` 里的日记式推进记录。
 2. `README.md` 里的项目总览。
-3. `rag-backend/work/` 和 `rag-frontend/work/` 里的阶段性推进记录。
+3. `docs/work/` 下各板块的阶段性推进记录。
 
 这里的 RFC 负责把“分散在周记、日记、提交记录和代码里的长期决策”整理成可持续维护的单点文档。
 
@@ -67,7 +67,7 @@
 
 ## Candidate Backlog
 
-结合当前仓库里的 `README.md`、`rag-backend/work/` 下周记/日记、前端计划和最近提交记录，下一批最值得进入 RFC 的主题有这些：
+结合当前仓库里的 `README.md`、`docs/work/rag-backend/` 下周记/日记、前端计划和最近提交记录，下一批最值得进入 RFC 的主题有这些：
 
 ### RFC-0012 Multi-instance Task Coordination And Cancellation
 
@@ -84,24 +84,24 @@
 当前 RFC 目录最主要的历史来源如下：
 
 1. [README.md](../../README.md)
-2. [current-status.md](../../rag-backend/work/current-status.md)
-3. [week1.md](../../rag-backend/work/week1.md)
-4. [week2.md](../../rag-backend/work/week2.md)
-5. [week3.md](../../rag-backend/work/week3.md)
-6. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
-7. [work day20.md](../../rag-backend/work/work%20day20.md)
-8. [work day25.md](../../rag-backend/work/work%20day25.md)
-9. [work day26.md](../../rag-backend/work/work%20day26.md)
-10. [work day27.md](../../rag-backend/work/work%20day27.md)
-11. [work day28.md](../../rag-backend/work/work%20day28.md)
-12. [evaluation/](../../rag-backend/work/evaluation/)
+2. [current-status.md](../work/rag-backend/current-status.md)
+3. [week1.md](../work/rag-backend/week1.md)
+4. [week2.md](../work/rag-backend/week2.md)
+5. [week3.md](../work/rag-backend/week3.md)
+6. [plan.md](../work/rag-frontend/plan.md)
+7. [work day20.md](../work/rag-backend/work%20day20.md)
+8. [work day25.md](../work/rag-backend/work%20day25.md)
+9. [work day26.md](../work/rag-backend/work%20day26.md)
+10. [work day27.md](../work/rag-backend/work%20day27.md)
+11. [work day28.md](../work/rag-backend/work%20day28.md)
+12. [RFC-0009](./RFC-0009-evaluation-dataset-and-acceptance-baseline.md)
 
 这些文档的作用不同：
 
 1. `README.md` 提供当前项目口径和边界。
 2. `current-status.md` 与 `week*.md`、`work day*.md` 提供迭代顺序和决策上下文。
-3. `frontend plan.md` 提供用户前端接入、运维入口和页面约束。
-4. `work day20.md`、`work day25.md`、`work day26.md` 与 `work/evaluation/` 提供评测基线、双轨对比口径和真实结果记录。
+3. `plan.md` 提供用户前端接入、运维入口和页面约束。
+4. `work day20.md`、`work day25.md`、`work day26.md` 与 `RFC-0009` 共同提供评测基线、双轨对比口径和真实结果记录。
 5. `work day27.md` 提供 Week 4 检索与问答最小观测口径。
 6. `work day28.md` 提供 Week 4 最终文档与 RFC 收口说明。
 7. `README.md` 已吸收近期关于 embedding rebuild、知识库恢复、评测结果、日志落盘和前端构建优化的阶段总结。

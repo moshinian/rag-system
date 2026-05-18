@@ -1,8 +1,9 @@
 package com.example.rag.service;
 
+import com.example.rag.config.RagAiGatewayProperties;
 import com.example.rag.config.RagEmbeddingProperties;
 import com.example.rag.config.RagLlmProperties;
-import com.example.rag.integration.llm.OpenAiCompatibleClient;
+import com.example.rag.integration.ai.AiGatewayClient;
 import com.example.rag.model.response.HealthStatusResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,9 +28,10 @@ class SystemHealthServiceTest {
     private Environment environment;
     private JdbcTemplate jdbcTemplate;
     private StringRedisTemplate stringRedisTemplate;
-    private OpenAiCompatibleClient openAiCompatibleClient;
+    private AiGatewayClient aiGatewayClient;
     private RagEmbeddingProperties ragEmbeddingProperties;
     private RagLlmProperties ragLlmProperties;
+    private RagAiGatewayProperties ragAiGatewayProperties;
     private SystemHealthService systemHealthService;
 
     @BeforeEach
@@ -37,20 +39,16 @@ class SystemHealthServiceTest {
         environment = mock(Environment.class);
         jdbcTemplate = mock(JdbcTemplate.class);
         stringRedisTemplate = new FixedPingStringRedisTemplate();
-        openAiCompatibleClient = mock(OpenAiCompatibleClient.class);
+        aiGatewayClient = mock(AiGatewayClient.class);
         ragEmbeddingProperties = new RagEmbeddingProperties();
         ragLlmProperties = new RagLlmProperties();
+        ragAiGatewayProperties = new RagAiGatewayProperties();
 
-        ragEmbeddingProperties.setProvider("aliyun-bailian-openai-compatible");
-        ragEmbeddingProperties.setBaseUrl("https://embedding.example.test/v1");
-        ragEmbeddingProperties.setApiKey("embedding-key");
+        ragEmbeddingProperties.setProvider("rag-ai-service");
         ragEmbeddingProperties.setModel("text-embedding-v4");
-        ragEmbeddingProperties.setEmbeddingPath("/embeddings");
 
-        ragLlmProperties.getChat().setBaseUrl("https://chat.example.test/v1");
-        ragLlmProperties.getChat().setApiKey("chat-key");
         ragLlmProperties.getChat().setModel("deepseek-v4-pro");
-        ragLlmProperties.getChat().setChatPath("/chat/completions");
+        ragAiGatewayProperties.setBaseUrl("http://localhost:8001");
 
         systemHealthService = new SystemHealthService(
                 environment,
@@ -58,7 +56,8 @@ class SystemHealthServiceTest {
                 stringRedisTemplate,
                 ragEmbeddingProperties,
                 ragLlmProperties,
-                openAiCompatibleClient
+                ragAiGatewayProperties,
+                aiGatewayClient
         );
     }
 
@@ -66,23 +65,17 @@ class SystemHealthServiceTest {
     void currentStatusShouldIncludeEmbeddingAndLlmComponents() {
         when(environment.getActiveProfiles()).thenReturn(new String[] {"local"});
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).thenReturn(1);
-        when(openAiCompatibleClient.createEmbedding(
-                ragEmbeddingProperties.getBaseUrl(),
-                ragEmbeddingProperties.getApiKey(),
-                ragEmbeddingProperties.getEmbeddingPath(),
+        when(aiGatewayClient.createEmbedding(
                 ragEmbeddingProperties.getModel(),
                 "health check"
         )).thenReturn(List.of(0.1D, 0.2D));
         doNothing()
-                .when(openAiCompatibleClient)
+                .when(aiGatewayClient)
                 .probeChatCompletion(
-                        ragLlmProperties.getChat().getBaseUrl(),
-                        ragLlmProperties.getChat().getApiKey(),
-                        ragLlmProperties.getChat().getChatPath(),
                         ragLlmProperties.getChat().getModel(),
-                        ragLlmProperties.getChat().getTemperature(),
-                        16,
-                        "You are a health check endpoint. Return a very short reply.",
+                        0D,
+                        64,
+                        "You are a health check endpoint. Reply with exactly pong.",
                         "ping"
                 );
 
@@ -91,7 +84,7 @@ class SystemHealthServiceTest {
         assertThat(response.status()).isEqualTo("UP");
         assertThat(response.components()).containsKeys("postgres", "redis", "embedding", "llm");
         assertThat(response.components().get("embedding").status()).isEqualTo("UP");
-        assertThat(response.components().get("embedding").provider()).isEqualTo("aliyun-bailian-openai-compatible");
+        assertThat(response.components().get("embedding").provider()).isEqualTo("rag-ai-service");
         assertThat(response.components().get("llm").model()).isEqualTo("deepseek-v4-pro");
     }
 
@@ -100,18 +93,15 @@ class SystemHealthServiceTest {
         when(environment.getActiveProfiles()).thenReturn(new String[] {"local"});
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).thenReturn(1);
         doThrow(new RuntimeException("embedding timeout"))
-                .when(openAiCompatibleClient)
-                .createEmbedding(anyString(), anyString(), anyString(), anyString(), eq("health check"));
+                .when(aiGatewayClient)
+                .probeEmbedding(anyString(), eq("health check"));
         doNothing()
-                .when(openAiCompatibleClient)
+                .when(aiGatewayClient)
                 .probeChatCompletion(
-                        ragLlmProperties.getChat().getBaseUrl(),
-                        ragLlmProperties.getChat().getApiKey(),
-                        ragLlmProperties.getChat().getChatPath(),
                         ragLlmProperties.getChat().getModel(),
-                        ragLlmProperties.getChat().getTemperature(),
-                        16,
-                        "You are a health check endpoint. Return a very short reply.",
+                        0D,
+                        64,
+                        "You are a health check endpoint. Reply with exactly pong.",
                         "ping"
                 );
 

@@ -46,7 +46,7 @@
 
 ### Phase 1: 先设计会话与消息表
 
-- 相关材料：[work day2.md](../../rag-backend/work/work%20day2.md)
+- 相关材料：[work day2.md](../work/rag-backend/work%20day2.md)
 - 特征：项目很早就为 `chat_session / chat_message` 预留了数据库模型，但当时还没有真实问答链路。
 
 ### Phase 2: 先落单轮问答历史
@@ -152,10 +152,10 @@
 
 1. [README.md](../../README.md)
 2. [RFC-0007](./RFC-0007-qa-contract-answer-sources-history.md)
-3. [current-status.md](../../rag-backend/work/current-status.md)
-4. [week2.md](../../rag-backend/work/week2.md)
-5. [work day2.md](../../rag-backend/work/work%20day2.md)
-6. [work day13.md](../../rag-backend/work/work%20day13.md)
-7. [work day14.md](../../rag-backend/work/work%20day14.md)
-8. [frontend plan.md](../../rag-frontend/work/frontend%20plan.md)
+3. [current-status.md](../work/rag-backend/current-status.md)
+4. [week2.md](../work/rag-backend/week2.md)
+5. [work day2.md](../work/rag-backend/work%20day2.md)
+6. [work day13.md](../work/rag-backend/work%20day13.md)
+7. [work day14.md](../work/rag-backend/work%20day14.md)
+8. [plan.md](../work/rag-frontend/plan.md)
 9. [QaRecordService.java](../../rag-backend/src/main/java/com/example/rag/service/QaRecordService.java)

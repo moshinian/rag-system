@@ -5,7 +5,7 @@ import com.example.rag.config.RagEmbeddingProperties;
 import com.example.rag.config.RagRetrievalProperties;
 import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.config.CacheNames;
-import com.example.rag.integration.llm.OpenAiCompatibleClient;
+import com.example.rag.integration.ai.AiGatewayClient;
 import com.example.rag.model.dto.RetrievedChunkCandidate;
 import com.example.rag.model.enums.KeywordStrategy;
 import com.example.rag.model.enums.RetrievalMode;
@@ -48,7 +48,7 @@ public class QuestionAnsweringService {
     private final DocumentChunkRepository documentChunkRepository;
     private final RagEmbeddingProperties ragEmbeddingProperties;
     private final RagRetrievalProperties ragRetrievalProperties;
-    private final OpenAiCompatibleClient openAiCompatibleClient;
+    private final AiGatewayClient aiGatewayClient;
     private final RetrievalReadinessService retrievalReadinessService;
 
     /** 构造QuestionAnsweringService。 */
@@ -56,13 +56,13 @@ public class QuestionAnsweringService {
                                     DocumentChunkRepository documentChunkRepository,
                                     RagEmbeddingProperties ragEmbeddingProperties,
                                     RagRetrievalProperties ragRetrievalProperties,
-                                    OpenAiCompatibleClient openAiCompatibleClient,
+                                    AiGatewayClient aiGatewayClient,
                                     RetrievalReadinessService retrievalReadinessService) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentChunkRepository = documentChunkRepository;
         this.ragEmbeddingProperties = ragEmbeddingProperties;
         this.ragRetrievalProperties = ragRetrievalProperties;
-        this.openAiCompatibleClient = openAiCompatibleClient;
+        this.aiGatewayClient = aiGatewayClient;
         this.retrievalReadinessService = retrievalReadinessService;
     }
 
@@ -106,10 +106,7 @@ public class QuestionAnsweringService {
                 .field("questionLength", normalizedQuestion.length())
                 .build());
 
-        List<Double> queryVector = openAiCompatibleClient.createEmbedding(
-                ragEmbeddingProperties.getBaseUrl(),
-                ragEmbeddingProperties.getApiKey(),
-                ragEmbeddingProperties.getEmbeddingPath(),
+        List<Double> queryVector = aiGatewayClient.createEmbedding(
                 ragEmbeddingProperties.getModel(),
                 normalizedQuestion
         );
