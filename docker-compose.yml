@@ -10,10 +10,10 @@ services:
       EMBEDDING_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
       EMBEDDING_API_KEY: ${DASHSCOPE_API_KEY:-}
       EMBEDDING_DEFAULT_MODEL: text-embedding-v4
-      CHAT_PROVIDER: deepseek-openai-compatible
-      CHAT_BASE_URL: https://api.deepseek.com
-      CHAT_API_KEY: ${DEEPSEEK_API_KEY:-}
-      CHAT_DEFAULT_MODEL: deepseek-v4-pro
+      CHAT_PROVIDER: aliyun-bailian-openai-compatible
+      CHAT_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
+      CHAT_API_KEY: ${DASHSCOPE_API_KEY:-}
+      CHAT_DEFAULT_MODEL: qwen-plus
     ports:
       - "8001:8001"
 

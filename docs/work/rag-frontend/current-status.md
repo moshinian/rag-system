@@ -50,6 +50,7 @@
 4. `qa/readiness`、`qa/retrieve`、`qa/ask`、`qa/history` 已接入。
 5. `health` 与 `redis-probe` 已接入。
 6. `POST /api/admin/embeddings/rebuild` 已接入运维入口。
+7. 健康页当前已适配 `aiGateway / embedding / llm` 的实时 provider / model 展示，不再只显示旧的本地静态默认值。
 
 ### 契约适配
 
@@ -71,6 +72,7 @@
 7. `HYBRID ask`。
 8. `qa/history` 回放。
 9. 健康页展示。
+10. 2026-05-20 已验证健康页在 Gateway chat 默认模型切换到 `qwen-plus` 后，会同步显示新的 provider / model。
 
 ## 当前未完成
 
@@ -87,6 +89,7 @@
 2. 它已经不只是静态壳子，而是和当前后端主链路做过真实联调。
 3. 它的主要价值在于把“RAG 主链路 + 运维入口 + 证据回放”组织成可演示的产品形态。
 4. 后续前端工作重点不应再只是补页面数量，而应转向状态收口、联调稳定性和体验打磨。
+5. 系统健康页已经具备第一版“异常优先 + 高延迟提示 + AI Gateway 分组展示”的运维视图，而不是单纯把 `/api/health` 原样平铺成一张表。
 
 ## 后续方向
 

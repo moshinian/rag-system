@@ -78,8 +78,7 @@ class QaServiceTest {
         when(promptBuilder.build(eq("这份文档主要讲了什么？"), eq(retrievalResponse.chunks())))
                 .thenReturn(promptPayload);
         when(chatClient.chat("system prompt", "user prompt"))
-                .thenReturn("这是基于检索内容生成的回答。");
-        when(chatClient.getChatModel()).thenReturn("deepseek-v4-flash");
+                .thenReturn(new ChatClient.ChatResult("这是基于检索内容生成的回答。", "deepseek-v4-flash"));
 
         QaAnswerResponse response = qaService.ask("day6-kb", "这份文档主要讲了什么？", 3);
 

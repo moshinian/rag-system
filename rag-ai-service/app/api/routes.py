@@ -15,6 +15,10 @@ def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
         status="UP",
         service=settings.service_name,
         version=settings.service_version,
+        embedding_provider=settings.embedding_provider,
+        embedding_default_model=settings.embedding_default_model,
+        chat_provider=settings.chat_provider,
+        chat_default_model=settings.chat_default_model,
     )
 
 

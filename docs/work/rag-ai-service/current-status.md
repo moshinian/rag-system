@@ -32,11 +32,12 @@
 3. `POST /v1/chat/completions` 已支持最小 OpenAI-compatible 子集。
 4. 错误返回已统一成 `error.message / error.type / error.code` 结构。
 5. `X-Request-Id` 已支持透传和回传。
+6. `/health` 当前还会返回 `embedding/chat` 的 provider 与默认模型，便于 Java 健康页和前端页面展示实时运行配置。
 
 ### 上游能力适配
 
 1. embeddings 已支持通过 OpenAI-compatible 协议调用 DashScope。
-2. chat completions 已支持通过 OpenAI-compatible 协议调用 DeepSeek。
+2. chat completions 已支持通过 OpenAI-compatible 协议调用 DeepSeek，也已验证可切换到阿里云百炼兼容模式。
 3. HTTP timeout、有限重试和 provider 错误映射已落地。
 4. usage 字段已按最小契约向下透出。
 
@@ -47,6 +48,8 @@
 3. `QuestionAnsweringService` 已改走 Gateway。
 4. `ChatClient` 已改走 Gateway。
 5. Java `/api/health` 已改为通过 Gateway 做真实能力探测。
+6. Java 健康检查中的 `llm / embedding` provider 和 model 已改为透传 Gateway 当前运行配置，而不是只展示 Java 本地默认值。
+7. Java chat 实际调用、`qa/ask` 返回值和 `qa/history` 落库的 `chatModel` 已与 Gateway 当前 `chat_default_model` 对齐。
 
 ## 已验证
 
@@ -57,7 +60,8 @@
 3. 真实 `GET /api/health` 已验证 embedding / llm 都能通过 Gateway 返回可用状态。
 4. 真实 `POST /api/admin/embeddings/rebuild` 已通过 Gateway 完成全量重嵌入。
 5. 真实 `POST /qa/retrieve` 已通过 Gateway 生成 query embedding 并完成检索。
-6. 真实 `POST /qa/ask` 已通过 Gateway 调用 DeepSeek 成功返回回答。
+6. 真实 `POST /qa/ask` 已通过 Gateway 调用 chat provider 成功返回回答。
+7. 2026-05-20 已完成一次真实切换验证：`CHAT_PROVIDER=aliyun-bailian-openai-compatible`、`CHAT_DEFAULT_MODEL=qwen-plus` 生效后，Gateway `/health`、Java `/api/health`、前端健康页、`qa/ask` 返回体与 `qa/history` 落库中的 `chatModel` 都已同步切换为 `qwen-plus`。
 
 ### 本次联调中确认的关键事实
 
@@ -65,6 +69,7 @@
 2. 旧知识库在 embedding profile 切换后仍会被 `reembedRequired` 正常阻断。
 3. 触发一次真实 rebuild 后，系统可以恢复到可检索、可问答状态。
 4. `day20-cn-kb` 已在新 Gateway 口径下真实完成 `health -> rebuild -> retrieve -> ask` 联调。
+5. `/health` 仍保持“只表达网关自身存活和当前运行配置”的轻量职责，不主动消耗 provider token。
 
 ## 当前未完成
 

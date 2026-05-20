@@ -60,6 +60,7 @@ public class SystemHealthService {
         // 这里固定输出顺序，便于前端健康页和日志对比时保持稳定展示。
         components.put("postgres", databaseStatus());
         components.put("redis", redisStatus());
+        components.put("aiGateway", aiGatewayStatus());
         components.put("embedding", embeddingStatus());
         components.put("llm", llmStatus());
 
@@ -148,9 +149,48 @@ public class SystemHealthService {
     }
 
     /** 检查 embedding 接口是否可返回真实向量。 */
-    private HealthComponentStatusResponse embeddingStatus() {
+    private HealthComponentStatusResponse aiGatewayStatus() {
         long startedAt = System.nanoTime();
         try {
+            AiGatewayClient.GatewayHealthSnapshot snapshot = aiGatewayClient.probeGatewayHealth();
+            boolean healthy = "UP".equalsIgnoreCase(snapshot.status());
+            return new HealthComponentStatusResponse(
+                    healthy ? "UP" : "DOWN",
+                    "ai-gateway",
+                    aiGatewayClient.gatewayHealthEndpoint(),
+                    "rag-ai-service",
+                    null,
+                    elapsedMillis(startedAt),
+                    "AI gateway /health returned status=" + snapshot.status()
+                            + ", embeddingProvider=" + nullSafe(snapshot.embeddingProvider())
+                            + ", chatProvider=" + nullSafe(snapshot.chatProvider()),
+                    healthy ? null : "Unexpected AI gateway health status: " + snapshot.status(),
+                    Instant.now()
+            );
+        } catch (Exception exception) {
+            return new HealthComponentStatusResponse(
+                    "DOWN",
+                    "ai-gateway",
+                    aiGatewayClient.gatewayHealthEndpoint(),
+                    "rag-ai-service",
+                    null,
+                    elapsedMillis(startedAt),
+                    "AI gateway health request failed",
+                    exception.getMessage(),
+                    Instant.now()
+            );
+        }
+    }
+
+    /** 检查 embedding 接口是否可返回真实向量。 */
+    private HealthComponentStatusResponse embeddingStatus() {
+        long startedAt = System.nanoTime();
+        String provider = "rag-ai-service";
+        String model = ragEmbeddingProperties.getModel();
+        try {
+            AiGatewayClient.GatewayHealthSnapshot snapshot = aiGatewayClient.probeGatewayHealth();
+            provider = hasText(snapshot.embeddingProvider()) ? snapshot.embeddingProvider() : provider;
+            model = hasText(snapshot.embeddingDefaultModel()) ? snapshot.embeddingDefaultModel() : model;
             // embedding 健康检查要求真实返回向量，不只检查 HTTP 200。
             aiGatewayClient.probeEmbedding(
                     ragEmbeddingProperties.getModel(),
@@ -160,8 +200,8 @@ public class SystemHealthService {
                     "UP",
                     "ai-capability",
                     joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getEmbeddingsPath()),
-                    "rag-ai-service",
-                    ragEmbeddingProperties.getModel(),
+                    provider,
+                    model,
                     elapsedMillis(startedAt),
                     "Embedding request returned a vector",
                     null,
@@ -172,8 +212,8 @@ public class SystemHealthService {
                     "DOWN",
                     "ai-capability",
                     joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getEmbeddingsPath()),
-                    "rag-ai-service",
-                    ragEmbeddingProperties.getModel(),
+                    provider,
+                    model,
                     elapsedMillis(startedAt),
                     "Embedding request failed",
                     exception.getMessage(),
@@ -186,7 +226,12 @@ public class SystemHealthService {
     private HealthComponentStatusResponse llmStatus() {
         long startedAt = System.nanoTime();
         RagLlmProperties.ChatProperties chat = ragLlmProperties.getChat();
+        String provider = "rag-ai-service";
+        String model = chat.getModel();
         try {
+            AiGatewayClient.GatewayHealthSnapshot snapshot = aiGatewayClient.probeGatewayHealth();
+            provider = hasText(snapshot.chatProvider()) ? snapshot.chatProvider() : provider;
+            model = hasText(snapshot.chatDefaultModel()) ? snapshot.chatDefaultModel() : model;
             // LLM 探针只要求最小 completion 合法返回，避免健康检查本身消耗过多 token。
             aiGatewayClient.probeChatCompletion(
                     chat.getModel(),
@@ -199,8 +244,8 @@ public class SystemHealthService {
                     "UP",
                     "ai-capability",
                     joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getChatCompletionsPath()),
-                    "rag-ai-service",
-                    chat.getModel(),
+                    provider,
+                    model,
                     elapsedMillis(startedAt),
                     "Chat completion request returned a response",
                     null,
@@ -211,14 +256,22 @@ public class SystemHealthService {
                     "DOWN",
                     "ai-capability",
                     joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getChatCompletionsPath()),
-                    "rag-ai-service",
-                    chat.getModel(),
+                    provider,
+                    model,
                     elapsedMillis(startedAt),
                     "Chat completion request failed",
                     exception.getMessage(),
                     Instant.now()
             );
         }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isBlank();
+    }
+
+    private String nullSafe(String value) {
+        return hasText(value) ? value : "-";
     }
 
     /** 计算耗时毫秒数。 */

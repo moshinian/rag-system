@@ -47,6 +47,10 @@ def test_health_returns_up_without_provider_call():
     body = response.json()
     assert body["status"] == "UP"
     assert body["service"] == "rag-ai-service"
+    assert body["embedding_provider"] == "aliyun-bailian-openai-compatible"
+    assert body["embedding_default_model"] == "text-embedding-v4"
+    assert body["chat_provider"] == "deepseek-openai-compatible"
+    assert body["chat_default_model"] == "deepseek-v4-pro"
 
 
 def test_embeddings_returns_openai_compatible_payload_and_request_id():

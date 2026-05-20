@@ -22,19 +22,39 @@ public class ChatClient {
     }
 
     /** 调用 OpenAI-compatible chat completion 并返回回答。 */
-    public String chat(String systemPrompt, String userPrompt) {
+    public ChatResult chat(String systemPrompt, String userPrompt) {
         RagLlmProperties.ChatProperties chat = ragLlmProperties.getChat();
-        return aiGatewayClient.createChatCompletion(
-                chat.getModel(),
-                chat.getTemperature(),
-                chat.getMaxOutputTokens(),
-                systemPrompt,
-                userPrompt
+        AiGatewayClient.GatewayHealthSnapshot gatewayHealth = aiGatewayClient.probeGatewayHealth();
+        String effectiveModel = hasText(gatewayHealth.chatDefaultModel())
+                ? gatewayHealth.chatDefaultModel()
+                : chat.getModel();
+        return new ChatResult(
+                aiGatewayClient.createChatCompletion(
+                        effectiveModel,
+                        chat.getTemperature(),
+                        chat.getMaxOutputTokens(),
+                        systemPrompt,
+                        userPrompt
+                ),
+                effectiveModel
         );
     }
 
     /** 返回当前配置使用的 chat model。 */
     public String getChatModel() {
-        return ragLlmProperties.getChat().getModel();
+        AiGatewayClient.GatewayHealthSnapshot gatewayHealth = aiGatewayClient.probeGatewayHealth();
+        return hasText(gatewayHealth.chatDefaultModel())
+                ? gatewayHealth.chatDefaultModel()
+                : ragLlmProperties.getChat().getModel();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isBlank();
+    }
+
+    public record ChatResult(
+            String answer,
+            String model
+    ) {
     }
 }
