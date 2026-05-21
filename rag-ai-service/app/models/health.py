@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 
 class HealthResponse(BaseModel):
+    """健康检查响应体。"""
+
     status: str
     service: str
     version: str

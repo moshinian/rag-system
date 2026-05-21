@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ProviderTarget:
+    """描述一次上游 provider 调用所需的目标信息。"""
     capability: str
     provider: str
     base_url: str
@@ -24,7 +25,10 @@ class ProviderTarget:
 
 
 class OpenAiCompatibleProviderClient:
+    """最小 OpenAI-compatible HTTP 客户端，负责超时、重试和错误映射。"""
+
     def __init__(self, settings: Settings) -> None:
+        """根据配置初始化复用型 HTTP 客户端。"""
         self.settings = settings
         timeout = httpx.Timeout(
             connect=settings.http_connect_timeout_ms / 1000.0,
@@ -35,6 +39,7 @@ class OpenAiCompatibleProviderClient:
         self.http_client = httpx.Client(timeout=timeout)
 
     def post_json(self, target: ProviderTarget, payload: dict[str, Any], request_id: str) -> dict[str, Any]:
+        """对外暴露统一 JSON POST 入口。"""
         return self._post_json(target, payload, request_id)
 
     @retry(
@@ -44,12 +49,14 @@ class OpenAiCompatibleProviderClient:
         retry=retry_if_exception(lambda exc: _is_retryable_exception(exc)),
     )
     def _post_json(self, target: ProviderTarget, payload: dict[str, Any], request_id: str) -> dict[str, Any]:
+        """向上游 provider 发起请求，并把常见失败收口成统一异常。"""
         url = _join_url(target.base_url, target.path)
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
             "X-Request-Id": request_id,
         }
+        # 是否附带鉴权头由配置决定，避免把具体供应商约束写死在调用层。
         if target.api_key:
             headers["Authorization"] = "Bearer " + target.api_key
 
@@ -71,9 +78,11 @@ class OpenAiCompatibleProviderClient:
             ) from exc
 
         if response.status_code >= 400:
+            # 尽量保留上游 error.message，便于 Java 和前端看到更可读的失败原因。
             error_body = _safe_json(response)
             message = _extract_error_message(error_body) or response.text
             status_code = response.status_code
+            # 429 和上游 5xx 视为可重试错误，交给 tenacity 进行有限重试。
             if status_code in (429, 500, 502, 503, 504):
                 raise ProviderError(
                     message=message or f"{target.capability} upstream error",
@@ -85,13 +94,14 @@ class OpenAiCompatibleProviderClient:
                 message=message or f"{target.capability} upstream request rejected",
                 error_type="provider_error",
                 code=f"upstream_{status_code}",
-                status_code=400,
+                status_code=status_code,
             )
 
         return response.json()
 
 
 def _join_url(base_url: str, path: str) -> str:
+    """拼接 base_url 和 path，避免出现重复或缺失斜杠。"""
     if base_url.endswith("/") and path.startswith("/"):
         return base_url[:-1] + path
     if not base_url.endswith("/") and not path.startswith("/"):
@@ -100,6 +110,7 @@ def _join_url(base_url: str, path: str) -> str:
 
 
 def _safe_json(response: httpx.Response) -> dict[str, Any]:
+    """尽量解析错误响应 JSON，失败时退化为空字典。"""
     try:
         return response.json()
     except ValueError:
@@ -107,6 +118,7 @@ def _safe_json(response: httpx.Response) -> dict[str, Any]:
 
 
 def _extract_error_message(payload: dict[str, Any]) -> str | None:
+    """从 OpenAI-compatible 错误结构中提取可展示的 message。"""
     error = payload.get("error")
     if isinstance(error, dict):
         message = error.get("message")
@@ -116,6 +128,7 @@ def _extract_error_message(payload: dict[str, Any]) -> str | None:
 
 
 def _is_retryable_exception(exc: BaseException) -> bool:
+    """只对网关定义为临时性的错误做有限重试。"""
     if not isinstance(exc, ProviderError):
         return False
     return exc.status_code in (429, 502, 504)

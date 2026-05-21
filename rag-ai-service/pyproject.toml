@@ -22,3 +22,17 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.pyright]
+venvPath = ".."
+venv = "venv"
+stubPath = "typings"
+include = ["app", "tests"]
+exclude = [
+    "**/.*",
+    "**/__pycache__",
+    "**/node_modules",
+    "**/.pytest_cache",
+    "**/venv",
+    "**/rag_ai_service.egg-info",
+]
