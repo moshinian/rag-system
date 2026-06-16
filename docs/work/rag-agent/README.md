@@ -21,16 +21,18 @@
 
 ## Current Breakpoint
 
-当前 Agent 能力已经完成 Day 1 基础模型落地：
+当前 Agent 能力已经完成 Day 2 Agent 查询 API 与 Service 骨架：
 
 1. 主计划已确认，保存在 [plan.md](./plan.md)。
 2. 长期设计决策已收口到 [RFC-0012](../../rfcs/RFC-0012-langgraph-rag-ops-agent.md)。
 3. Day 1 已完成 `AgentState` 草案、工具协议、状态枚举和三张表。
-4. 下一步从 `plan.md` 的 Day 2 开始：Java 实现 `agent_run / agent_step / agent_action` 持久化与查询 API。
+4. Day 2 已完成 Agent run 创建、详情查询、`AgentRunService` 和 `AgentController` 骨架。
+5. 下一步从 `plan.md` 的 Day 3 开始：封装 `system.health.check` 和 `kb.readiness.check` 两个 P0 只读工具。
 
 ## History
 
 1. [work day1.md](./work%20day1.md) 记录 Agent 状态模型、工具协议和三张表的基础落地。
+2. [work day2.md](./work%20day2.md) 记录 Agent 查询 API 与 Service 骨架。
 
 ## Related Boards
 

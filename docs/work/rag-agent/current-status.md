@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-`rag-agent` 目前已经完成 Day 1 的基础模型落地，进入 Day 2 前的状态。
+`rag-agent` 目前已经完成 Day 2 的 Agent 查询 API 与 Service 骨架，进入 Day 3 前的状态。
 
 当前已经明确的方向是：
 
@@ -50,14 +50,30 @@
    - `AgentToolDefinition`
 5. 已在 `rag-ai-service` 新增 `app/agent/` 包，并补入 Python 侧 `AgentState` 与 Runtime 请求/响应模型草案。
 
+### Day 2：Agent 查询 API 与 Service 骨架
+
+1. 已新增 `AgentRunCreateRequest`。
+2. 已新增 `AgentRunResponse / AgentStepResponse / AgentActionResponse`。
+3. 已新增 `AgentRunService`，支持：
+   - 创建 Agent run
+   - 查询 Agent run 详情
+   - 查询详情时组装 steps/actions
+   - 校验 run 必须属于当前知识库
+4. 已新增 `AgentController`，支持：
+   - `POST /api/knowledge-bases/{kbCode}/agent/runs`
+   - `GET /api/knowledge-bases/{kbCode}/agent/runs/{runCode}`
+5. 已新增 `AgentRunServiceTest / AgentControllerTest`。
+6. Day 2 继续保持不调用 Python Agent Runtime、不实现 confirm/reject、不接前端。
+
 ## 当前未实现
 
-1. 还没有新增 Java Agent API。
-2. 还没有实现 `AgentRunService`。
-3. 还没有在 `rag-ai-service` 内引入 LangGraph。
-4. 还没有实现 Agent 工具调用节点和状态图。
-5. 还没有前端 Agent 工作台。
-6. 还没有 Agent 演示场景和测试用例。
+1. 还没有封装 P0 只读工具 `system.health.check / kb.readiness.check`。
+2. 还没有在 `rag-ai-service` 内引入 LangGraph。
+3. 还没有实现 Agent 工具调用节点和状态图。
+4. 还没有持久化 Python Runtime 返回的 steps/actions。
+5. 还没有实现 confirm/reject。
+6. 还没有前端 Agent 工作台。
+7. 还没有 Agent 演示场景。
 
 ## 当前风险
 
@@ -68,17 +84,18 @@
 
 ## 下一步
 
-从 [plan.md](./plan.md) 的 Day 2 开始：
+从 [plan.md](./plan.md) 的 Day 3 开始：
 
-1. Java 实现 `agent_run / agent_step / agent_action` 持久化与查询 API。
-2. 新增 Agent 请求/响应对象。
-3. 新增 `AgentController` 与 `AgentRunService` 骨架。
-4. 保持 Java 统一生成 `runCode / stepCode / actionCode` 的边界。
+1. Java 封装 `system.health.check` 工具。
+2. Java 封装 `kb.readiness.check` 工具。
+3. 明确 Agent 工具白名单和只读工具执行结果结构。
+4. 保持 Day 3 不接 LangGraph，只先建立 Java 可控工具边界。
 
 ## 已验证
 
 1. `mvn -q -pl rag-backend -DskipTests compile` 已通过。
 2. `./venv/bin/python -m py_compile rag-ai-service/app/agent/__init__.py rag-ai-service/app/agent/state.py` 已通过。
+3. `mvn -q -pl rag-backend -Dtest=AgentRunServiceTest,AgentControllerTest test` 已通过。
 
 ## 恢复入口
 
