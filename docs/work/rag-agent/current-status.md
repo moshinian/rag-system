@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-`rag-agent` 目前处于正式计划已确认、代码尚未实现的阶段。
+`rag-agent` 目前已经完成 Day 1 的基础模型落地，进入 Day 2 前的状态。
 
 当前已经明确的方向是：
 
@@ -17,7 +17,7 @@
 
 ## 已完成
 
-当前已完成的是计划和边界收口：
+### Phase 0：计划和边界收口
 
 1. 已确认 Agent 主场景是“RAG 运维诊断 Agent”。
 2. 已确认 Java / Python / 前端三层分工。
@@ -27,13 +27,37 @@
 6. 已确认 `agent_run / agent_step / agent_action` 三张表作为轨迹和审计模型。
 7. 已确认 v1 不做 MCP、多 Agent、多轮聊天和自动危险操作。
 
+### Day 1：状态模型、工具协议和三张表
+
+1. 已新增 Flyway 迁移 `V18__create_agent_tables.sql`，创建 `agent_run / agent_step / agent_action` 三张表。
+2. 已新增 Agent 相关枚举：
+   - `AgentRunMode`
+   - `AgentRunStatus`
+   - `AgentStepType`
+   - `AgentStepStatus`
+   - `AgentActionRiskLevel`
+   - `AgentActionStatus`
+   - `AgentToolExecutionMode`
+3. 已新增 Agent 持久化实体、Mapper 和 Repository：
+   - `AgentRunEntity / AgentRunMapper / AgentRunRepository`
+   - `AgentStepEntity / AgentStepMapper / AgentStepRepository`
+   - `AgentActionEntity / AgentActionMapper / AgentActionRepository`
+4. 已新增 Java 与 Python Agent Runtime 的第一版协议 DTO：
+   - `AgentRuntimeRequest`
+   - `AgentRuntimeResponse`
+   - `AgentRuntimeStepResult`
+   - `AgentRuntimeActionDraft`
+   - `AgentToolDefinition`
+5. 已在 `rag-ai-service` 新增 `app/agent/` 包，并补入 Python 侧 `AgentState` 与 Runtime 请求/响应模型草案。
+
 ## 当前未实现
 
-1. 还没有新增 Agent 数据表和 Java API。
-2. 还没有在 `rag-ai-service` 内引入 LangGraph。
-3. 还没有实现 Agent 工具协议和状态图。
-4. 还没有前端 Agent 工作台。
-5. 还没有 Agent 演示场景和测试用例。
+1. 还没有新增 Java Agent API。
+2. 还没有实现 `AgentRunService`。
+3. 还没有在 `rag-ai-service` 内引入 LangGraph。
+4. 还没有实现 Agent 工具调用节点和状态图。
+5. 还没有前端 Agent 工作台。
+6. 还没有 Agent 演示场景和测试用例。
 
 ## 当前风险
 
@@ -44,12 +68,17 @@
 
 ## 下一步
 
-从 [plan.md](./plan.md) 的 Day 1 开始：
+从 [plan.md](./plan.md) 的 Day 2 开始：
 
-1. 确定 `AgentState`。
-2. 确定 Java 与 Python 之间的工具协议。
-3. 确定 Agent 状态枚举。
-4. 设计 `agent_run / agent_step / agent_action` 三张表。
+1. Java 实现 `agent_run / agent_step / agent_action` 持久化与查询 API。
+2. 新增 Agent 请求/响应对象。
+3. 新增 `AgentController` 与 `AgentRunService` 骨架。
+4. 保持 Java 统一生成 `runCode / stepCode / actionCode` 的边界。
+
+## 已验证
+
+1. `mvn -q -pl rag-backend -DskipTests compile` 已通过。
+2. `./venv/bin/python -m py_compile rag-ai-service/app/agent/__init__.py rag-ai-service/app/agent/state.py` 已通过。
 
 ## 恢复入口
 
