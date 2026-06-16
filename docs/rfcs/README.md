@@ -64,12 +64,13 @@
 | [RFC-0009](./RFC-0009-evaluation-dataset-and-acceptance-baseline.md) | Accepted | Evaluation Dataset And Acceptance Baseline | 为中文评测问题集、Week 4 的 dense vs hybrid 对比口径和真实结果建立稳定基线 |
 | [RFC-0010](./RFC-0010-chunk-inspector-workspace.md) | Accepted | Chunk Inspector Workspace | 把文档切块检视从折叠预览升级为 Retrieval Workspace 的证据检视子视图 |
 | [RFC-0011](./RFC-0011-session-reuse-and-multi-turn-conversation-model.md) | Planned | Session Reuse And Multi-turn Conversation Model | 为从单问单答历史记录演进到真实会话线程提前建立边界和影响面 |
+| [RFC-0012](./RFC-0012-langgraph-rag-ops-agent.md) | Planned | LangGraph RAG Ops Agent | 为 RAG 运维诊断 Agent、Java/Python 边界、human-in-the-loop 和执行轨迹审计建立路线图 |
 
 ## Candidate Backlog
 
 结合当前仓库里的 `README.md`、`docs/work/rag-backend/` 下周记/日记、前端计划和最近提交记录，下一批最值得进入 RFC 的主题有这些：
 
-### RFC-0012 Multi-instance Task Coordination And Cancellation
+### RFC-0013 Multi-instance Task Coordination And Cancellation
 
 成熟度：中，建议在异步索引任务开始进入多实例或更复杂运维前补。
 
