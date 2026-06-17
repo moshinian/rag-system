@@ -326,10 +326,17 @@ rag-system/
 
 1. `postgres`：执行 `SELECT 1` 验证数据库可用性
 2. `redis`：执行 `PING` 验证 Redis 连通性
-3. `embedding`：对当前配置的 embedding 接口发起最小真实请求，验证向量能力可用
-4. `llm`：对当前配置的 chat completion 接口发起最小真实请求，验证回答能力可用
+3. `aiGateway`：直连 `rag-ai-service /health`，验证网关进程、当前 provider 和默认模型配置可读
+4. `embedding`：对当前配置的 embedding 接口发起最小真实请求，验证向量能力可用
+5. `llm`：对当前配置的 chat completion 接口发起最小真实请求，验证回答能力可用
 
-前端 `/health` 页面会展示各组件的状态、endpoint、provider/model、耗时和错误信息；`/api/health/redis-probe` 仍保留最小读写探针，用于确认 Redis 不只是能连通，也能正常读写。
+前端 `/health` 页面现在会按 `基础设施 / AI Gateway / 模型能力` 分组展示组件状态，并把异常组件和高延迟探针置顶；`/api/health/redis-probe` 仍保留最小读写探针，用于确认 Redis 不只是能连通，也能正常读写。
+
+当前口径还额外收紧了两条容易混淆的模型语义：
+
+1. 健康页中的 `provider / model` 已改为实时读取 `rag-ai-service` 当前运行配置，不再只展示 Java 本地静态默认值。
+2. chat completion 实际调用、接口返回 `chatModel`、以及 `qa/history` 持久化的 `chatModel` 已统一跟随 `rag-ai-service` 当前 `chat_default_model`。
+3. embedding 仍保持显式配置，不跟随 Gateway 默认模型静默漂移，避免向量维度、readiness 和 rebuild 语义失真。
 
 ## 运行方式
 

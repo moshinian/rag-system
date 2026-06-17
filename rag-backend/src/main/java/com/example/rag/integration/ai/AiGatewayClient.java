@@ -120,6 +120,28 @@ public class AiGatewayClient {
         createChatCompletion(model, temperature, maxOutputTokens, systemPrompt, userPrompt);
     }
 
+    /** 直接探测 AI Gateway 自身健康接口。 */
+    public GatewayHealthSnapshot probeGatewayHealth() {
+        try {
+            GatewayHealthResponse response = getJson("/health", GatewayHealthResponse.class);
+            if (response == null || !hasText(response.status())) {
+                throw new BusinessException("AI gateway health response is empty");
+            }
+            return new GatewayHealthSnapshot(
+                    response.status(),
+                    response.embeddingProvider(),
+                    response.embeddingDefaultModel(),
+                    response.chatProvider(),
+                    response.chatDefaultModel()
+            );
+        } catch (IOException ex) {
+            log.warn(StructuredLogMessage.of("ai.gateway.health.failed")
+                    .field("message", ex.getMessage())
+                    .build());
+            throw new BusinessException("Failed to call AI gateway health endpoint: " + ex.getMessage());
+        }
+    }
+
     /** 返回已配置的 embeddings endpoint。 */
     public String embeddingsEndpoint() {
         return joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getEmbeddingsPath());
@@ -128,6 +150,11 @@ public class AiGatewayClient {
     /** 返回已配置的 chat completions endpoint。 */
     public String chatCompletionsEndpoint() {
         return joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getChatCompletionsPath());
+    }
+
+    /** 返回 AI Gateway 健康检查 endpoint。 */
+    public String gatewayHealthEndpoint() {
+        return joinUrl(ragAiGatewayProperties.getBaseUrl(), "/health");
     }
 
     private <T> T postJson(String path, Object payload, Class<T> responseType) throws IOException {
@@ -150,6 +177,30 @@ public class AiGatewayClient {
                 outputStream.write(jsonBytes);
                 outputStream.flush();
             }
+            int statusCode = connection.getResponseCode();
+            String responseBody = readResponseBody(connection, statusCode);
+            if (statusCode < 200 || statusCode >= 300) {
+                String message = extractErrorMessage(responseBody);
+                throw new BusinessException(statusCode + " " + message);
+            }
+            return objectMapper.readValue(responseBody, responseType);
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private <T> T getJson(String path, Class<T> responseType) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) new URL(joinUrl(ragAiGatewayProperties.getBaseUrl(), path)).openConnection();
+        connection.setRequestMethod("GET");
+        connection.setConnectTimeout(resolveConnectTimeoutMillis());
+        connection.setReadTimeout(resolveReadTimeoutMillis());
+        connection.setRequestProperty(HttpHeaders.ACCEPT, "application/json");
+        String requestId = MDC.get("requestId");
+        if (hasText(requestId)) {
+            connection.setRequestProperty("X-Request-Id", requestId);
+        }
+
+        try {
             int statusCode = connection.getResponseCode();
             String responseBody = readResponseBody(connection, statusCode);
             if (statusCode < 200 || statusCode >= 300) {
@@ -285,6 +336,39 @@ public class AiGatewayClient {
 
     private record ErrorDetail(
             String message
+    ) {
+    }
+
+    private record GatewayHealthResponse(
+            String status,
+            String embedding_provider,
+            String embedding_default_model,
+            String chat_provider,
+            String chat_default_model
+    ) {
+        String embeddingProvider() {
+            return embedding_provider;
+        }
+
+        String embeddingDefaultModel() {
+            return embedding_default_model;
+        }
+
+        String chatProvider() {
+            return chat_provider;
+        }
+
+        String chatDefaultModel() {
+            return chat_default_model;
+        }
+    }
+
+    public record GatewayHealthSnapshot(
+            String status,
+            String embeddingProvider,
+            String embeddingDefaultModel,
+            String chatProvider,
+            String chatDefaultModel
     ) {
     }
 }

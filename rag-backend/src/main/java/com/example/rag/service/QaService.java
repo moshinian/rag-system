@@ -61,13 +61,14 @@ public class QaService {
                 retrievalResponse.chunks()
         );
         long llmStartedAt = System.currentTimeMillis();
-        String answer = chatClient.chat(promptPayload.systemPrompt(), promptPayload.userPrompt());
+        ChatClient.ChatResult chatResult = chatClient.chat(promptPayload.systemPrompt(), promptPayload.userPrompt());
+        String answer = chatResult.answer();
         long llmDurationMs = System.currentTimeMillis() - llmStartedAt;
         log.info(StructuredLogMessage.of("qa.ask.llm.completed")
                 .field("kbCode", kbCode)
                 .field("retrievalMode", retrievalResponse.retrievalMode().name())
                 .field("fusionStrategy", retrievalResponse.fusionStrategy())
-                .field("chatModel", chatClient.getChatModel())
+                .field("chatModel", chatResult.model())
                 .field("llmDurationMs", llmDurationMs)
                 .field("answerLength", answer.length())
                 .build());
@@ -80,7 +81,7 @@ public class QaService {
                 retrievalResponse.question(),
                 answer,
                 retrievalResponse.topK(),
-                chatClient.getChatModel(),
+                chatResult.model(),
                 retrievalResponse.retrievalMode(),
                 retrievalResponse.fusionStrategy(),
                 retrievalResponse.denseHitCount(),
@@ -107,7 +108,7 @@ public class QaService {
                 .field("keywordDurationMs", retrievalResponse.keywordDurationMs())
                 .field("fusionDurationMs", retrievalResponse.fusionDurationMs())
                 .field("llmDurationMs", llmDurationMs)
-                .field("chatModel", chatClient.getChatModel())
+                .field("chatModel", chatResult.model())
                 .field("answerLength", answer.length())
                 .field("totalDurationMs", totalDurationMs)
                 .build());
