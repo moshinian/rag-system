@@ -1,6 +1,8 @@
 package com.example.rag.controller;
 
 import com.example.rag.common.ApiResponse;
+import com.example.rag.model.request.AgentActionConfirmRequest;
+import com.example.rag.model.request.AgentActionRejectRequest;
 import com.example.rag.model.request.AgentRunCreateRequest;
 import com.example.rag.model.response.AgentRunResponse;
 import com.example.rag.service.AgentRunService;
@@ -46,6 +48,30 @@ public class AgentController {
                                                 HttpServletRequest request) {
         String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
         AgentRunResponse response = agentRunService.getRun(kbCode, runCode);
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 确认并执行一条 Agent 推荐动作。 */
+    @PostMapping("/runs/{runCode}/actions/{actionCode}/confirm")
+    public ApiResponse<AgentRunResponse> confirmAction(@PathVariable String kbCode,
+                                                       @PathVariable String runCode,
+                                                       @PathVariable String actionCode,
+                                                       @RequestBody(required = false) AgentActionConfirmRequest body,
+                                                       HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        AgentRunResponse response = agentRunService.confirmAction(kbCode, runCode, actionCode, body);
+        return ApiResponse.success(response, requestId);
+    }
+
+    /** 拒绝一条 Agent 推荐动作。 */
+    @PostMapping("/runs/{runCode}/actions/{actionCode}/reject")
+    public ApiResponse<AgentRunResponse> rejectAction(@PathVariable String kbCode,
+                                                      @PathVariable String runCode,
+                                                      @PathVariable String actionCode,
+                                                      @RequestBody(required = false) AgentActionRejectRequest body,
+                                                      HttpServletRequest request) {
+        String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
+        AgentRunResponse response = agentRunService.rejectAction(kbCode, runCode, actionCode, body);
         return ApiResponse.success(response, requestId);
     }
 }

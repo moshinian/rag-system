@@ -6,6 +6,7 @@ import {
   HeartOutlined,
   MessageOutlined,
   RadarChartOutlined,
+  RobotOutlined,
   UploadOutlined
 } from "@ant-design/icons";
 import { Button, Layout, Menu, Select, Space, Typography } from "antd";
@@ -43,6 +44,7 @@ export function AppShell() {
 
     return [
       { key: `/kb/${kbCode}`, icon: <DatabaseOutlined />, label: <Link to={`/kb/${kbCode}`}>概览</Link> },
+      { key: `/kb/${kbCode}/agent`, icon: <RobotOutlined />, label: <Link to={`/kb/${kbCode}/agent`}>Agent 诊断</Link> },
       { key: `/kb/${kbCode}/upload`, icon: <UploadOutlined />, label: <Link to={`/kb/${kbCode}/upload`}>文档接入</Link> },
       { key: `/kb/${kbCode}/documents`, icon: <FileTextOutlined />, label: <Link to={`/kb/${kbCode}/documents`}>文档管理</Link> },
       { key: `/kb/${kbCode}/retrieval`, icon: <FileSearchOutlined />, label: <Link to={`/kb/${kbCode}/retrieval`}>检索调试</Link> },

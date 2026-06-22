@@ -5,5 +5,6 @@ package com.example.rag.model.enums;
  */
 public enum AgentRunMode {
     DIAGNOSE_ONLY,
-    DIAGNOSE_AND_RECOMMEND
+    DIAGNOSE_AND_RECOMMEND,
+    INTELLIGENT_TOOL_AGENT
 }

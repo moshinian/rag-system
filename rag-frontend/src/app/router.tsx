@@ -7,6 +7,10 @@ const DashboardPage = lazy(() =>
   import("../pages/dashboard").then((module) => ({ default: module.DashboardPage }))
 );
 
+const AgentPage = lazy(() =>
+  import("../pages/agent").then((module) => ({ default: module.AgentPage }))
+);
+
 const DocumentDetailPage = lazy(() =>
   import("../pages/documents/detail").then((module) => ({ default: module.DocumentDetailPage }))
 );
@@ -62,6 +66,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/knowledge-bases" replace /> },
       { path: "knowledge-bases", element: withPageLoader(<KnowledgeBasesPage />) },
       { path: "kb/:kbCode", element: withPageLoader(<DashboardPage />) },
+      { path: "kb/:kbCode/agent", element: withPageLoader(<AgentPage />) },
       { path: "kb/:kbCode/upload", element: withPageLoader(<UploadPage />) },
       { path: "kb/:kbCode/documents", element: withPageLoader(<DocumentsPage />) },
       { path: "kb/:kbCode/documents/:documentCode", element: withPageLoader(<DocumentDetailPage />) },

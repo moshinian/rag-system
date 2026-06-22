@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, Request, Response
 
+from app.agent.runtime import AgentRuntime, get_agent_runtime
+from app.agent.state import AgentRuntimeRequest, AgentRuntimeResponse
 from app.core.config import Settings, get_settings
 from app.models.chat import ChatCompletionRequest, ChatCompletionResponse
 from app.models.embedding import EmbeddingRequest, EmbeddingResponse
@@ -57,3 +59,15 @@ async def create_chat_completion(
     request_id = request.state.request_id
     response.headers["X-Request-Id"] = request_id
     return await gateway_service.create_chat_completion(payload, request_id)
+
+
+@router.post("/v1/agent/runs", response_model=AgentRuntimeResponse)
+def run_agent(
+    payload: AgentRuntimeRequest,
+    request: Request,
+    response: Response,
+    agent_runtime: AgentRuntime = Depends(get_agent_runtime),
+) -> AgentRuntimeResponse:
+    request_id = request.state.request_id
+    response.headers["X-Request-Id"] = request_id
+    return agent_runtime.run(payload)

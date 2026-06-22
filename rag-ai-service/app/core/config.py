@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     chat_provider: str = "aliyun-bailian-openai-compatible"
     chat_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     chat_api_key: str = Field(default="", validation_alias="CHAT_API_KEY")
-    chat_default_model: str = "qwen-plus"
+    chat_default_model: str = "qwen3.7-plus"
     chat_path: str = "/chat/completions"
 
     # provider-specific 兼容变量，避免本地沿用旧 .env 时出现“有 key 但没接上”的问题。
@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     # 连接超时主要覆盖建连和连接池等待，读超时覆盖上游生成阶段。
     http_connect_timeout_ms: int = 5000
     http_read_timeout_ms: int = 30000
+
+    # Agent Runtime 调 Java 只读工具的配置。
+    agent_tool_client: str = "static"
+    java_agent_tool_base_url: str = "http://localhost:8080"
+    java_agent_tool_token: str = "dev-agent-tool-token"
+    java_agent_tool_execute_path_template: str = "/api/internal/agent/tools/{tool_name}/execute"
 
     def model_post_init(self, __context: object) -> None:
         """在未显式提供能力级 API key 时，根据当前 provider 回退到兼容变量。"""

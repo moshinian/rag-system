@@ -255,6 +255,112 @@ updated_at
 6. Day 13：补 `qa.retrieve.probe` 简化版 Dense / Hybrid 对比；若时间不足，降级为 P2。
 7. Day 14：更新 README、架构图、接口说明、简历 bullet 和面试讲稿。
 
+第 3 周：单 Agent 智能 Tool-use 改造
+
+目标是把当前固定流程式 Agent 演进为“单 Agent、LLM 驱动、可循环调用工具”的智能 Tool-use Agent。旧固定图保留为 legacy/debug：`build_readiness_diagnosis_graph()`；新增智能图：`build_intelligent_tool_agent_graph()`。
+
+智能 Agent run 状态规则：
+
+1. `SUCCEEDED`：LLM 生成 `FINAL_ANSWER`，且没有待确认动作。
+2. `WAITING_CONFIRMATION`：Python Runtime 返回 `recommendedActions`，由 Java 统一落库为 `PENDING_CONFIRMATION`。
+3. `FAILED`：LLM 决策解析失败、schema 校验失败、工具执行失败不可恢复，或超过最大工具调用次数。
+
+LangGraph 智能图：
+
+```text
+load_tools
+  -> llm_plan
+  -> route_decision
+      -> execute_readonly_tool -> llm_plan
+      -> create_recommended_action -> END
+      -> final_report -> END
+      -> fail_report -> END
+```
+
+`execute_readonly_tool` 执行工具、写入 observation、落 `TOOL_CALL` step，然后回到 `llm_plan`。不单独保留 `observe` 节点。
+
+AgentState 显式保存：
+
+1. `tools`
+2. `messages`
+3. `decision`
+4. `observations`
+5. `tool_call_count`
+6. `steps`
+7. `recommended_actions`
+8. `summary`
+9. `error_message`
+
+Tool Definition v2 字段：
+
+1. `schemaVersion`
+2. `name`
+3. `description`
+4. `inputSchema`
+5. `outputSchema`
+6. `riskLevel`
+7. `executionMode`
+8. `sourceType`
+9. `requiresConfirmation`
+10. `timeoutMs`
+
+AgentDecision 严格 JSON 示例：
+
+```json
+{
+  "action": "CALL_TOOL",
+  "toolName": "kb.readiness.check",
+  "arguments": {
+    "kbCode": "day20-cn-kb"
+  },
+  "reason": "需要先检查知识库是否具备问答条件。",
+  "finalAnswer": null,
+  "riskLevel": "LOW"
+}
+```
+
+```json
+{
+  "action": "REQUEST_CONFIRMATION",
+  "toolName": "embedding.rebuild.submit",
+  "arguments": {
+    "kbCode": "day20-cn-kb"
+  },
+  "reason": "readiness 显示 reembedRequired=true，需要人工确认后提交重嵌入任务。",
+  "finalAnswer": null,
+  "riskLevel": "MEDIUM"
+}
+```
+
+```json
+{
+  "action": "FINAL_ANSWER",
+  "toolName": null,
+  "arguments": {},
+  "reason": "已有工具观察结果足够生成结论。",
+  "finalAnswer": "当前未发现阻断问答的 readiness 问题，系统健康和知识库 readiness 均正常。",
+  "riskLevel": null
+}
+```
+
+关键安全边界：
+
+1. `REQUEST_CONFIRMATION` 不能只依赖 LLM 自觉。
+2. 即使 LLM 输出 `CALL_TOOL`，只要目标工具是 `WRITE`、`MEDIUM/HIGH` 风险，或 `requiresConfirmation=true`，Runtime 都必须转成 Python `recommendedActions`。
+3. Java 统一生成 `actionCode` 并落库为 `PENDING_CONFIRMATION`。
+4. 前端 confirm/reject 后再由 Java 执行。
+5. 工具原始结果写入 step output JSON；回灌给 LLM 的 observation 必须先裁剪或摘要。
+
+第 3 周任务拆分：
+
+1. Day 15：文档和状态模型收口，新增智能 runMode、AgentState、AgentDecision、AgentObservation、ToolDefinition v2。
+2. Day 16：Tool Registry v2，Java 暴露内部 tool definitions 查询接口，Python 拉取 Java tool definitions。
+3. Day 17：智能 LangGraph 主循环，新增 `build_intelligent_tool_agent_graph()`，每次 LLM 决策落 `LLM_DECISION` step，每次工具调用落 `TOOL_CALL` step。
+4. Day 18：LLM 决策校验和失败恢复，非法 JSON 重试一次，工具循环次数默认上限为 6，测试使用 fake LLM / mock LLM。
+5. Day 19：安全拦截和 recommended action，根据 Tool Registry 强制识别 `WRITE / MEDIUM/HIGH / requiresConfirmation`，有 recommended action 时 Java 将 run 标记为 `WAITING_CONFIRMATION`。
+6. Day 20：MCP/CLI 最小接入，只接一个 fake MCP tool 和一个只读 CLI tool；CLI 不是 shell agent，不允许 LLM 传任意 command。
+7. Day 21：端到端验收和面试材料，验收 Java tool + fake MCP tool + 只读 CLI tool 在同一主循环中工作。
+
 ## Demo Scenarios
 
 优先场景 1：readiness 异常

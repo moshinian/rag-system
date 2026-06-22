@@ -6,5 +6,6 @@ package com.example.rag.model.enums;
 public enum AgentStepType {
     NODE,
     TOOL_CALL,
-    REASONING
+    REASONING,
+    LLM_DECISION
 }
