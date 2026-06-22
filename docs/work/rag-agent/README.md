@@ -46,7 +46,12 @@
     - Tool Definition 升级为 v2。
     - Java 暴露内部 tool definitions 查询接口。
     - Python Runtime 支持 LLM_DECISION / TOOL_CALL 轨迹、recommended action 强制拦截、fake MCP tool 和只读 CLI tool。
-18. 下一步从 `plan.md` 第 3 周 Day 18/Day 19 继续：补强决策 parser、schema 校验、Java WAITING_CONFIRMATION 端到端测试，以及 MCP/CLI 配置化 MVP。
+18. Day 18 已完成 LLM 决策校验和失败恢复测试。
+19. Day 19 已完成智能模式 recommended action 到 Java `WAITING_CONFIRMATION` 的落库边界测试。
+20. Day 20 已完成 fake MCP tool 和只读 CLI tool 的配置化最小 MVP。
+21. 已补齐智能模式前端入口：`INTELLIGENT_TOOL_AGENT` runMode 和 `LLM_DECISION` step type。
+22. 已完成一次三端联调：通过前端 Vite proxy 创建 `INTELLIGENT_TOOL_AGENT` run，Java 调 Python，Python 在同一主循环中执行 fake MCP tool 和只读 CLI tool，run `AR-327301374603825153` 返回 `SUCCEEDED`。
+23. 下一步从 `plan.md` 第 3 周 Day 21 继续：准备确定性演示数据、固定 demo timeline 和面试材料。
 
 ## History
 
@@ -66,6 +71,9 @@
 14. [work day15.md](./work%20day15.md) 记录智能 Tool-use Agent 状态模型与计划收口。
 15. [work day16.md](./work%20day16.md) 记录 Tool Registry v2 与工具发现接口。
 16. [work day17.md](./work%20day17.md) 记录智能 LangGraph 主循环骨架。
+17. [work day18.md](./work%20day18.md) 记录 LLM 决策校验和失败恢复。
+18. [work day19.md](./work%20day19.md) 记录安全拦截和 recommended action 落库边界。
+19. [work day20.md](./work%20day20.md) 记录 MCP/CLI 最小配置化接入。
 
 ## Related Boards
 

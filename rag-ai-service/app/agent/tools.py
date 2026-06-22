@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any, Protocol
@@ -8,7 +9,7 @@ from typing import Any, Protocol
 import httpx
 
 from app.agent.state import AgentRuntimeRequest, AgentToolDefinition
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 
 
 @dataclass(frozen=True)
@@ -31,8 +32,11 @@ class AgentToolClient(Protocol):
 class StaticAgentToolClient:
     """Day 4/Day 6 replaceable tool client used before Java exposes runtime tool HTTP APIs."""
 
+    def __init__(self, settings: Settings | None = None) -> None:
+        self._settings = settings or get_settings()
+
     def definitions(self) -> list[AgentToolDefinition]:
-        return _default_tool_definitions()
+        return _default_tool_definitions(self._settings)
 
     def execute(self, tool_name: str, request: AgentRuntimeRequest) -> AgentToolExecution:
         started_at = perf_counter()
@@ -47,9 +51,9 @@ class StaticAgentToolClient:
                 output = self._indexing_tasks(request)
             elif tool_name == "qa.retrieve.probe":
                 output = self._qa_retrieve_probe(request)
-            elif tool_name == "mcp.repo.status.inspect":
+            elif tool_name == self._settings.agent_fake_mcp_tool_name:
                 output = self._mcp_repo_status()
-            elif tool_name == "cli.git.status":
+            elif tool_name == self._settings.agent_cli_git_status_tool_name:
                 output = self._cli_git_status()
             else:
                 return AgentToolExecution(
@@ -227,18 +231,10 @@ class StaticAgentToolClient:
         return any(marker in goal_text for marker in ["keyword 零命中", "关键词零命中", "keyword zero"])
 
     def _mcp_repo_status(self) -> dict[str, Any]:
-        return {
-            "repository": "rag-system",
-            "summary": "fake MCP repo inspection completed",
-            "signals": ["agent-runtime-present", "tool-registry-present"],
-        }
+        return _fake_mcp_repo_status()
 
     def _cli_git_status(self) -> dict[str, Any]:
-        return {
-            "command": "git status --short",
-            "mode": "READ_ONLY_TEMPLATE",
-            "summary": "working tree status inspected by a whitelisted CLI adapter",
-        }
+        return _run_cli_git_status(self._settings)
 
     @staticmethod
     def _elapsed_ms(started_at: float) -> int:
@@ -272,19 +268,28 @@ class JavaAgentToolClient:
                 headers={"X-Agent-Tool-Token": self._settings.java_agent_tool_token},
             )
             if response.status_code < 200 or response.status_code >= 300:
-                return _default_tool_definitions()
+                return _default_tool_definitions(self._settings)
             envelope = response.json()
             data = envelope.get("data") if isinstance(envelope, dict) else None
             if not isinstance(data, list):
-                return _default_tool_definitions()
+                return _default_tool_definitions(self._settings)
             definitions = [AgentToolDefinition.model_validate(item) for item in data if isinstance(item, dict)]
-            return _merge_tool_definitions(definitions, _default_non_java_tool_definitions())
+            return _merge_tool_definitions(definitions, _configured_non_java_tool_definitions(self._settings))
         except Exception:
-            return _default_tool_definitions()
+            return _default_tool_definitions(self._settings)
 
     def execute(self, tool_name: str, request: AgentRuntimeRequest) -> AgentToolExecution:
         started_at = perf_counter()
         try:
+            local_output = _execute_configured_local_tool(tool_name, self._settings)
+            if local_output is not None:
+                return AgentToolExecution(
+                    tool_name=tool_name,
+                    success=True,
+                    output=local_output,
+                    duration_ms=self._elapsed_ms(started_at),
+                )
+
             response = self._client.post(
                 self._tool_url(tool_name),
                 json={
@@ -368,8 +373,8 @@ class JavaAgentToolClient:
         return max(0, int((perf_counter() - started_at) * 1000))
 
 
-def _default_tool_definitions() -> list[AgentToolDefinition]:
-    return _merge_tool_definitions(_default_java_tool_definitions(), _default_non_java_tool_definitions())
+def _default_tool_definitions(settings: Settings | None = None) -> list[AgentToolDefinition]:
+    return _merge_tool_definitions(_default_java_tool_definitions(), _configured_non_java_tool_definitions(settings or get_settings()))
 
 
 def _default_java_tool_definitions() -> list[AgentToolDefinition]:
@@ -396,19 +401,26 @@ def _default_java_tool_definitions() -> list[AgentToolDefinition]:
     ]
 
 
-def _default_non_java_tool_definitions() -> list[AgentToolDefinition]:
-    return [
-        _tool_definition(
-            "mcp.repo.status.inspect",
-            "Fake MCP repo inspection tool used to validate MCP tool discovery and observation flow.",
-            source_type="MCP",
-        ),
-        _tool_definition(
-            "cli.git.status",
-            "Whitelisted read-only CLI adapter for git status inspection.",
-            source_type="CLI",
-        ),
-    ]
+def _configured_non_java_tool_definitions(settings: Settings) -> list[AgentToolDefinition]:
+    definitions: list[AgentToolDefinition] = []
+    if settings.agent_fake_mcp_enabled:
+        definitions.append(
+            _tool_definition(
+                settings.agent_fake_mcp_tool_name,
+                "Fake MCP repo inspection tool used to validate MCP tool discovery and observation flow.",
+                source_type="MCP",
+            )
+        )
+    if settings.agent_cli_git_status_enabled:
+        definitions.append(
+            _tool_definition(
+                settings.agent_cli_git_status_tool_name,
+                "Whitelisted read-only CLI adapter for git status inspection.",
+                source_type="CLI",
+                timeout_ms=settings.agent_cli_git_status_timeout_ms,
+            )
+        )
+    return definitions
 
 
 def _tool_definition(
@@ -419,6 +431,7 @@ def _tool_definition(
     risk_level: str = "LOW",
     source_type: str = "JAVA",
     requires_confirmation: bool = False,
+    timeout_ms: int = 5000,
 ) -> AgentToolDefinition:
     return AgentToolDefinition(
         toolName=name,
@@ -436,7 +449,7 @@ def _tool_definition(
         maxRiskLevel=risk_level,
         sourceType=source_type,
         requiresConfirmation=requires_confirmation,
-        timeoutMs=5000,
+        timeoutMs=timeout_ms,
     )
 
 
@@ -448,3 +461,38 @@ def _merge_tool_definitions(
     for tool in fallback:
         merged.setdefault(tool.name, tool)
     return list(merged.values())
+
+
+def _execute_configured_local_tool(tool_name: str, settings: Settings) -> dict[str, Any] | None:
+    if settings.agent_fake_mcp_enabled and tool_name == settings.agent_fake_mcp_tool_name:
+        return _fake_mcp_repo_status()
+    if settings.agent_cli_git_status_enabled and tool_name == settings.agent_cli_git_status_tool_name:
+        return _run_cli_git_status(settings)
+    return None
+
+
+def _fake_mcp_repo_status() -> dict[str, Any]:
+    return {
+        "repository": "rag-system",
+        "summary": "fake MCP repo inspection completed",
+        "signals": ["agent-runtime-present", "tool-registry-present"],
+    }
+
+
+def _run_cli_git_status(settings: Settings) -> dict[str, Any]:
+    timeout_seconds = max(1, settings.agent_cli_git_status_timeout_ms / 1000)
+    completed = subprocess.run(
+        ["git", "status", "--short"],
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+        check=False,
+    )
+    return {
+        "command": "git status --short",
+        "mode": "READ_ONLY_TEMPLATE",
+        "exitCode": completed.returncode,
+        "stdout": completed.stdout[:2000],
+        "stderr": completed.stderr[:1000],
+        "summary": "working tree status inspected by a whitelisted CLI adapter",
+    }

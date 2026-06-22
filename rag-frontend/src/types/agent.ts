@@ -1,8 +1,8 @@
-export type AgentRunMode = "DIAGNOSE_ONLY" | "DIAGNOSE_AND_RECOMMEND";
+export type AgentRunMode = "DIAGNOSE_ONLY" | "DIAGNOSE_AND_RECOMMEND" | "INTELLIGENT_TOOL_AGENT";
 
 export type AgentRunStatus = "RUNNING" | "WAITING_CONFIRMATION" | "SUCCEEDED" | "FAILED";
 
-export type AgentStepType = "NODE" | "TOOL_CALL" | "LLM_CALL";
+export type AgentStepType = "NODE" | "TOOL_CALL" | "LLM_CALL" | "LLM_DECISION";
 
 export type AgentStepStatus = "RUNNING" | "SUCCEEDED" | "FAILED" | "SKIPPED";
 

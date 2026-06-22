@@ -19,6 +19,7 @@ type FormValues = {
 
 const defaultGoal = "诊断这个知识库为什么不能问答";
 const failedTaskGoal = "检查这个知识库有没有索引异常";
+const intelligentProjectGoal = "检查当前项目状态，并结合 git 状态给出诊断";
 
 /** Agent 诊断工作台页面。 */
 export function AgentPage() {
@@ -143,6 +144,7 @@ export function AgentPage() {
               <Form.Item name="runMode" label="运行模式">
                 <Select
                   options={[
+                    { label: "智能 Tool-use Agent", value: "INTELLIGENT_TOOL_AGENT" },
                     { label: "诊断并推荐", value: "DIAGNOSE_AND_RECOMMEND" },
                     { label: "仅诊断", value: "DIAGNOSE_ONLY" }
                   ]}
@@ -159,6 +161,17 @@ export function AgentPage() {
                 <Space wrap>
                   <Button onClick={() => form.setFieldsValue({ goal: defaultGoal })}>问答 readiness</Button>
                   <Button onClick={() => form.setFieldsValue({ goal: failedTaskGoal, question: undefined })}>索引异常</Button>
+                  <Button
+                    onClick={() =>
+                      form.setFieldsValue({
+                        goal: intelligentProjectGoal,
+                        question: undefined,
+                        runMode: "INTELLIGENT_TOOL_AGENT"
+                      })
+                    }
+                  >
+                    智能项目检查
+                  </Button>
                 </Space>
               </Form.Item>
             </Col>
