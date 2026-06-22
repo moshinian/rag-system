@@ -324,9 +324,11 @@ public class DocumentIndexingService {
             task.setErrorMessage(null);
             touchHeartbeat(task, null);
 
+            String kbCode = Objects.requireNonNull(knowledgeBase.getKbCode(), "knowledgeBase.kbCode must not be null");
+            String documentCode = Objects.requireNonNull(document.getDocumentCode(), "document.documentCode must not be null");
             DocumentProcessResponse processResponse = documentProcessingService.processForIndexing(
-                    knowledgeBase.getKbCode(),
-                    document.getDocumentCode(),
+                    kbCode,
+                    documentCode,
                     operator
             );
             task.setParserName(processResponse.parserName());

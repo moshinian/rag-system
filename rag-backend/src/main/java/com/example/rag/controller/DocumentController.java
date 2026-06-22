@@ -14,6 +14,7 @@ import com.example.rag.service.DocumentIndexingService;
 import com.example.rag.service.DocumentProcessingService;
 import com.example.rag.service.DocumentService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.lang.NonNull;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -117,8 +118,8 @@ public class DocumentController {
 
     /** 处理已上传文档，执行解析、切块和入库。 */
     @PostMapping("/{documentCode}/process")
-    public ApiResponse<DocumentProcessResponse> process(@PathVariable String kbCode,
-                                                        @PathVariable String documentCode,
+    public ApiResponse<DocumentProcessResponse> process(@PathVariable @NonNull String kbCode,
+                                                        @PathVariable @NonNull String documentCode,
                                                         @RequestParam(value = "operator", required = false) String operator,
                                                         HttpServletRequest request) {
         String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));
@@ -128,8 +129,8 @@ public class DocumentController {
 
     /** 重新处理已上传文档。 */
     @PostMapping("/{documentCode}/reprocess")
-    public ApiResponse<DocumentProcessResponse> reprocess(@PathVariable String kbCode,
-                                                          @PathVariable String documentCode,
+    public ApiResponse<DocumentProcessResponse> reprocess(@PathVariable @NonNull String kbCode,
+                                                          @PathVariable @NonNull String documentCode,
                                                           @RequestParam(value = "operator", required = false) String operator,
                                                           HttpServletRequest request) {
         String requestId = String.valueOf(request.getAttribute(REQUEST_ID_ATTRIBUTE));

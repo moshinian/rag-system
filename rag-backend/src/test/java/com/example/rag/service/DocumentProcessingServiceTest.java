@@ -28,6 +28,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.support.NoOpCacheManager;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -111,7 +112,8 @@ class DocumentProcessingServiceTest {
                 List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
                 new FixedWindowChunker(defaultChunkingProperties()),
                 snowflakeIdGenerator,
-                new ObjectMapper()
+                new ObjectMapper(),
+                new NoOpCacheManager()
         );
 
         DocumentProcessResponse response = service.process("settlement-kb", "DOC-1", "tester");
@@ -161,7 +163,8 @@ class DocumentProcessingServiceTest {
                 List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser(), new PdfDocumentTextParser()),
                 new FixedWindowChunker(defaultChunkingProperties()),
                 snowflakeIdGenerator,
-                new ObjectMapper()
+                new ObjectMapper(),
+                new NoOpCacheManager()
         );
 
         DocumentProcessResponse response = service.process("settlement-kb", "DOC-1", "tester");
@@ -186,7 +189,8 @@ class DocumentProcessingServiceTest {
                 List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
                 new FixedWindowChunker(defaultChunkingProperties()),
                 snowflakeIdGenerator,
-                new ObjectMapper()
+                new ObjectMapper(),
+                new NoOpCacheManager()
         );
 
         assertThatThrownBy(() -> service.process("settlement-kb", "DOC-1", "tester"))
@@ -211,7 +215,8 @@ class DocumentProcessingServiceTest {
                 List.of(new MarkdownDocumentTextParser(), new PlainTextDocumentTextParser()),
                 new FixedWindowChunker(defaultChunkingProperties()),
                 snowflakeIdGenerator,
-                new ObjectMapper()
+                new ObjectMapper(),
+                new NoOpCacheManager()
         );
 
         assertThatThrownBy(() -> service.process("settlement-kb", "DOC-1", "tester"))

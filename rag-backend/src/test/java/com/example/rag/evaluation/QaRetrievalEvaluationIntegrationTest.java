@@ -28,6 +28,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -211,7 +212,11 @@ class QaRetrievalEvaluationIntegrationTest {
 
     private void processAndEmbedAll(String kbCode, List<String> documentCodes) {
         for (String documentCode : documentCodes) {
-            DocumentProcessResponse processResponse = documentProcessingService.process(kbCode, documentCode, "itest");
+            DocumentProcessResponse processResponse = documentProcessingService.process(
+                    Objects.requireNonNull(kbCode, "kbCode must not be null"),
+                    Objects.requireNonNull(documentCode, "documentCode must not be null"),
+                    "itest"
+            );
             assertThat(processResponse.chunkCount()).isGreaterThan(0);
             DocumentEmbeddingResponse embeddingResponse = documentEmbeddingService.embed(kbCode, documentCode);
             assertThat(embeddingResponse.embeddedChunkCount()).isGreaterThan(0);
