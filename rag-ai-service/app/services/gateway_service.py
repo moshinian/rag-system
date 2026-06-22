@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from functools import lru_cache
@@ -20,12 +21,17 @@ log = logging.getLogger(__name__)
 
 
 class GatewayService:
+    """编排 embedding 和 chat 请求，并转换为网关统一响应模型。"""
+
     def __init__(self, settings: Settings) -> None:
+        """创建服务并注入底层 provider 客户端。"""
         self.settings = settings
         self.provider_client = OpenAiCompatibleProviderClient(settings)
 
-    def create_embeddings(self, payload: EmbeddingRequest, request_id: str) -> EmbeddingResponse:
+    async def create_embeddings(self, payload: EmbeddingRequest, request_id: str) -> EmbeddingResponse:
+        """处理 embedding 请求，并把上游返回映射成标准响应。"""
         started_at = time.perf_counter()
+        # OpenAI-compatible 协议同时支持单字符串和字符串数组输入，这里统一归一化。
         inputs = [payload.input] if isinstance(payload.input, str) else payload.input
         model = payload.model or self.settings.embedding_default_model
         upstream_payload = {"model": model, "input": inputs if len(inputs) > 1 else inputs[0]}
@@ -37,8 +43,9 @@ class GatewayService:
             default_model=self.settings.embedding_default_model,
             path=self.settings.embedding_path,
         )
-        upstream = self.provider_client.post_json(target, upstream_payload, request_id)
+        upstream = await asyncio.to_thread(self.provider_client.post_json, target, upstream_payload, request_id)
         usage = upstream.get("usage") or {}
+        # 对上游缺失字段做兜底，避免兼容实现存在轻微差异时直接打断主链路。
         response = EmbeddingResponse(
             data=[
                 EmbeddingData(
@@ -67,7 +74,8 @@ class GatewayService:
         )
         return response
 
-    def create_chat_completion(self, payload: ChatCompletionRequest, request_id: str) -> ChatCompletionResponse:
+    async def create_chat_completion(self, payload: ChatCompletionRequest, request_id: str) -> ChatCompletionResponse:
+        """处理 chat completion 请求，并映射最小 OpenAI-compatible 子集。"""
         started_at = time.perf_counter()
         model = payload.model or self.settings.chat_default_model
         upstream_payload = payload.model_dump(exclude_none=True)
@@ -80,8 +88,9 @@ class GatewayService:
             default_model=self.settings.chat_default_model,
             path=self.settings.chat_path,
         )
-        upstream = self.provider_client.post_json(target, upstream_payload, request_id)
+        upstream = await asyncio.to_thread(self.provider_client.post_json, target, upstream_payload, request_id)
         usage = upstream.get("usage") or {}
+        # choices / usage 字段采用宽松解析，兼容不同上游实现的细小结构差异。
         response = ChatCompletionResponse(
             id=upstream.get("id", "chatcmpl-rag-ai-service"),
             object=upstream.get("object", "chat.completion"),
@@ -120,6 +129,7 @@ class GatewayService:
         return response
 
     def _log_call(self, capability: str, request_id: str, provider: str, model: str, latency_ms: int, **extra: Any) -> None:
+        """输出最小结构化日志，便于和 Java 主链路按 requestId 关联。"""
         fields: dict[str, Any] = {
             "event": "ai.gateway.request.completed",
             "capability": capability,
@@ -134,10 +144,12 @@ class GatewayService:
 
 @lru_cache
 def get_gateway_service() -> GatewayService:
+    """缓存 GatewayService，复用底层 HTTP 客户端。"""
     return GatewayService(get_settings())
 
 
 def _quote(value: Any) -> str:
+    """为日志字段生成简单的 key=value 安全文本。"""
     text = str(value)
     if not text or any(char.isspace() for char in text):
         return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
@@ -145,6 +157,7 @@ def _quote(value: Any) -> str:
 
 
 def _as_int(value: Any) -> int:
+    """把上游返回的数值宽松转换为 int。"""
     if isinstance(value, int):
         return value
     if isinstance(value, float):

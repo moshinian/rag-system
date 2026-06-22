@@ -109,6 +109,21 @@ public class IndexingTaskRepository {
         return indexingTaskMapper.selectList(query);
     }
 
+    /** 按知识库、状态和创建时间倒序扫描任务。 */
+    public List<IndexingTaskEntity> findByKnowledgeBaseIdAndStatusesOrderByCreatedAtDesc(Long knowledgeBaseId,
+                                                                                          List<IndexingTaskStatus> statuses,
+                                                                                          int limit) {
+        LambdaQueryWrapper<IndexingTaskEntity> query = new LambdaQueryWrapper<IndexingTaskEntity>()
+                .eq(IndexingTaskEntity::getKnowledgeBaseId, knowledgeBaseId)
+                .orderByDesc(IndexingTaskEntity::getCreatedAt)
+                .orderByDesc(IndexingTaskEntity::getId)
+                .last("LIMIT " + Math.max(1, limit));
+        if (statuses != null && !statuses.isEmpty()) {
+            query.in(IndexingTaskEntity::getStatus, statuses);
+        }
+        return indexingTaskMapper.selectList(query);
+    }
+
     /** 按知识库删除全部任务。 */
     public void deleteByKnowledgeBaseId(Long knowledgeBaseId) {
         LambdaQueryWrapper<IndexingTaskEntity> query = new LambdaQueryWrapper<IndexingTaskEntity>()

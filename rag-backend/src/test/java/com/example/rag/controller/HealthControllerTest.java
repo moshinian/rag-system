@@ -47,6 +47,7 @@ class HealthControllerTest {
                 List.of("local"),
                 Map.of(
                         "postgres", new HealthComponentStatusResponse("UP", "infrastructure", "jdbc:postgresql", null, null, 12L, "SELECT 1 succeeded", null, Instant.parse("2026-05-11T10:00:00Z")),
+                        "aiGateway", new HealthComponentStatusResponse("UP", "ai-gateway", "http://localhost:8001/health", "rag-ai-service", null, 15L, "AI gateway /health returned status=UP", null, Instant.parse("2026-05-11T10:00:00Z")),
                         "embedding", new HealthComponentStatusResponse("DOWN", "ai-capability", "https://example.test/embeddings", "aliyun", "text-embedding-v4", 123L, "Embedding request failed", "401 unauthorized", Instant.parse("2026-05-11T10:00:01Z"))
                 ),
                 Instant.parse("2026-05-11T10:00:02Z")
@@ -59,6 +60,7 @@ class HealthControllerTest {
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.status").value("DEGRADED"))
                 .andExpect(jsonPath("$.data.components.postgres.status").value("UP"))
+                .andExpect(jsonPath("$.data.components.aiGateway.provider").value("rag-ai-service"))
                 .andExpect(jsonPath("$.data.components.embedding.model").value("text-embedding-v4"))
                 .andExpect(jsonPath("$.data.components.embedding.errorMessage").value("401 unauthorized"));
     }

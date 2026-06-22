@@ -28,6 +28,9 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -56,6 +59,7 @@ public class DocumentProcessingService {
     private final FixedWindowChunker fixedWindowChunker;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final ObjectMapper objectMapper;
+    private final CacheManager cacheManager;
 
     /** 注入文档处理所需依赖。 */
     public DocumentProcessingService(DocumentRepository documentRepository,
@@ -65,7 +69,8 @@ public class DocumentProcessingService {
                                      List<DocumentTextParser> documentTextParsers,
                                      FixedWindowChunker fixedWindowChunker,
                                      SnowflakeIdGenerator snowflakeIdGenerator,
-                                     ObjectMapper objectMapper) {
+                                     ObjectMapper objectMapper,
+                                     CacheManager cacheManager) {
         this.documentRepository = documentRepository;
         this.documentChunkRepository = documentChunkRepository;
         this.indexingTaskRepository = indexingTaskRepository;
@@ -74,6 +79,7 @@ public class DocumentProcessingService {
         this.fixedWindowChunker = fixedWindowChunker;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
         this.objectMapper = objectMapper;
+        this.cacheManager = cacheManager;
     }
 
     /**
@@ -89,18 +95,18 @@ public class DocumentProcessingService {
             @CacheEvict(cacheNames = CacheNames.QA_READINESS, key = "#kbCode"),
             @CacheEvict(cacheNames = CacheNames.QA_RETRIEVAL, allEntries = true)
     })
-    public DocumentProcessResponse process(String kbCode, String documentCode, String operator) {
+    public DocumentProcessResponse process(@NonNull String kbCode, @NonNull String documentCode, String operator) {
         return processInternal(kbCode, documentCode, operator, false);
     }
 
     /** 异步索引链路内部调用时允许复用 process 逻辑，但要绕过“活动索引任务”自校验。 */
-    DocumentProcessResponse processForIndexing(String kbCode, String documentCode, String operator) {
+    DocumentProcessResponse processForIndexing(@NonNull String kbCode, @NonNull String documentCode, String operator) {
         return processInternal(kbCode, documentCode, operator, true);
     }
 
     /** 执行文档处理主流程，并按场景决定是否跳过活动索引任务校验。 */
-    private DocumentProcessResponse processInternal(String kbCode,
-                                                    String documentCode,
+    private DocumentProcessResponse processInternal(@NonNull String kbCode,
+                                                    @NonNull String documentCode,
                                                     String operator,
                                                     boolean allowDuringActiveIndexing) {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
@@ -179,6 +185,8 @@ public class DocumentProcessingService {
                     .field("message", ex.getMessage())
                     .build());
             throw ex;
+        } finally {
+            evictProcessingCaches(kbCode, documentCode);
         }
     }
 
@@ -308,6 +316,42 @@ public class DocumentProcessingService {
         task.setErrorMessage(truncate(message));
         task.setFinishedAt(OffsetDateTime.now());
         indexingTaskRepository.updateById(task);
+    }
+
+    /** 异步索引会调用 package-private 入口，不能依赖 public 方法上的 Spring Cache AOP。 */
+    private void evictProcessingCaches(@NonNull String kbCode, @NonNull String documentCode) {
+        String documentKey = kbCode + ":" + documentCode;
+        evictKey(CacheNames.DOCUMENT_DETAIL, documentKey);
+        evictKey(CacheNames.DOCUMENT_CHUNKS, documentKey);
+        evictKey(CacheNames.QA_READINESS, kbCode);
+        evictAll(CacheNames.DOCUMENT_PAGE);
+        evictAll(CacheNames.QA_RETRIEVAL);
+    }
+
+    /** 清理单个缓存键；缓存不可用不应影响文档处理主链路。 */
+    private void evictKey(@NonNull String cacheName, @NonNull String key) {
+        try {
+            Cache cache = cacheManager.getCache(cacheName);
+            if (cache != null) {
+                cache.evictIfPresent(key);
+            }
+        } catch (RuntimeException ex) {
+            log.warn("Failed to evict document processing cache. cache={}, key={}, reason={}",
+                    cacheName, key, ex.getMessage());
+        }
+    }
+
+    /** 清理整个缓存域；缓存不可用不应影响文档处理主链路。 */
+    private void evictAll(@NonNull String cacheName) {
+        try {
+            Cache cache = cacheManager.getCache(cacheName);
+            if (cache != null) {
+                cache.clear();
+            }
+        } catch (RuntimeException ex) {
+            log.warn("Failed to clear document processing cache. cache={}, reason={}",
+                    cacheName, ex.getMessage());
+        }
     }
 
     /** 截断错误信息，避免超过数据库字段长度。 */

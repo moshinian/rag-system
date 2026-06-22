@@ -46,6 +46,7 @@
 | [rag-backend](./rag-backend/README.md) | Java RAG 主系统，负责知识库、文档、检索、问答、异步任务和运维语义 | [status](./rag-backend/current-status.md), [plan](./rag-backend/plan.md), `week*.md`, `work day*.md` |
 | [rag-frontend](./rag-frontend/README.md) | RAG 工作台前端，负责知识库操作、检索调试、问答展示和运维入口 | [status](./rag-frontend/current-status.md), [plan](./rag-frontend/plan.md) |
 | [rag-ai-service](./rag-ai-service/README.md) | Python AI Gateway，负责 embedding/chat provider 收口和模型能力治理边界 | [status](./rag-ai-service/current-status.md), [plan](./rag-ai-service/plan.md) |
+| [rag-agent](./rag-agent/README.md) | LangGraph RAG 运维诊断 Agent 计划板块，负责下一阶段 Agent 编排、工具调用、human-in-the-loop 和执行轨迹设计 | [status](./rag-agent/current-status.md), [plan](./rag-agent/plan.md) |
 
 ## Reading Order
 
@@ -64,12 +65,14 @@
 1. `rag-backend` 已完成企业级 RAG 主链路，覆盖文档接入、异步索引、向量检索、问答、readiness gate、rebuild 和恢复语义。
 2. `rag-frontend` 已形成工作台式产品外壳，承接知识库、文档、检索、问答、历史和健康观察页面。
 3. `rag-ai-service` 已把模型供应商调用从 Java 主系统中剥离出来，形成独立的 AI Gateway。
+4. `rag-agent` 已完成下一阶段 LangGraph 运维诊断 Agent 的计划收口，但尚未进入代码实现。
 
 当前项目的真实系统边界是：
 
 1. Java 负责业务域和 RAG 编排。
 2. Python 负责模型能力网关与 provider 适配。
 3. 前端负责把主链路和运维动作组织成可操作、可演示的企业后台界面。
+4. Agent 改造阶段将继续保持 Java 业务权威，Python 只承担 LangGraph Agent Runtime。
 
 ## Cross-board Milestones
 
@@ -78,6 +81,7 @@
 3. Frontend Phase 1：工作台、文档、检索、问答、历史和健康页完成第一版接入。
 4. AI Gateway Phase 1：`rag-ai-service` 落地，Java -> Gateway -> Provider 真实联调完成，并已统一收口为持续维护的 `plan.md`。
 5. 真实运维链路：`health -> rebuild -> readiness -> retrieve -> ask` 已完成新架构下验证。
+6. Agent Phase 0：已完成 LangGraph RAG 运维诊断 Agent 的 RFC、计划和恢复入口收口。
 
 ## Maintenance Rules
 

@@ -73,11 +73,14 @@ rag:
       base-url: http://localhost:8001
       embeddings-path: /v1/embeddings
       chat-completions-path: /v1/chat/completions
+      agent-runs-path: /v1/agent/runs
       connect-timeout-millis: 5000
       read-timeout-millis: 30000
+  agent:
+    internal-tool-token: ${RAG_AGENT_TOOL_TOKEN:dev-agent-tool-token}
   llm:
     chat:
-      model: deepseek-v4-pro
+      model: qwen3.7-plus
       temperature: 0.2
       max-output-tokens: 1200
   retrieval:

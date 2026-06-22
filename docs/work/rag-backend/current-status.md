@@ -43,6 +43,8 @@
 1. Java 已不再直接承接模型供应商调用。
 2. 后端已通过 `AiGatewayClient` 接入 `rag-ai-service`。
 3. 健康检查已经改成通过 Gateway 做端到端能力探测。
+4. 健康检查中的 `aiGateway / embedding / llm` provider 和 model 已改为优先展示 Gateway 当前运行配置，而不是只读本地静态默认值。
+5. chat completion 实际调用已优先跟随 Gateway 当前 `chat_default_model`；`qa/ask` 返回值、结构化日志和 `qa/history` 持久化的 `chatModel` 已保持一致。
 
 ## 已验证
 
@@ -53,6 +55,7 @@
 3. `GET /api/health` 通过 Gateway 探测 embedding 和 llm 能力。
 4. `POST /api/admin/embeddings/rebuild` 可完成一次全量重嵌入恢复。
 5. 相关后端单测在 Gateway 重构后仍保持通过。
+6. 2026-05-20 已完成一次真实问答闭环验证：当 Gateway chat 默认模型切换为 `qwen-plus` 后，`qa/ask` 返回体与 `qa/history` 最新记录中的 `chatModel` 都已同步变为 `qwen-plus`。
 
 ## 当前未完成 / 风险
 
@@ -61,6 +64,7 @@
 3. 更完整的 tracing、指标平台和日志采集体系还未落地。
 4. 任务取消、批量编排和多实例任务协调还未开始。
 5. 多轮会话和 session reuse 仍停留在 RFC 规划阶段。
+6. embedding 仍保持显式模型配置，不跟随 Gateway 默认 embedding 模型自动漂移；这是为了维持向量维度、readiness 和 rebuild 语义稳定。
 
 ## 当前判断
 
