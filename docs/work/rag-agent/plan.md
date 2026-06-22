@@ -1,174 +1,125 @@
-# 基于 LangGraph 的 RAG 运维诊断 Agent 改造计划
+# RAG Agent 改造计划
 
-## Summary
+## 1. 当前定位
 
-在现有 RAG 系统基础上新增“RAG 运维诊断 Agent”，用 LangGraph 承接 Agent 状态图和工具编排，用 Java 后端承接受控工具、安全边界、落库审计和确认执行，用前端展示执行轨迹与 human-in-the-loop 操作。
+在现有 RAG 系统上方新增一个可审计、可确认、可演示的运维诊断 Agent。
 
-核心原则：
+项目同时保留两条 Agent 路线：
 
-1. Java 是 Agent Run 的权威状态中心。
-2. Python 是 LangGraph Agent Runtime，只负责一次诊断执行的计算与建议生成。
-3. Python 不生成 `runCode / stepCode / actionCode`，这些由 Java 统一生成和落库。
-4. `WAITING_CONFIRMATION` 是 Java 的 run 状态，不要求 LangGraph 在确认后继续执行。
-5. v1 优先打通两个演示场景：`reembedRequired` 和 `FAILED indexing task`。
+1. **Legacy 固定流程 Agent**：确定性业务工作流，用于 readiness、索引任务、检索探测等固定诊断路径。
+2. **Intelligent Tool-use Agent**：单 Agent、LLM 决策、LangGraph 循环编排，根据工具注册表动态选择 Java / MCP / CLI 工具。
 
-## Key Changes
+核心边界：
 
-### 架构分工
+1. Java 是业务权威、run 状态中心和写操作执行方。
+2. Python 是 LangGraph Runtime，只负责工具编排、观察结果整理和推荐动作生成。
+3. 前端负责创建 run、展示 timeline、展示 recommended actions、触发 confirm/reject。
+4. Python 不生成 `runCode / stepCode / actionCode`，这些由 Java 统一生成并落库。
+5. 写操作、`MEDIUM/HIGH` 风险工具、`requiresConfirmation=true` 工具必须进入 human-in-the-loop。
 
-`rag-backend`：
+## 2. 系统分工
 
-1. 新增 Agent API：创建 run、查询 run、确认/拒绝 action。
-2. 新增 `agent_run / agent_step / agent_action` 三张表。
-3. 封装 Agent 可调用的受控工具。
-4. 调用 `rag-ai-service` 的 LangGraph Agent Runtime。
-5. 根据 Python 返回的步骤和推荐动作生成 `stepCode / actionCode` 并落库。
-6. 对写操作执行白名单、风险等级和确认校验。
+### 2.1 Java 后端
 
-`rag-ai-service`：
+职责：
 
-1. 新增 `app/agent/` 模块。
-2. 引入 LangGraph。
-3. 定义 `AgentState` 和固定状态图。
-4. 调用 Java 提供的只读工具接口。
-5. 返回诊断步骤、诊断结论和推荐动作草案。
-6. 不直接写业务库，不直接执行重试或重嵌入。
+1. 提供 Agent Run API。
+2. 持久化 `agent_run / agent_step / agent_action`。
+3. 暴露受控 Java 工具和 Tool Registry definitions。
+4. 调用 Python Agent Runtime。
+5. 将 Python 返回的 `steps / recommendedActions` 落库。
+6. 根据 Runtime 返回的 action 决定 runStatus。
+7. confirm/reject 后执行或拒绝写操作。
 
-`rag-frontend`：
+runStatus 规则：
 
-1. 新增 Agent 工作台。
-2. 支持创建诊断 run。
-3. 展示 step timeline。
-4. 展示 recommended actions。
-5. 支持确认或拒绝 action。
-6. 展示执行结果、错误信息和 requestId。
+1. `SUCCEEDED`：Runtime 成功，且没有待确认动作。
+2. `WAITING_CONFIRMATION`：Python 返回 `recommendedActions`，Java 落库为 `PENDING_CONFIRMATION`。
+3. `FAILED`：Runtime 失败、工具失败不可恢复、协议校验失败或确认执行失败。
 
-### LangGraph v1 状态图
+### 2.2 Python AI Service
 
-```text
-START
-  ↓
-parse_goal
-  ↓
-system_health_check
-  ↓
-kb_readiness_check
-  ↓
-documents_status_scan
-  ↓
-indexing_tasks_scan
-  ↓
-should_run_retrieve_probe?
-      ├── yes → qa_retrieve_probe
-      └── no
-  ↓
-diagnose
-  ↓
-recommend_actions
-  ↓
-generate_report
-  ↓
-END
-```
+职责：
 
-LangGraph 只负责诊断和推荐。Java 根据返回结果判断：
+1. 承载 LangGraph Runtime。
+2. 保留 legacy graph：`build_readiness_diagnosis_graph()`。
+3. 新增 intelligent graph：`build_intelligent_tool_agent_graph()`。
+4. 从 Tool Registry 读取工具定义。
+5. 执行只读工具，写回 observations。
+6. 强制拦截高风险或写工具，转成 recommended action。
+7. 每次 LLM 决策落 `LLM_DECISION` step，每次工具调用落 `TOOL_CALL` step。
 
-1. 如果存在 `requiresConfirmation=true` 的 action，`agent_run.status = WAITING_CONFIRMATION`。
-2. 如果没有待确认 action，`agent_run.status = SUCCEEDED`。
-3. 如果 Agent Runtime 或工具调用失败，`agent_run.status = FAILED` 并记录 `error_message`。
+Python 不做：
 
-### MVP 工具范围
+1. 不直接写业务库。
+2. 不直接执行 retry/rebuild 等写操作。
+3. 不让 LLM 直接拼 shell 字符串。
+4. 不把 chain-of-thought 入库。
 
-P0 必做只读工具：
+### 2.3 前端
 
-1. `system.health.check`
-2. `kb.readiness.check`
+职责：
 
-P1 强烈建议完成：
+1. Agent 工作台创建 run。
+2. 支持 `DIAGNOSE_ONLY / DIAGNOSE_AND_RECOMMEND / INTELLIGENT_TOOL_AGENT`。
+3. 展示 summary、runStatus、timeline。
+4. 展示 action 风险、payload、confirm/reject。
+5. 展示工具 observation 的 JSON 输出。
 
-1. `documents.status.scan`
-2. `indexing.tasks.scan`
-3. `document.indexing_task.retry`
+## 3. 数据模型和接口
 
-P2 有时间完成：
-
-1. `qa.retrieve.probe`
-2. `embedding.rebuild.submit`
-
-`qa.retrieve.probe` 设计为 Dense / Hybrid 对比探测：
-
-1. 同一问题分别执行 `DENSE` 和 `HYBRID`。
-2. 返回命中数、keyword 命中数、TopK sources 和耗时。
-3. 标记 keyword 零命中、Hybrid 无增益、检索结果为空等诊断信号。
-
-暂缓：
-
-1. `qa.ask.probe`
-2. `kb.enable.with_failed_task_retry`
-3. `redis.probe.run`
-4. 多轮聊天
-5. MCP
-6. 多 Agent 协作
-7. 自动危险操作
-
-## Public Interfaces And Data Model
-
-### Java API
+### 3.1 Java API
 
 ```text
 POST /api/knowledge-bases/{kbCode}/agent/runs
 GET  /api/knowledge-bases/{kbCode}/agent/runs/{runCode}
 POST /api/knowledge-bases/{kbCode}/agent/runs/{runCode}/actions/{actionCode}/confirm
 POST /api/knowledge-bases/{kbCode}/agent/runs/{runCode}/actions/{actionCode}/reject
+GET  /api/internal/agent/tools
+POST /api/internal/agent/tools/{toolName}/execute
 ```
 
-`POST /agent/runs` 请求：
+创建 run 请求：
 
 ```json
 {
   "goal": "诊断这个知识库为什么不能问答",
-  "question": "可选，用于检索探测",
-  "runMode": "DIAGNOSE_AND_RECOMMEND"
+  "question": "可选问题",
+  "runMode": "INTELLIGENT_TOOL_AGENT",
+  "createdBy": "frontend"
 }
 ```
 
-`runMode` 支持：
-
-```text
-DIAGNOSE_ONLY
-DIAGNOSE_AND_RECOMMEND
-```
-
-### Python Agent Runtime API
+### 3.2 Python Runtime API
 
 ```text
 POST /v1/agent/runs
 ```
 
-请求由 Java 发起，包含：
+请求由 Java 发起：
 
 ```json
 {
   "runCode": "AR-xxx",
   "kbCode": "day20-cn-kb",
   "goal": "诊断这个知识库为什么不能问答",
-  "question": "可选检索探测问题",
-  "runMode": "DIAGNOSE_AND_RECOMMEND"
+  "question": "可选问题",
+  "runMode": "INTELLIGENT_TOOL_AGENT"
 }
 ```
 
-Python 返回步骤和动作草案，不返回最终主键：
+Python 返回草案，不返回 Java 主键：
 
 ```json
 {
   "status": "SUCCEEDED",
-  "summary": "知识库不可问答，主要原因是 embedding 配置变化后尚未重嵌入。",
+  "summary": "Agent 已生成待确认动作：embedding.rebuild.submit",
   "steps": [],
   "recommendedActions": []
 }
 ```
 
-### 数据表
+### 3.3 持久化表
 
 `agent_run`：
 
@@ -194,7 +145,7 @@ run_code
 step_code
 node_name
 tool_name
-step_type: NODE / TOOL_CALL / REASONING
+step_type: NODE / TOOL_CALL / LLM_DECISION
 status: PENDING / RUNNING / SUCCEEDED / FAILED / SKIPPED
 input_json
 output_json
@@ -227,45 +178,31 @@ created_at
 updated_at
 ```
 
-风险策略：
+## 4. Legacy 固定流程 Agent
 
-1. `LOW`：允许确认执行。
-2. `MEDIUM`：必须确认执行。
-3. `HIGH`：v1 禁止执行，只能展示建议。
+固定图：
 
-## Implementation Plan
+```text
+parse_goal
+  -> system_health_check
+  -> kb_readiness_check
+  -> documents_status_scan
+  -> indexing_tasks_scan
+  -> qa_retrieve_probe
+  -> diagnose
+  -> recommend_actions
+  -> generate_report
+```
 
-第 1 周：Agent 主线跑通
+目标：
 
-1. Day 1：确定 `AgentState`、工具协议、状态枚举和三张表。
-2. Day 2：Java 实现 `agent_run / agent_step / agent_action` 持久化与查询 API。
-3. Day 3：Java 封装 `system.health.check` 和 `kb.readiness.check` 工具。
-4. Day 4：Python 引入 LangGraph，实现 `parse_goal -> health -> readiness -> diagnose -> recommend -> report` 最小图。
-5. Day 5：Java 调用 Python Agent Runtime，并将返回 steps/actions 落库。
-6. Day 6：实现 `documents.status.scan` 和 `indexing.tasks.scan`。
-7. Day 7：跑通第一个完整诊断场景：`readiness 异常 -> 推荐重嵌入 -> WAITING_CONFIRMATION`。
+1. 提供确定性诊断链路。
+2. 覆盖 readiness、索引失败、检索质量三个业务场景。
+3. 作为 debug / fallback / 面试中“确定性业务工作流 Agent”案例。
 
-第 2 周：运维闭环和展示
+## 5. Intelligent Tool-use Agent
 
-1. Day 8：实现 `document.indexing_task.retry` 确认执行。
-2. Day 9：实现 `embedding.rebuild.submit` 确认执行。
-3. Day 10：前端新增 Agent 工作台：创建 run、查询 run、展示 summary。
-4. Day 11：前端展示 timeline 和推荐动作卡片。
-5. Day 12：前端接入 confirm/reject，并展示执行结果。
-6. Day 13：补 `qa.retrieve.probe` 简化版 Dense / Hybrid 对比；若时间不足，降级为 P2。
-7. Day 14：更新 README、架构图、接口说明、简历 bullet 和面试讲稿。
-
-第 3 周：单 Agent 智能 Tool-use 改造
-
-目标是把当前固定流程式 Agent 演进为“单 Agent、LLM 驱动、可循环调用工具”的智能 Tool-use Agent。旧固定图保留为 legacy/debug：`build_readiness_diagnosis_graph()`；新增智能图：`build_intelligent_tool_agent_graph()`。
-
-智能 Agent run 状态规则：
-
-1. `SUCCEEDED`：LLM 生成 `FINAL_ANSWER`，且没有待确认动作。
-2. `WAITING_CONFIRMATION`：Python Runtime 返回 `recommendedActions`，由 Java 统一落库为 `PENDING_CONFIRMATION`。
-3. `FAILED`：LLM 决策解析失败、schema 校验失败、工具执行失败不可恢复，或超过最大工具调用次数。
-
-LangGraph 智能图：
+智能图：
 
 ```text
 load_tools
@@ -277,9 +214,7 @@ load_tools
       -> fail_report -> END
 ```
 
-`execute_readonly_tool` 执行工具、写入 observation、落 `TOOL_CALL` step，然后回到 `llm_plan`。不单独保留 `observe` 节点。
-
-AgentState 显式保存：
+状态结构：
 
 1. `tools`
 2. `messages`
@@ -291,7 +226,18 @@ AgentState 显式保存：
 8. `summary`
 9. `error_message`
 
-Tool Definition v2 字段：
+关键行为：
+
+1. `llm_plan` 只接受严格 JSON 决策。
+2. 每轮决策做 JSON parse、枚举校验、toolName 白名单校验、arguments schema 校验。
+3. 非法 JSON 重试一次；仍失败则生成 failed `LLM_DECISION` step。
+4. 工具调用上限默认 6 次；超过后 run failed。
+5. 工具原始输出写 step output JSON。
+6. 回灌 LLM 的 observation 先裁剪/摘要，避免把大 JSON 原样塞回。
+
+## 6. Tool Registry v2
+
+ToolDefinition 字段：
 
 1. `schemaVersion`
 2. `name`
@@ -304,7 +250,22 @@ Tool Definition v2 字段：
 9. `requiresConfirmation`
 10. `timeoutMs`
 
-AgentDecision 严格 JSON 示例：
+工具来源：
+
+1. `JAVA`：Java 内部受控工具。
+2. `MCP`：先做 fake MCP MVP，验证 discovery/definition/call/observation 链路。
+3. `CLI`：只读、白名单、schema 化、模板化命令适配器。
+
+CLI 边界：
+
+1. CLI Adapter 不是通用 shell 代理。
+2. LLM 不允许传入任意 `command`。
+3. 当前仅开放 `cli.git.status`，固定执行 `git status --short`。
+4. 写 CLI 未来必须走 Java confirm/action 流程。
+
+## 7. AgentDecision 协议
+
+`CALL_TOOL` 示例：
 
 ```json
 {
@@ -319,6 +280,8 @@ AgentDecision 严格 JSON 示例：
 }
 ```
 
+`REQUEST_CONFIRMATION` 示例：
+
 ```json
 {
   "action": "REQUEST_CONFIRMATION",
@@ -332,107 +295,149 @@ AgentDecision 严格 JSON 示例：
 }
 ```
 
+`FINAL_ANSWER` 示例：
+
 ```json
 {
   "action": "FINAL_ANSWER",
   "toolName": null,
   "arguments": {},
   "reason": "已有工具观察结果足够生成结论。",
-  "finalAnswer": "当前未发现阻断问答的 readiness 问题，系统健康和知识库 readiness 均正常。",
+  "finalAnswer": "当前未发现阻断问答的 readiness 问题。",
   "riskLevel": null
 }
 ```
 
-关键安全边界：
+安全要求：
 
-1. `REQUEST_CONFIRMATION` 不能只依赖 LLM 自觉。
-2. 即使 LLM 输出 `CALL_TOOL`，只要目标工具是 `WRITE`、`MEDIUM/HIGH` 风险，或 `requiresConfirmation=true`，Runtime 都必须转成 Python `recommendedActions`。
-3. Java 统一生成 `actionCode` 并落库为 `PENDING_CONFIRMATION`。
-4. 前端 confirm/reject 后再由 Java 执行。
-5. 工具原始结果写入 step output JSON；回灌给 LLM 的 observation 必须先裁剪或摘要。
+1. `REQUEST_CONFIRMATION` 不能只依赖 LLM 自觉输出。
+2. Runtime 必须根据 Tool Registry 强制拦截。
+3. 即使 LLM 输出 `CALL_TOOL`，只要目标工具是 `WRITE`、`MEDIUM/HIGH` 或 `requiresConfirmation=true`，也必须转成 `recommendedActions`。
+4. Java 统一落库为 `PENDING_CONFIRMATION`。
 
-第 3 周任务拆分：
+## 8. Week 1-3 任务拆分
 
-1. Day 15：文档和状态模型收口，新增智能 runMode、AgentState、AgentDecision、AgentObservation、ToolDefinition v2。
-2. Day 16：Tool Registry v2，Java 暴露内部 tool definitions 查询接口，Python 拉取 Java tool definitions。
-3. Day 17：智能 LangGraph 主循环，新增 `build_intelligent_tool_agent_graph()`，每次 LLM 决策落 `LLM_DECISION` step，每次工具调用落 `TOOL_CALL` step。
-4. Day 18：LLM 决策校验和失败恢复，非法 JSON 重试一次，工具循环次数默认上限为 6，测试使用 fake LLM / mock LLM。
-5. Day 19：安全拦截和 recommended action，根据 Tool Registry 强制识别 `WRITE / MEDIUM/HIGH / requiresConfirmation`，有 recommended action 时 Java 将 run 标记为 `WAITING_CONFIRMATION`。
-6. Day 20：MCP/CLI 最小接入，只接一个 fake MCP tool 和一个只读 CLI tool；CLI 不是 shell agent，不允许 LLM 传任意 command。
-7. Day 21：端到端验收和面试材料，验收 Java tool + fake MCP tool + 只读 CLI tool 在同一主循环中工作。
+### Week 1：Agent 主链路
 
-## Demo Scenarios
+| Day | 目标 | 状态 |
+| --- | --- | --- |
+| Day 1 | 状态模型、工具协议、三张表 | Done |
+| Day 2 | Agent 查询 API 与 Service 骨架 | Done |
+| Day 3 | P0 只读工具封装 | Done |
+| Day 4 | Python LangGraph 最小图 | Done |
+| Day 5 | Java 调 Python Runtime 并落库 | Done |
+| Day 6 | documents/status 与 indexing/tasks 扫描 | Done |
+| Day 7 | readiness / failed task 端到端验收 | Done |
 
-优先场景 1：readiness 异常
+### Week 2：运维闭环和前端展示
+
+| Day | 目标 | 状态 |
+| --- | --- | --- |
+| Day 8 | `document.indexing_task.retry` 确认执行 | Done |
+| Day 9 | `embedding.rebuild.submit` 确认执行 | Done |
+| Day 10 | 前端 Agent 工作台基础 | Done |
+| Day 11 | timeline 和 action 卡片 | Done |
+| Day 12 | confirm/reject 前端闭环 | Done |
+| Day 13 | `qa.retrieve.probe` Dense / Hybrid 探测 | Done |
+| Day 14 | README、接口说明、面试材料 | Done |
+
+### Week 3：单 Agent 智能 Tool-use 改造
+
+| Day | 目标 | 状态 |
+| --- | --- | --- |
+| Day 15 | 文档和状态模型收口，新增智能 runMode / AgentState / AgentDecision / ToolDefinition v2 | Done |
+| Day 16 | Tool Registry v2，Java definitions API，Python 拉取 Java tool definitions | Done |
+| Day 17 | 智能 LangGraph 主循环，`LLM_DECISION -> TOOL_CALL -> observation -> next decision` | Done |
+| Day 18 | JSON 决策校验、失败恢复、fake/mock LLM 测试 | Done |
+| Day 19 | Runtime 安全拦截，recommended action 和 Java `WAITING_CONFIRMATION` | Done |
+| Day 20 | fake MCP + 只读 CLI MVP，证明新增工具不改主循环 | Done |
+| Day 21 | 端到端验收、确定性演示数据、面试展示材料 | In Progress |
+
+## 9. 固定演示场景
+
+演示 1：readiness 异常
+
+准备数据：
 
 ```text
-输入：诊断 day20-cn-kb 为什么不能问答
-输出：health 正常，readiness 显示 reembedRequired=true，推荐 embedding.rebuild.submit，等待用户确认
+day20-cn-kb readiness 返回 reembedRequired=true
 ```
 
-优先场景 2：索引任务失败
+期望 timeline：
 
 ```text
-输入：检查这个知识库有没有索引异常
-输出：发现 FAILED indexing task，展示失败原因，推荐 document.indexing_task.retry，等待用户确认
+LLM_DECISION -> kb.readiness.check -> observation -> LLM_DECISION -> recommended embedding.rebuild.submit -> WAITING_CONFIRMATION
 ```
 
-可选场景 3：检索质量诊断
+演示 2：索引任务失败
+
+准备数据：
 
 ```text
-输入：用某个问题检查 Dense / Hybrid 检索效果
-输出：展示 DENSE 和 HYBRID 命中、keywordHitCount、TopK sources 和耗时差异
+indexing.tasks.scan 返回至少一条 FAILED task
 ```
 
-## Test Plan
+期望 timeline：
 
-后端测试：
+```text
+LLM_DECISION -> indexing.tasks.scan -> observation -> LLM_DECISION -> recommended document.indexing_task.retry -> WAITING_CONFIRMATION
+```
 
-1. 创建 Agent run 后状态为 `RUNNING` 并正确落库。
-2. Python 返回 steps/actions 后，Java 生成 `stepCode / actionCode` 并持久化。
-3. `reembedRequired=true` 时生成 `embedding.rebuild.submit` action。
-4. 存在 `FAILED` 索引任务时生成 `document.indexing_task.retry` action。
-5. 有待确认 action 时，run 状态变为 `WAITING_CONFIRMATION`。
-6. 未确认时写操作不会执行。
-7. 确认后只允许执行白名单工具。
-8. `HIGH` 风险 action 不能执行。
-9. reject 后 action 状态变为 `REJECTED`。
-10. Agent Runtime 失败时记录 `error_message`。
+演示 3：MCP + CLI 只读工具
 
-Python 测试：
+输入：
 
-1. LangGraph 最小图按预期节点顺序执行。
-2. readiness 异常能生成稳定诊断结论。
-3. 工具调用失败能返回 step error。
-4. `qa.retrieve.probe` 可按条件跳过。
-5. recommended actions 只返回工具名和 payload 草案，不生成 actionCode。
+```text
+检查当前项目状态，并结合 git 状态给出诊断
+```
 
-前端验证：
+期望 timeline：
 
-1. 可以创建诊断 run。
-2. 可以展示 summary、status 和 timeline。
-3. 可以展示 action 卡片、风险等级和确认按钮。
-4. confirm/reject 后页面状态刷新。
-5. API 错误展示 message 和 requestId。
-6. `npm run build` 通过。
+```text
+LLM_DECISION -> mcp.repo.status.inspect -> observation -> LLM_DECISION -> cli.git.status -> observation -> LLM_DECISION -> FINAL_ANSWER -> SUCCEEDED
+```
 
-## Resume Positioning
+## 10. 测试计划
+
+后端：
+
+1. 创建 run 后能正确调用 Python Runtime。
+2. Runtime steps/actions 由 Java 生成 `stepCode/actionCode` 并落库。
+3. 有 recommended action 时 run 进入 `WAITING_CONFIRMATION`。
+4. confirm/reject 状态流转正确。
+5. 未确认时写操作不会执行。
+6. `HIGH` 风险 action 禁止执行。
+
+Python：
+
+1. Legacy graph 节点顺序稳定。
+2. Intelligent graph 可循环调用工具。
+3. fake/mock LLM 覆盖非法 JSON、未知工具、schema mismatch、最大工具次数。
+4. Runtime 强制拦截写工具和中高风险工具。
+5. fake MCP 和只读 CLI 可通过 Tool Registry 接入。
+
+前端：
+
+1. 可创建三种 runMode。
+2. 可展示 `LLM_DECISION / TOOL_CALL / NODE` timeline。
+3. 可展示 action 卡片和 confirm/reject。
+4. API 错误展示 message 和 requestId。
+5. `npm run build` 通过。
+
+联调：
+
+1. Python `/health` 正常。
+2. Java `/api/health` 可达，并记录 PostgreSQL/Redis/AI Gateway/embedding/llm 的实际能力状态。
+3. Frontend dev server 正常。
+4. 通过前后端 API 创建 `INTELLIGENT_TOOL_AGENT` run。
+5. 验证 Java tool、fake MCP tool、只读 CLI tool 可在同一主循环中工作。
+
+## 11. 面试表达
 
 简历 bullet：
 
-> 在企业知识库 RAG 系统基础上引入 LangGraph，构建 RAG 运维诊断 Agent，将系统健康检查、问答 readiness、文档状态扫描、索引任务扫描、Dense / Hybrid 检索探测、失败重试和重嵌入封装为受控工具。Agent 通过状态图完成任务解析、工具调用、结果观察、原因诊断和修复计划生成；Java 后端负责工具白名单、安全边界与确认执行，对重试索引、重嵌入等写操作引入 human-in-the-loop，并通过 agent_run / agent_step / agent_action 记录执行轨迹与审计结果。
+> 在企业知识库 RAG 系统基础上引入 LangGraph，构建 RAG 运维诊断 Agent，将系统健康检查、问答 readiness、文档状态扫描、索引任务扫描、Dense / Hybrid 检索探测、失败重试和重嵌入封装为受控工具。进一步演进为单 Agent Tool-use 模式，通过 Tool Registry 统一接入 Java / MCP / CLI 工具，由 Runtime 强制拦截写操作和中高风险工具，并通过 agent_run / agent_step / agent_action 记录执行轨迹与 human-in-the-loop 审计结果。
 
 面试解释：
 
-> 我没有把 Agent 做成纯聊天入口，而是围绕 RAG 系统真实运维问题设计了一个受控 Agent 工作流。LangGraph 负责状态流转和工具编排，每个节点对应明确诊断动作，例如 health、readiness、文档状态、索引任务、检索探测。LLM 只辅助诊断总结和报告生成，不能绕过 Java 后端工具白名单。涉及重试索引、重嵌入等写操作时，必须进入 human-in-the-loop，由用户确认后执行，并且全过程落库可追踪。
-
-## Assumptions
-
-1. 本次 MVP 主打“RAG 运维诊断 Agent”。
-2. 周期按 2 周安排。
-3. Java 是业务权威和状态中心。
-4. Python 是 LangGraph Agent Runtime。
-5. 第一版不做确认后回到 LangGraph 继续执行。
-6. 第一版优先完成 `reembedRequired` 和 `FAILED indexing task` 两个演示场景。
-7. LLM 可以辅助总结，但不参与权限判断。
-8. 不新增独立 Agent 服务，先在 `rag-ai-service` 内隔离 `app/agent/`。
+> 我没有把 Agent 做成纯聊天入口，而是围绕 RAG 系统真实运维问题设计了一个受控 Tool-use Agent。LangGraph 负责循环编排：LLM 输出严格 JSON 决策，Runtime 校验后调用工具，把 observation 裁剪后回灌，再进入下一轮决策。Java 仍然是业务权威和安全边界，涉及重试索引、重嵌入等写操作时必须生成 recommendedAction，由前端确认后 Java 执行。这样既能展示固定业务工作流 Agent，也能展示 LLM 驱动的智能 Tool-use Agent。

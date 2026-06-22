@@ -77,4 +77,4 @@ def _default_tool_client() -> AgentToolClient:
     client_name = _resolve_tool_client_name(settings.agent_tool_client)
     if client_name == "java":
         return JavaAgentToolClient(settings)
-    return StaticAgentToolClient()
+    return StaticAgentToolClient(settings)

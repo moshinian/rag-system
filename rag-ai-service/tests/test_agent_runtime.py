@@ -4,8 +4,8 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.agent.runtime import AgentRuntime, get_agent_runtime
-from app.agent.state import AgentRuntimeRequest
-from app.agent.tools import AgentToolExecution, JavaAgentToolClient
+from app.agent.state import AgentRuntimeRequest, AgentToolDefinition
+from app.agent.tools import AgentToolExecution, JavaAgentToolClient, StaticAgentToolClient
 from app.core.config import Settings
 from app.main import create_app
 
@@ -200,6 +200,150 @@ def test_intelligent_agent_fails_after_invalid_json_retry():
     assert any(step.step_type == "LLM_DECISION" and step.status == "FAILED" for step in response.steps)
 
 
+def test_intelligent_agent_rejects_unknown_tool_name():
+    runtime = AgentRuntime(
+        decision_client=ScriptedDecisionClient([
+            json.dumps(
+                {
+                    "action": "CALL_TOOL",
+                    "toolName": "missing.tool",
+                    "arguments": {},
+                    "reason": "try missing tool",
+                    "finalAnswer": None,
+                    "riskLevel": "LOW",
+                }
+            ),
+            json.dumps(
+                {
+                    "action": "CALL_TOOL",
+                    "toolName": "still.missing",
+                    "arguments": {},
+                    "reason": "try missing tool again",
+                    "finalAnswer": None,
+                    "riskLevel": "LOW",
+                }
+            ),
+        ])
+    )
+    request = AgentRuntimeRequest(
+        runCode="AR-test",
+        kbCode="day20-cn-kb",
+        goal="检查未知工具",
+        runMode="INTELLIGENT_TOOL_AGENT",
+    )
+
+    response = runtime.run(request)
+
+    assert response.status == "FAILED"
+    assert "Unknown toolName" in response.error_message
+    assert not any(step.step_type == "TOOL_CALL" for step in response.steps)
+
+
+def test_intelligent_agent_rejects_arguments_that_do_not_match_schema():
+    runtime = AgentRuntime(
+        tool_client=SchemaToolClient(),
+        decision_client=ScriptedDecisionClient([
+            json.dumps(
+                {
+                    "action": "CALL_TOOL",
+                    "toolName": "schema.test",
+                    "arguments": {"count": "not-a-number"},
+                    "reason": "schema mismatch",
+                    "finalAnswer": None,
+                    "riskLevel": "LOW",
+                }
+            ),
+            json.dumps(
+                {
+                    "action": "CALL_TOOL",
+                    "toolName": "schema.test",
+                    "arguments": {},
+                    "reason": "missing required arg",
+                    "finalAnswer": None,
+                    "riskLevel": "LOW",
+                }
+            ),
+        ]),
+    )
+    request = AgentRuntimeRequest(
+        runCode="AR-test",
+        kbCode="day20-cn-kb",
+        goal="检查 schema",
+        runMode="INTELLIGENT_TOOL_AGENT",
+    )
+
+    response = runtime.run(request)
+
+    assert response.status == "FAILED"
+    assert "Argument count must be number" in response.error_message or "Missing required argument" in response.error_message
+    assert not any(step.step_type == "TOOL_CALL" for step in response.steps)
+
+
+def test_intelligent_agent_fails_when_tool_call_count_exceeds_limit():
+    repeated_decisions = [
+        json.dumps(
+            {
+                "action": "CALL_TOOL",
+                "toolName": "system.health.check",
+                "arguments": {},
+                "reason": "keep checking",
+                "finalAnswer": None,
+                "riskLevel": "LOW",
+            }
+        )
+        for _ in range(7)
+    ]
+    runtime = AgentRuntime(decision_client=ScriptedDecisionClient(repeated_decisions))
+    request = AgentRuntimeRequest(
+        runCode="AR-test",
+        kbCode="day20-cn-kb",
+        goal="循环调用工具",
+        runMode="INTELLIGENT_TOOL_AGENT",
+    )
+
+    response = runtime.run(request)
+
+    assert response.status == "FAILED"
+    assert response.error_message == "Exceeded max tool call count: 6"
+    assert sum(1 for step in response.steps if step.step_type == "TOOL_CALL") == 6
+
+
+def test_static_tool_definitions_respect_fake_mcp_and_cli_settings():
+    client = StaticAgentToolClient(
+        Settings(
+            agent_fake_mcp_enabled=False,
+            agent_cli_git_status_enabled=True,
+            agent_cli_git_status_tool_name="cli.git.status",
+            agent_cli_git_status_timeout_ms=1234,
+        )
+    )
+
+    definitions = {tool.name: tool for tool in client.definitions()}
+
+    assert "mcp.repo.status.inspect" not in definitions
+    assert definitions["cli.git.status"].source_type == "CLI"
+    assert definitions["cli.git.status"].timeout_ms == 1234
+
+
+def test_cli_git_status_uses_fixed_readonly_template():
+    client = StaticAgentToolClient(Settings(agent_cli_git_status_tool_name="cli.git.status"))
+
+    execution = client.execute(
+        "cli.git.status",
+        AgentRuntimeRequest(
+            runCode="AR-test",
+            kbCode="day20-cn-kb",
+            goal="检查当前项目状态",
+            runMode="INTELLIGENT_TOOL_AGENT",
+        ),
+    )
+
+    assert execution.success is True
+    assert execution.output["command"] == "git status --short"
+    assert execution.output["mode"] == "READ_ONLY_TEMPLATE"
+    assert "exitCode" in execution.output
+
+
 def test_java_agent_tool_client_calls_java_internal_tool_api():
     captured_request: httpx.Request | None = None
 
@@ -255,6 +399,34 @@ def test_java_agent_tool_client_calls_java_internal_tool_api():
         "operator": "agent-runtime",
         "attributes": {},
     }
+
+
+def test_java_agent_tool_client_executes_configured_non_java_tool_locally():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("configured local tools must not be posted to Java")
+
+    client = JavaAgentToolClient(
+        Settings(
+            java_agent_tool_base_url="http://java-backend",
+            agent_cli_git_status_tool_name="cli.git.status",
+        ),
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    execution = client.execute(
+        "cli.git.status",
+        AgentRuntimeRequest(
+            runCode="AR-test",
+            kbCode="day20-cn-kb",
+            goal="检查当前项目状态，并结合 git 状态给出诊断",
+            runMode="INTELLIGENT_TOOL_AGENT",
+        ),
+    )
+
+    assert execution.success is True
+    assert execution.tool_name == "cli.git.status"
+    assert execution.output["command"] == "git status --short"
+    assert execution.output["mode"] == "READ_ONLY_TEMPLATE"
 
 
 def test_java_agent_tool_client_returns_failed_execution_on_java_error():
@@ -334,3 +506,28 @@ class ScriptedDecisionClient:
                 "riskLevel": None,
             }
         )
+
+
+class SchemaToolClient(StaticAgentToolClient):
+    def definitions(self) -> list[AgentToolDefinition]:
+        return [
+            AgentToolDefinition(
+                toolName="schema.test",
+                schemaVersion="v2",
+                description="schema validation test tool",
+                inputSchema={
+                    "type": "object",
+                    "required": ["count"],
+                    "properties": {"count": {"type": "integer"}},
+                },
+                outputSchema={"type": "object"},
+                executionMode="READ_ONLY",
+                maxRiskLevel="LOW",
+                sourceType="JAVA",
+                requiresConfirmation=False,
+                timeoutMs=5000,
+            )
+        ]
+
+    def execute(self, tool_name: str, request: AgentRuntimeRequest) -> AgentToolExecution:
+        return AgentToolExecution(tool_name=tool_name, success=True, output={"ok": True}, duration_ms=1)

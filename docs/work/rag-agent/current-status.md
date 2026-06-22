@@ -428,9 +428,9 @@
     - 内部工具入口不注册 `document.indexing_task.retry`
     - 写动作只在 Java `AgentRunService.confirmAction` 中按白名单和人审状态执行
 
-## 当前未实现
+## 第 3 周智能 Tool-use 进度
 
-1. 第 3 周智能 Tool-use Agent 已完成 Day 15/部分 Day 16/Day 17 的基础骨架：
+1. 第 3 周智能 Tool-use Agent 已完成 Day 15-20 的基础骨架：
    - 新增 `INTELLIGENT_TOOL_AGENT` runMode。
    - 保留 legacy 固定图入口 `build_readiness_diagnosis_graph()`。
    - 新增智能图入口 `build_intelligent_tool_agent_graph()`。
@@ -439,31 +439,44 @@
    - Tool Definition 已升级为 v2，补入 `schemaVersion / description / inputSchema / outputSchema / sourceType / requiresConfirmation / timeoutMs`。
    - Java 已暴露 `GET /api/internal/agent/tools`，供 Python Runtime 发现 Java tools。
    - Python Runtime 已支持智能模式下的严格 JSON 决策、只读工具循环、recommended action 强制拦截、fake MCP tool 和只读 CLI tool。
-2. 第 3 周还没有接真实 LLM planner，目前智能模式默认使用 deterministic `HeuristicAgentDecisionClient`，测试使用 fake/mock decision client。
-3. MCP/CLI 仍是 MVP 骨架：
-   - MCP 只做 fake tool：`mcp.repo.status.inspect`。
-   - CLI 只做只读模板化 tool：`cli.git.status`。
+   - Day 18 已补充 unknown tool、arguments schema mismatch、最大工具调用次数等 fake/mock LLM 失败恢复测试。
+   - Day 19 已补充 Java 智能模式 recommended action -> `WAITING_CONFIRMATION` 的专项测试。
+   - Day 20 已将 fake MCP tool 和只读 CLI tool 推进到 settings 配置化最小 MVP。
+2. 已补齐 Day 20/21 联调前发现的两个缺口：
+   - 前端 `AgentRunMode` 已支持 `INTELLIGENT_TOOL_AGENT`，step type 已支持 `LLM_DECISION`。
+   - `JavaAgentToolClient` 在 `AGENT_TOOL_CLIENT=java` 时可本地执行配置化 fake MCP / CLI 工具，Java 工具仍走后端内部工具 API。
+3. 已完成一次 frontend -> backend -> ai-service 的真实联调：
+   - 前端 dev server 通过 Vite proxy 调 Java。
+   - Java 创建 `INTELLIGENT_TOOL_AGENT` run。
+   - Python 拉取 Java Tool Registry definitions，并合并 fake MCP / CLI tools。
+   - 智能主循环执行 `mcp.repo.status.inspect -> cli.git.status -> FINAL_ANSWER`。
+   - run `AR-327300621860474881` 返回 `SUCCEEDED`，无 recommended actions。
+
+## 当前未实现
+
+1. 第 3 周还没有接真实 LLM planner，目前智能模式默认使用 deterministic `HeuristicAgentDecisionClient`，测试使用 fake/mock decision client。
+2. MCP/CLI 仍是 MVP 骨架：
+   - MCP 只做可配置 fake tool：默认 `mcp.repo.status.inspect`。
+   - CLI 只做可配置只读模板化 tool：默认 `cli.git.status`，固定执行 `git status --short`。
    - 尚未接真实 MCP server。
-4. 还没有整理真实 Python -> Java 工具 HTTP API 的 README、架构图和接口说明。
-5. 前端对 `qa.retrieve.probe` 仍复用 step `outputJson` 展示，尚未做专门 Dense / Hybrid 对比组件。
-6. `reembedRequired` 场景已有测试闭环，但本次真实服务联调样本没有命中 `reembedRequired=true`。
+3. 前端对 `qa.retrieve.probe` 仍复用 step `outputJson` 展示，尚未做专门 Dense / Hybrid 对比组件。
+4. `reembedRequired` 场景已有测试闭环，但真实演示仍需要准备确定性数据，确保 readiness 返回 `reembedRequired=true`。
+5. `FAILED indexing task` 场景已有测试闭环，但真实演示仍需要准备至少一条 `FAILED` indexing task。
 
 ## 当前风险
 
 1. `Java -> Python -> Java` 链路会增加接口契约复杂度，需要坚持“Java 是权威状态中心”的边界。
-2. 两周 MVP 范围偏紧，必须优先完成 P0/P1，不要提前扩展 MCP、多 Agent 或完整多轮。
-3. `qa.retrieve.probe` 有简历价值，但涉及 Dense / Hybrid 对比 UI 和诊断规则，必要时降级为 P2。
-4. 写操作必须 human-in-the-loop，不能为了演示效果绕过确认和白名单。
+2. 写操作必须 human-in-the-loop，不能为了演示效果绕过确认和白名单。
+3. 三端联调依赖本地启动环境变量；已按 `.vscode/launch.json` 读取模型 key 后复测，Java `/api/health` 整体为 `UP`。
+4. Day 21 演示场景必须准备确定性数据，避免真实环境状态变化导致 expected timeline 跑偏。
 
 ## 下一步
 
 从 [plan.md](./plan.md) 的后续项继续：
 
-1. 按第 3 周 Day 18 继续补强 LLM 决策 parser 和 schema 校验边界。
-2. 按第 3 周 Day 19 补齐 Java 侧 recommended action / WAITING_CONFIRMATION 的智能模式端到端测试。
-3. 按第 3 周 Day 20 将 fake MCP / 只读 CLI adapter 从静态样例推进到配置化最小 MVP。
-4. 更新 Agent README 和模块说明，补充 Python -> Java 内部工具 HTTP API 与智能 Tool-use Agent 说明。
-5. 继续准备 `reembedRequired=true` 和 `FAILED indexing task` 的确定性演示数据。
+1. 按第 3 周 Day 21 整理固定演示问题、期望 timeline 和面试材料。
+2. 准备 `reembedRequired=true` 和 `FAILED indexing task` 的确定性演示数据。
+3. 后续接真实 LLM planner，并保留 fake/mock planner 作为确定性测试入口。
 
 ## 已验证
 
@@ -504,6 +517,17 @@
 35. `GET http://127.0.0.1:8080/api/knowledge-bases/finance-kb/agent/runs/AR-325284142981976065` 已确认 run/steps/actions 可从 Java 持久化状态读取。
 36. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 legacy 诊断图和智能 Tool-use Agent 骨架。
 37. `mvn -q -pl rag-backend -Dtest=AgentInternalToolControllerTest,AgentToolRegistryTest,SystemHealthAgentToolTest,QaReadinessAgentToolTest test` 已通过，覆盖 Tool Definition v2 查询接口。
+38. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 Day 18 决策校验和失败恢复。
+39. `mvn -q -pl rag-backend -Dtest=AgentRunServiceTest,AgentRunScenarioTest test` 已通过，覆盖 Day 19 智能模式 recommended action 落库边界。
+40. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 Day 20 fake MCP / 只读 CLI 配置化 MVP。
+41. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py rag-ai-service/tests/test_app.py` 已通过，覆盖 Python legacy 和 intelligent runtime。
+42. `mvn -q -pl rag-backend -Dtest=AgentRunServiceTest,AgentRunScenarioTest,AgentInternalToolControllerTest test` 已通过，覆盖后端 run/action/internal tools。
+43. `cd rag-frontend && npm run build` 已通过，覆盖前端智能模式类型和构建。
+44. `GET http://127.0.0.1:8001/health` 已返回 `UP`。
+45. `GET http://127.0.0.1:8080/api/health` 已返回 `UP`，其中 PostgreSQL/Redis/AI Gateway/embedding/llm 均为 `UP`。
+46. `GET http://127.0.0.1:5173/` 已返回前端 HTML。
+47. `GET http://127.0.0.1:5173/api/knowledge-bases?pageNo=1&pageSize=1` 已通过 Vite proxy 返回 Java API 数据。
+48. `POST http://127.0.0.1:5173/api/knowledge-bases/day20-cn-kb/agent/runs` 已创建 `INTELLIGENT_TOOL_AGENT` run `AR-327301374603825153`，状态 `SUCCEEDED`，timeline 包含 `mcp.repo.status.inspect` 和 `cli.git.status`。
 
 ## 恢复入口
 

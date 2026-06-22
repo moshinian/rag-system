@@ -213,6 +213,70 @@ class AgentRunServiceTest {
     }
 
     @Test
+    void createRunShouldPersistIntelligentModeRecommendedActionAndWaitForConfirmation() {
+        KnowledgeBaseEntity knowledgeBase = knowledgeBase(1L, "day20-cn-kb");
+        when(knowledgeBaseRepository.findByCode("day20-cn-kb")).thenReturn(Optional.of(knowledgeBase));
+        when(snowflakeIdGenerator.nextId()).thenReturn(100L, 200L, 300L);
+        when(snowflakeIdGenerator.nextId("AR-")).thenReturn("AR-100");
+        when(snowflakeIdGenerator.nextId("AST-")).thenReturn("AST-200");
+        when(snowflakeIdGenerator.nextId("ACT-")).thenReturn("ACT-300");
+        when(agentRunRepository.insert(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(agentRunRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(agentStepRepository.insert(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(agentActionRepository.insert(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(agentRuntimeClient.run(any())).thenReturn(new AgentRuntimeResponse(
+                "SUCCEEDED",
+                "Agent 已生成待确认动作：embedding.rebuild.submit",
+                List.of(new AgentRuntimeStepResult(
+                        "llm_plan",
+                        null,
+                        AgentStepType.LLM_DECISION,
+                        AgentStepStatus.SUCCEEDED,
+                        null,
+                        "{\"decision\":{\"action\":\"CALL_TOOL\",\"toolName\":\"embedding.rebuild.submit\"}}",
+                        1L,
+                        null
+                )),
+                List.of(new AgentRuntimeActionDraft(
+                        "embedding.rebuild.submit",
+                        "确认执行 embedding.rebuild.submit",
+                        "readiness 显示需要重嵌入，必须转为待确认动作。",
+                        AgentActionRiskLevel.MEDIUM,
+                        true,
+                        "{\"kbCode\":\"day20-cn-kb\"}"
+                )),
+                null
+        ));
+
+        AgentRunResponse response = agentRunService.createRun(
+                "day20-cn-kb",
+                new AgentRunCreateRequest(
+                        "诊断这个知识库为什么不能问答",
+                        null,
+                        AgentRunMode.INTELLIGENT_TOOL_AGENT,
+                        "tester"
+                )
+        );
+
+        assertThat(response.runMode()).isEqualTo(AgentRunMode.INTELLIGENT_TOOL_AGENT);
+        assertThat(response.status()).isEqualTo(AgentRunStatus.WAITING_CONFIRMATION);
+        assertThat(response.finishedAt()).isNull();
+        assertThat(response.steps()).hasSize(1);
+        assertThat(response.steps().get(0).stepType()).isEqualTo(AgentStepType.LLM_DECISION);
+        assertThat(response.steps().get(0).stepCode()).isEqualTo("AST-200");
+        assertThat(response.actions()).hasSize(1);
+        assertThat(response.actions().get(0).actionCode()).isEqualTo("ACT-300");
+        assertThat(response.actions().get(0).toolName()).isEqualTo("embedding.rebuild.submit");
+        assertThat(response.actions().get(0).status()).isEqualTo(AgentActionStatus.PENDING_CONFIRMATION);
+
+        verify(agentRuntimeClient).run(argThat(runtimeRequest ->
+                runtimeRequest.runMode() == AgentRunMode.INTELLIGENT_TOOL_AGENT
+                        && runtimeRequest.runCode().equals("AR-100")
+                        && runtimeRequest.kbCode().equals("day20-cn-kb")
+        ));
+    }
+
+    @Test
     void createRunShouldMarkFailedWhenRuntimeReturnsFailed() {
         KnowledgeBaseEntity knowledgeBase = knowledgeBase(1L, "day20-cn-kb");
         when(knowledgeBaseRepository.findByCode("day20-cn-kb")).thenReturn(Optional.of(knowledgeBase));

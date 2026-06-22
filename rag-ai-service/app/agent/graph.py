@@ -230,6 +230,15 @@ def llm_plan(state: AgentGraphState) -> AgentGraphState:
 
 
 def route_decision(state: AgentGraphState) -> AgentGraphState:
+    if state.get("error_message"):
+        return state
+    next_state = dict(state)
+    if int(state.get("tool_call_count") or 0) >= 6:
+        next_state["error_message"] = "Exceeded max tool call count: 6"
+        return next_state
+    if state.get("decision") is None:
+        next_state["error_message"] = "Missing AgentDecision"
+        return next_state
     return state
 
 
@@ -331,12 +340,8 @@ def fail_report(state: AgentGraphState) -> AgentGraphState:
 def _route_after_decision(state: AgentGraphState) -> str:
     if state.get("error_message"):
         return "fail_report"
-    if int(state.get("tool_call_count") or 0) >= 6:
-        state["error_message"] = "Exceeded max tool call count: 6"
-        return "fail_report"
     decision = state.get("decision")
     if decision is None:
-        state["error_message"] = "Missing AgentDecision"
         return "fail_report"
     if decision.action == "FINAL_ANSWER":
         return "final_report"

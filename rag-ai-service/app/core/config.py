@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     java_agent_tool_base_url: str = "http://localhost:8080"
     java_agent_tool_token: str = "dev-agent-tool-token"
     java_agent_tool_execute_path_template: str = "/api/internal/agent/tools/{tool_name}/execute"
+    agent_fake_mcp_enabled: bool = True
+    agent_fake_mcp_tool_name: str = "mcp.repo.status.inspect"
+    agent_cli_git_status_enabled: bool = True
+    agent_cli_git_status_tool_name: str = "cli.git.status"
+    agent_cli_git_status_timeout_ms: int = 5000
 
     def model_post_init(self, __context: object) -> None:
         """在未显式提供能力级 API key 时，根据当前 provider 回退到兼容变量。"""
