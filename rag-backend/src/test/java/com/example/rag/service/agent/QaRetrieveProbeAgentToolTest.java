@@ -1,7 +1,5 @@
 package com.example.rag.service.agent;
 
-import com.example.rag.model.dto.AgentToolContext;
-import com.example.rag.model.dto.AgentToolResult;
 import com.example.rag.model.enums.AgentActionRiskLevel;
 import com.example.rag.model.enums.AgentToolExecutionMode;
 import com.example.rag.model.enums.RetrievalMode;
@@ -28,13 +26,13 @@ class QaRetrieveProbeAgentToolTest {
     void executeShouldCompareDenseAndHybridRetrievalResults() throws Exception {
         QuestionAnsweringService questionAnsweringService = mock(QuestionAnsweringService.class);
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
-        QaRetrieveProbeAgentTool tool = new QaRetrieveProbeAgentTool(questionAnsweringService, objectMapper);
+        QaRetrieveProbeAgentTool tool = new QaRetrieveProbeAgentTool(questionAnsweringService);
         when(questionAnsweringService.retrieve("day20-cn-kb", "第二百三十八条是什么", 5, RetrievalMode.DENSE))
                 .thenReturn(retrieval(RetrievalMode.DENSE, "NONE", 1, 0, 1, 12L, chunk("DOC-1", 1, 0.82D)));
         when(questionAnsweringService.retrieve("day20-cn-kb", "第二百三十八条是什么", 5, RetrievalMode.HYBRID))
                 .thenReturn(retrieval(RetrievalMode.HYBRID, "RRF", 2, 1, 2, 18L, chunk("DOC-2", 2, 0.91D)));
 
-        AgentToolResult result = tool.execute(new AgentToolContext(
+        McpToolResult result = tool.call(new McpToolContext(
                 "day20-cn-kb",
                 " 第二百三十八条是什么 ",
                 "AR-test",
@@ -42,9 +40,9 @@ class QaRetrieveProbeAgentToolTest {
                 Map.of()
         ));
 
-        assertThat(result.success()).isTrue();
+        assertThat(!result.isError()).isTrue();
         assertThat(result.toolName()).isEqualTo(QaRetrieveProbeAgentTool.TOOL_NAME);
-        JsonNode json = objectMapper.readTree(result.outputJson());
+        JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(result.structuredContent()));
         assertThat(json.get("question").asText()).isEqualTo("第二百三十八条是什么");
         assertThat(json.get("topK").asInt()).isEqualTo(5);
         assertThat(json.get("dense").get("hitCount").asInt()).isEqualTo(1);
@@ -59,13 +57,56 @@ class QaRetrieveProbeAgentToolTest {
     }
 
     @Test
+    void executeShouldUseTopKFromAttributes() throws Exception {
+        QuestionAnsweringService questionAnsweringService = mock(QuestionAnsweringService.class);
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        QaRetrieveProbeAgentTool tool = new QaRetrieveProbeAgentTool(questionAnsweringService);
+        when(questionAnsweringService.retrieve("day20-cn-kb", "第二百三十八条是什么", 3, RetrievalMode.DENSE))
+                .thenReturn(retrieval(RetrievalMode.DENSE, "NONE", 1, 0, 1, 12L, chunk("DOC-1", 1, 0.82D)));
+        when(questionAnsweringService.retrieve("day20-cn-kb", "第二百三十八条是什么", 3, RetrievalMode.HYBRID))
+                .thenReturn(retrieval(RetrievalMode.HYBRID, "RRF", 1, 1, 1, 18L, chunk("DOC-1", 1, 0.91D)));
+
+        McpToolResult result = tool.call(new McpToolContext(
+                "day20-cn-kb",
+                "第二百三十八条是什么",
+                "AR-test",
+                "frontend",
+                Map.of("topK", 3)
+        ));
+
+        assertThat(!result.isError()).isTrue();
+        JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(result.structuredContent()));
+        assertThat(json.get("topK").asInt()).isEqualTo(3);
+        verify(questionAnsweringService).retrieve("day20-cn-kb", "第二百三十八条是什么", 3, RetrievalMode.DENSE);
+        verify(questionAnsweringService).retrieve("day20-cn-kb", "第二百三十八条是什么", 3, RetrievalMode.HYBRID);
+    }
+
+    @Test
+    void executeShouldRejectInvalidTopK() {
+        QuestionAnsweringService questionAnsweringService = mock(QuestionAnsweringService.class);
+        QaRetrieveProbeAgentTool tool = new QaRetrieveProbeAgentTool(questionAnsweringService);
+
+        McpToolResult result = tool.call(new McpToolContext(
+                "day20-cn-kb",
+                "第二百三十八条是什么",
+                "AR-test",
+                "frontend",
+                Map.of("topK", 11)
+        ));
+
+        assertThat(!result.isError()).isFalse();
+        assertThat(result.errorMessage()).contains("topK must be an integer between 1 and 10");
+        verifyNoInteractions(questionAnsweringService);
+    }
+
+    @Test
     void executeShouldReturnFailureWhenQuestionIsBlank() {
         QuestionAnsweringService questionAnsweringService = mock(QuestionAnsweringService.class);
-        QaRetrieveProbeAgentTool tool = new QaRetrieveProbeAgentTool(questionAnsweringService, new ObjectMapper());
+        QaRetrieveProbeAgentTool tool = new QaRetrieveProbeAgentTool(questionAnsweringService);
 
-        AgentToolResult result = tool.execute(AgentToolContext.forKnowledgeBase("day20-cn-kb"));
+        McpToolResult result = tool.call(McpToolContext.forKnowledgeBase("day20-cn-kb"));
 
-        assertThat(result.success()).isFalse();
+        assertThat(!result.isError()).isFalse();
         assertThat(result.errorMessage()).contains("question must not be blank");
         verifyNoInteractions(questionAnsweringService);
     }
@@ -73,11 +114,10 @@ class QaRetrieveProbeAgentToolTest {
     @Test
     void definitionShouldDeclareReadOnlyLowRiskTool() {
         QaRetrieveProbeAgentTool tool = new QaRetrieveProbeAgentTool(
-                mock(QuestionAnsweringService.class),
-                new ObjectMapper()
+                mock(QuestionAnsweringService.class)
         );
 
-        assertThat(tool.definition().toolName()).isEqualTo(QaRetrieveProbeAgentTool.TOOL_NAME);
+        assertThat(tool.definition().name()).isEqualTo(QaRetrieveProbeAgentTool.TOOL_NAME);
         assertThat(tool.definition().executionMode()).isEqualTo(AgentToolExecutionMode.READ_ONLY);
         assertThat(tool.definition().maxRiskLevel()).isEqualTo(AgentActionRiskLevel.LOW);
     }

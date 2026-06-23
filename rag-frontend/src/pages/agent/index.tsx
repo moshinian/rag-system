@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { Alert, App, Button, Card, Col, Descriptions, Form, Input, Row, Select, Space, Table, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Col, Descriptions, Form, Input, Progress, Row, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useMemo, useState } from "react";
 import { confirmAgentAction, createAgentRun, getAgentRun, rejectAgentAction } from "../../api/agent";
@@ -19,7 +19,8 @@ type FormValues = {
 
 const defaultGoal = "诊断这个知识库为什么不能问答";
 const failedTaskGoal = "检查这个知识库有没有索引异常";
-const intelligentProjectGoal = "检查当前项目状态，并结合 git 状态给出诊断";
+const financeRetrievalGoal = "诊断财务结算知识库对“结算异常怎么处理？”的检索和问答准备情况，比较 Dense/Hybrid 是否有收益，并检查当前检索配置影响";
+const financeRetrievalQuestion = "结算异常怎么处理？";
 
 /** Agent 诊断工作台页面。 */
 export function AgentPage() {
@@ -100,6 +101,8 @@ export function AgentPage() {
     []
   );
 
+  const runStats = useMemo(() => summarizeRun(currentRun), [currentRun]);
+
   function submit(values: FormValues) {
     createMutation.mutate({
       goal: values.goal,
@@ -122,13 +125,20 @@ export function AgentPage() {
           form={form}
           layout="vertical"
           initialValues={{
-            goal: defaultGoal,
-            question: "第二百三十八条是什么",
-            runMode: "DIAGNOSE_AND_RECOMMEND",
+            goal: financeRetrievalGoal,
+            question: financeRetrievalQuestion,
+            runMode: "INTELLIGENT_TOOL_AGENT",
             createdBy: "frontend"
           }}
           onFinish={submit}
         >
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="智能模式使用 LLM planner + Java MCP tools"
+            description="LLM 只生成 AgentDecision JSON；工具调用仍由后端校验、MCP tools/list 与 tools/call 执行。当前可直接调用的只读工具包括 readiness、文档/索引扫描、retrieve probe 和检索配置检查。"
+          />
           <Row gutter={16}>
             <Col xs={24} lg={12}>
               <Form.Item name="goal" label="诊断目标" rules={[{ required: true, message: "请输入诊断目标" }]}>
@@ -162,15 +172,17 @@ export function AgentPage() {
                   <Button onClick={() => form.setFieldsValue({ goal: defaultGoal })}>问答 readiness</Button>
                   <Button onClick={() => form.setFieldsValue({ goal: failedTaskGoal, question: undefined })}>索引异常</Button>
                   <Button
+                    type="primary"
+                    ghost
                     onClick={() =>
                       form.setFieldsValue({
-                        goal: intelligentProjectGoal,
-                        question: undefined,
+                        goal: financeRetrievalGoal,
+                        question: financeRetrievalQuestion,
                         runMode: "INTELLIGENT_TOOL_AGENT"
                       })
                     }
                   >
-                    智能项目检查
+                    财务检索诊断
                   </Button>
                 </Space>
               </Form.Item>
@@ -202,6 +214,7 @@ export function AgentPage() {
             {currentRun.errorMessage ? (
               <Alert type="error" showIcon message={currentRun.errorMessage} style={{ marginBottom: 16 }} />
             ) : null}
+            <AgentChainOverview run={currentRun} />
             <Descriptions column={{ xs: 1, md: 2, xl: 3 }} bordered size="small">
               <Descriptions.Item label="runCode">{currentRun.runCode}</Descriptions.Item>
               <Descriptions.Item label="知识库">{currentRun.knowledgeBaseCode}</Descriptions.Item>
@@ -210,6 +223,9 @@ export function AgentPage() {
               <Descriptions.Item label="创建人">{currentRun.createdBy}</Descriptions.Item>
               <Descriptions.Item label="创建时间">{formatDateTime(currentRun.createdAt)}</Descriptions.Item>
               <Descriptions.Item label="完成时间">{formatDateTime(currentRun.finishedAt)}</Descriptions.Item>
+              <Descriptions.Item label="LLM 决策">{runStats.llmDecisionCount}</Descriptions.Item>
+              <Descriptions.Item label="工具调用">{runStats.toolCallCount}</Descriptions.Item>
+              <Descriptions.Item label="待确认动作">{currentRun.actions.length}</Descriptions.Item>
               <Descriptions.Item label="目标" span={2}>{currentRun.goal}</Descriptions.Item>
               <Descriptions.Item label="问题" span={2}>{currentRun.question || "-"}</Descriptions.Item>
             </Descriptions>
@@ -217,7 +233,7 @@ export function AgentPage() {
 
           <Card title="诊断摘要">
             {currentRun.summary ? (
-              <Typography.Paragraph style={{ marginBottom: 0 }}>{currentRun.summary}</Typography.Paragraph>
+              <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>{currentRun.summary}</Typography.Paragraph>
             ) : (
               <Typography.Text type="secondary">暂无摘要</Typography.Text>
             )}
@@ -287,4 +303,52 @@ function renderActionStatus(status: string) {
 function renderRisk(risk: string) {
   const color = risk === "HIGH" ? "red" : risk === "MEDIUM" ? "orange" : "green";
   return <Tag color={color}>{risk}</Tag>;
+}
+
+function summarizeRun(run?: AgentRun) {
+  if (!run) {
+    return { llmDecisionCount: 0, toolCallCount: 0, toolNames: [] as string[] };
+  }
+  const toolNames = run.steps
+    .filter((step) => step.stepType === "TOOL_CALL" && step.toolName)
+    .map((step) => step.toolName!)
+    .filter((toolName, index, all) => all.indexOf(toolName) === index);
+  return {
+    llmDecisionCount: run.steps.filter((step) => step.stepType === "LLM_DECISION").length,
+    toolCallCount: run.steps.filter((step) => step.stepType === "TOOL_CALL").length,
+    toolNames
+  };
+}
+
+function AgentChainOverview({ run }: { run: AgentRun }) {
+  const stats = summarizeRun(run);
+  const hasFinalAnswer = run.steps.some((step) => {
+    if (step.stepType !== "LLM_DECISION" || !step.outputJson) return false;
+    try {
+      const output = JSON.parse(step.outputJson) as { decision?: { action?: string } };
+      return output.decision?.action === "FINAL_ANSWER";
+    } catch {
+      return false;
+    }
+  });
+  const completedCount = [stats.llmDecisionCount > 0, stats.toolCallCount > 0, hasFinalAnswer || run.status === "WAITING_CONFIRMATION"].filter(Boolean).length;
+  const percent = Math.round((completedCount / 3) * 100);
+
+  return (
+    <Card size="small" style={{ marginBottom: 16 }} styles={{ body: { padding: 12 } }}>
+      <Space direction="vertical" size="small" style={{ width: "100%" }}>
+        <Space wrap>
+          <Tag color={stats.llmDecisionCount > 0 ? "blue" : "default"}>LLM 决策 {stats.llmDecisionCount}</Tag>
+          <Tag color={stats.toolCallCount > 0 ? "geekblue" : "default"}>MCP 工具调用 {stats.toolCallCount}</Tag>
+          <Tag color={hasFinalAnswer ? "green" : run.status === "WAITING_CONFIRMATION" ? "gold" : "default"}>
+            {hasFinalAnswer ? "已生成最终回答" : run.status === "WAITING_CONFIRMATION" ? "等待人工确认" : "未完成最终回答"}
+          </Tag>
+        </Space>
+        <Progress percent={percent} size="small" status={run.status === "FAILED" ? "exception" : percent === 100 ? "success" : "active"} />
+        <Typography.Text type="secondary">
+          {stats.toolNames.length > 0 ? `已调用工具：${stats.toolNames.join("、")}` : "尚未记录 MCP 工具调用。"}
+        </Typography.Text>
+      </Space>
+    </Card>
+  );
 }

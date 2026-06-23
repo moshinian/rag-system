@@ -1,11 +1,6 @@
 package com.example.rag.service.agent;
 
 import com.example.rag.common.exception.BusinessException;
-import com.example.rag.model.dto.AgentToolContext;
-import com.example.rag.model.dto.AgentToolDefinition;
-import com.example.rag.model.dto.AgentToolResult;
-import com.example.rag.model.enums.AgentActionRiskLevel;
-import com.example.rag.model.enums.AgentToolExecutionMode;
 import com.example.rag.model.enums.IndexingTaskStatus;
 import com.example.rag.persistence.DocumentRepository;
 import com.example.rag.persistence.IndexingTaskRepository;
@@ -13,7 +8,6 @@ import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.DocumentEntity;
 import com.example.rag.persistence.entity.IndexingTaskEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.EnumMap;
@@ -26,42 +20,35 @@ import java.util.Optional;
  * Agent 只读索引任务扫描工具。
  */
 @Component
-public class IndexingTasksScanAgentTool implements AgentTool {
+public class IndexingTasksScanAgentTool implements McpTool {
     public static final String TOOL_NAME = "indexing.tasks.scan";
     private static final int TASK_SCAN_LIMIT = 50;
     private static final int FAILED_TASK_SAMPLE_LIMIT = 5;
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentRepository documentRepository;
     private final IndexingTaskRepository indexingTaskRepository;
-    private final ObjectMapper objectMapper;
 
     /** 构造IndexingTasksScanAgentTool。 */
     public IndexingTasksScanAgentTool(KnowledgeBaseRepository knowledgeBaseRepository,
                                       DocumentRepository documentRepository,
-                                      IndexingTaskRepository indexingTaskRepository,
-                                      ObjectMapper objectMapper) {
+                                      IndexingTaskRepository indexingTaskRepository) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentRepository = documentRepository;
         this.indexingTaskRepository = indexingTaskRepository;
-        this.objectMapper = objectMapper;
     }
 
     @Override
-    public String toolName() {
+    public String name() {
         return TOOL_NAME;
     }
 
     @Override
-    public AgentToolDefinition definition() {
-        return new AgentToolDefinition(
-                TOOL_NAME,
-                AgentToolExecutionMode.READ_ONLY,
-                AgentActionRiskLevel.LOW
-        );
+    public McpToolDefinition definition() {
+        return McpToolDefinition.readOnlyLow(TOOL_NAME, TOOL_NAME, toolDescription());
     }
 
     @Override
-    public AgentToolResult execute(AgentToolContext context) {
+    public McpToolResult call(McpToolContext context) {
         long startedAt = System.nanoTime();
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(context.kbCode())
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + context.kbCode()));
@@ -88,11 +75,15 @@ public class IndexingTasksScanAgentTool implements AgentTool {
         output.put("scannedTaskCount", tasks.size());
         output.put("statusCounts", statusCounts);
         output.put("failedTasks", failedTasks);
-        return AgentToolResult.success(
+        return McpToolResult.success(
                 TOOL_NAME,
-                AgentToolSupport.toJson(objectMapper, output),
+                output,
                 AgentToolSupport.elapsedMillis(startedAt)
         );
+    }
+
+    private String toolDescription() {
+        return "扫描指定知识库最近索引任务状态，并返回少量失败任务摘要。";
     }
 
     private Map<String, Object> toFailedTask(IndexingTaskEntity task) {

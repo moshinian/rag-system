@@ -27,13 +27,14 @@ class ProviderTarget:
 class OpenAiCompatibleProviderClient:
     """最小 OpenAI-compatible HTTP 客户端，负责超时、重试和错误映射。"""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, read_timeout_ms: int | None = None) -> None:
         """根据配置初始化复用型 HTTP 客户端。"""
         self.settings = settings
+        resolved_read_timeout_ms = read_timeout_ms or settings.http_read_timeout_ms
         timeout = httpx.Timeout(
             connect=settings.http_connect_timeout_ms / 1000.0,
-            read=settings.http_read_timeout_ms / 1000.0,
-            write=settings.http_read_timeout_ms / 1000.0,
+            read=resolved_read_timeout_ms / 1000.0,
+            write=resolved_read_timeout_ms / 1000.0,
             pool=settings.http_connect_timeout_ms / 1000.0,
         )
         self.http_client = httpx.Client(timeout=timeout)

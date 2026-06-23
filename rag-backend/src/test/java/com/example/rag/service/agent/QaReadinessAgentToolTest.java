@@ -1,7 +1,5 @@
 package com.example.rag.service.agent;
 
-import com.example.rag.model.dto.AgentToolContext;
-import com.example.rag.model.dto.AgentToolResult;
 import com.example.rag.model.enums.AgentActionRiskLevel;
 import com.example.rag.model.enums.AgentToolExecutionMode;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
@@ -41,12 +39,12 @@ class QaReadinessAgentToolTest {
                         "Submit embedding rebuild"
                 ));
 
-        AgentToolResult result = tool.execute(AgentToolContext.forKnowledgeBase("day20-cn-kb"));
+        McpToolResult result = tool.call(McpToolContext.forKnowledgeBase("day20-cn-kb"));
 
-        assertThat(result.success()).isTrue();
+        assertThat(!result.isError()).isTrue();
         assertThat(result.toolName()).isEqualTo(QaReadinessAgentTool.TOOL_NAME);
         assertThat(result.durationMs()).isNotNegative();
-        JsonNode json = objectMapper.readTree(result.outputJson());
+        JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(result.structuredContent()));
         assertThat(json.get("knowledgeBaseCode").asText()).isEqualTo("day20-cn-kb");
         assertThat(json.get("questionAnsweringReady").asBoolean()).isFalse();
         assertThat(json.get("reembedRequired").asBoolean()).isTrue();
@@ -57,7 +55,7 @@ class QaReadinessAgentToolTest {
     void definitionShouldDeclareReadOnlyLowRiskTool() {
         QaReadinessAgentTool tool = new QaReadinessAgentTool(mock(QuestionAnsweringService.class), new ObjectMapper());
 
-        assertThat(tool.definition().toolName()).isEqualTo(QaReadinessAgentTool.TOOL_NAME);
+        assertThat(tool.definition().name()).isEqualTo(QaReadinessAgentTool.TOOL_NAME);
         assertThat(tool.definition().executionMode()).isEqualTo(AgentToolExecutionMode.READ_ONLY);
         assertThat(tool.definition().maxRiskLevel()).isEqualTo(AgentActionRiskLevel.LOW);
     }

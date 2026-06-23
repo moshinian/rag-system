@@ -19,6 +19,7 @@ import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.entity.AgentActionEntity;
 import com.example.rag.persistence.entity.AgentRunEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
+import com.example.rag.service.agent.RecommendedActionCatalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -77,6 +78,7 @@ class AgentActionExecutionTest {
                 agentRuntimeClient,
                 documentIndexingService,
                 embeddingRebuildService,
+                new RecommendedActionCatalog(),
                 new ObjectMapper().findAndRegisterModules()
         );
     }

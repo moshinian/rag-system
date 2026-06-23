@@ -21,10 +21,10 @@ class Settings(BaseSettings):
     embedding_path: str = "/embeddings"
 
     # chat 能力的上游接入配置。
-    chat_provider: str = "aliyun-bailian-openai-compatible"
-    chat_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    chat_provider: str = "deepseek-openai-compatible"
+    chat_base_url: str = "https://api.deepseek.com"
     chat_api_key: str = Field(default="", validation_alias="CHAT_API_KEY")
-    chat_default_model: str = "qwen3.7-plus"
+    chat_default_model: str = "deepseek-v4-pro"
     chat_path: str = "/chat/completions"
 
     # provider-specific 兼容变量，避免本地沿用旧 .env 时出现“有 key 但没接上”的问题。
@@ -36,16 +36,17 @@ class Settings(BaseSettings):
     http_connect_timeout_ms: int = 5000
     http_read_timeout_ms: int = 30000
 
-    # Agent Runtime 调 Java 只读工具的配置。
-    agent_tool_client: str = "static"
-    java_agent_tool_base_url: str = "http://localhost:8080"
-    java_agent_tool_token: str = "dev-agent-tool-token"
-    java_agent_tool_execute_path_template: str = "/api/internal/agent/tools/{tool_name}/execute"
-    agent_fake_mcp_enabled: bool = True
-    agent_fake_mcp_tool_name: str = "mcp.repo.status.inspect"
-    agent_cli_git_status_enabled: bool = True
-    agent_cli_git_status_tool_name: str = "cli.git.status"
-    agent_cli_git_status_timeout_ms: int = 5000
+    # Agent Runtime 调 Java MCP tools capability 的配置。
+    agent_tool_client: str = "mcp"
+    # Agent planner 唯一使用真实 LLM；失败时 run 明确 FAILED，不做规则型 fallback。
+    agent_planner_model: str = ""
+    agent_planner_temperature: float = 0
+    agent_planner_timeout_ms: int = 30000
+    mcp_tool_base_url: str = "http://127.0.0.1:8080"
+    mcp_tool_endpoint: str = "/api/internal/mcp"
+    mcp_tool_token: str = "dev-agent-tool-token"
+    mcp_protocol_version: str = "2025-06-18"
+    mcp_tool_origin: str = "http://127.0.0.1:8001"
 
     def model_post_init(self, __context: object) -> None:
         """在未显式提供能力级 API key 时，根据当前 provider 回退到兼容变量。"""
