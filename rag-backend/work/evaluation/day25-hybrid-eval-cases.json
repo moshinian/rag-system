@@ -1,0 +1,100 @@
+{
+  "kbCode": "day20-cn-kb",
+  "baselineDataset": "day20-qa-eval-cases.json",
+  "language": "zh-CN",
+  "topK": 3,
+  "comparisonModes": ["DENSE", "HYBRID"],
+  "executionOrder": ["DENSE", "HYBRID"],
+  "cases": [
+    {
+      "caseCode": "DAY25-001",
+      "category": "FACT",
+      "comparisonFocus": "FIELD_NAME",
+      "question": "结算异常中的商户编码字段叫什么",
+      "expectedDocument": "结算异常处理指南",
+      "expectedKeywords": ["商户", "编码", "字段"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY25-002",
+      "category": "PROCESS",
+      "comparisonFocus": "PROCESS_KEYWORD",
+      "question": "发现对账差异后下一步如何处理",
+      "expectedDocument": "对账常见问题",
+      "expectedKeywords": ["对账", "差异", "处理"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY25-003",
+      "category": "SUMMARY",
+      "comparisonFocus": "PROCESS_KEYWORD",
+      "question": "值班巡检清单主要覆盖哪些风险",
+      "expectedDocument": "值班巡检清单",
+      "expectedKeywords": ["值班", "巡检", "风险"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY25-004",
+      "category": "FACT",
+      "comparisonFocus": "ASCII_TERM",
+      "question": "状态为失败时需要检查哪些记录",
+      "expectedDocument": "结算异常处理指南",
+      "expectedKeywords": ["失败", "FAILED", "记录"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY25-005",
+      "category": "FACT",
+      "comparisonFocus": "ASCII_TERM",
+      "question": "重试次数对应的字段如何使用",
+      "expectedDocument": "结算异常处理指南",
+      "expectedKeywords": ["重试", "retryCount", "字段"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY25-006",
+      "category": "PROCESS",
+      "comparisonFocus": "FIELD_NAME",
+      "question": "清算日期字段用于定位哪类问题",
+      "expectedDocument": "对账常见问题",
+      "expectedKeywords": ["清算", "日期", "字段"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY25-007",
+      "category": "SUMMARY",
+      "comparisonFocus": "PROCESS_KEYWORD",
+      "question": "人工调整记录需要满足哪些要求",
+      "expectedDocument": "对账常见问题",
+      "expectedKeywords": ["人工", "调整", "记录"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY25-008",
+      "category": "FACT",
+      "comparisonFocus": "FIELD_NAME",
+      "question": "任务错误信息应该在哪里查看",
+      "expectedDocument": "值班巡检清单",
+      "expectedKeywords": ["任务", "错误", "信息"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY25-009",
+      "category": "PROCESS",
+      "comparisonFocus": "PROCESS_KEYWORD",
+      "question": "提交重嵌入前应该确认什么",
+      "expectedDocument": "值班巡检清单",
+      "expectedKeywords": ["重嵌入", "确认", "提交"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY25-010",
+      "category": "NO_ANSWER",
+      "comparisonFocus": "NO_ANSWER",
+      "question": "怎样办理会议室门禁权限",
+      "expectedDocument": "",
+      "expectedKeywords": ["会议室", "门禁", "权限"],
+      "expectationType": "SHOULD_REJECT"
+    }
+  ]
+}

@@ -27,8 +27,21 @@ public class QaReadinessAgentTool implements McpTool {
     }
 
     @Override
-    public McpToolDefinition definition() {
-        return McpToolDefinition.readOnlyLow(TOOL_NAME, TOOL_NAME, toolDescription());
+    public String title() {
+        return TOOL_NAME;
+    }
+
+    @Override
+    public String description() {
+        return "检查指定知识库是否具备问答 readiness，包括索引、向量和重嵌入状态。";
+    }
+
+    @Override
+    public Map<String, Object> inputSchema() {
+        return AgentToolSupport.objectSchema(
+                java.util.List.of("kbCode"),
+                Map.of("kbCode", AgentToolSupport.stringProperty("知识库编码。"))
+        );
     }
 
     @Override
@@ -39,7 +52,4 @@ public class QaReadinessAgentTool implements McpTool {
         return McpToolResult.success(TOOL_NAME, output, AgentToolSupport.elapsedMillis(startedAt));
     }
 
-    private String toolDescription() {
-        return "检查指定知识库是否具备问答 readiness，包括索引、向量和重嵌入状态。";
-    }
 }

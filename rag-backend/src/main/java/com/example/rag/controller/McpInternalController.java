@@ -3,6 +3,7 @@ package com.example.rag.controller;
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.config.RagAgentProperties;
 import com.example.rag.service.agent.McpTool;
+import com.example.rag.service.agent.McpToolArgumentsValidator;
 import com.example.rag.service.agent.McpToolContext;
 import com.example.rag.service.agent.McpToolDefinition;
 import com.example.rag.service.agent.McpToolRegistry;
@@ -15,6 +16,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.lang.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @RestController
 @RequestMapping("/api/internal/mcp")
 public class McpInternalController {
+    private static final Logger log = LoggerFactory.getLogger(McpInternalController.class);
     public static final String INTERNAL_TOOL_TOKEN_HEADER = "X-Agent-Tool-Token";
     public static final String PROTOCOL_VERSION_HEADER = "MCP-Protocol-Version";
     public static final String SESSION_ID_HEADER = "Mcp-Session-Id";
@@ -123,20 +127,31 @@ public class McpInternalController {
         if (name == null) {
             return jsonRpcError(id, -32602, "tools/call params.name is required");
         }
-        Object argumentsObject = paramsMap.get("arguments");
-        if (!(argumentsObject instanceof Map<?, ?> argumentsMap)) {
-            return jsonRpcError(id, -32602, "tools/call params.arguments must be an object");
-        }
-        Map<String, Object> arguments = normalizeObject(argumentsMap);
         McpTool tool;
+        McpToolDefinition definition;
         try {
             tool = mcpToolRegistry.require(name);
+            definition = mcpToolRegistry.requireDefinition(name);
+        } catch (BusinessException ex) {
+            return jsonRpcError(id, -32602, ex.getMessage());
+        }
+        Map<String, Object> arguments;
+        try {
+            arguments = optionalObject(paramsMap.get("arguments"), "tools/call params.arguments");
+            McpToolArgumentsValidator.validate(name, definition.inputSchema(), arguments);
+        } catch (BusinessException ex) {
+            log.warn("Invalid MCP tool arguments: {}", ex.getMessage());
+            return jsonRpcError(id, -32602, ex.getMessage());
+        }
+        Map<String, Object> meta;
+        try {
+            meta = optionalObject(paramsMap.get("_meta"), "tools/call params._meta");
         } catch (BusinessException ex) {
             return jsonRpcError(id, -32602, ex.getMessage());
         }
         McpToolContext context;
         try {
-            context = toContext(arguments);
+            context = toContext(arguments, meta);
         } catch (BusinessException ex) {
             return jsonRpcError(id, -32602, ex.getMessage());
         }
@@ -149,25 +164,22 @@ public class McpInternalController {
         return jsonRpcResult(id, toToolCallResult(toolResult), Map.of());
     }
 
-    private McpToolContext toContext(Map<String, Object> arguments) {
-        String kbCode = trimToNull(asText(arguments.get("kbCode")));
-        if (kbCode == null) {
-            throw new BusinessException("arguments.kbCode must be a non-empty string");
-        }
+    private McpToolContext toContext(Map<String, Object> arguments, Map<String, Object> meta) {
         Object attributesObject = arguments.get("attributes");
-        Map<String, Object> attributes = attributesObject instanceof Map<?, ?> attributesMap
-                ? normalizeObject(attributesMap)
-                : Map.of();
         if (attributesObject != null && !(attributesObject instanceof Map<?, ?>)) {
             throw new BusinessException("arguments.attributes must be an object");
         }
-        return new McpToolContext(
-                kbCode,
-                trimToNull(asText(arguments.get("question"))),
-                trimToNull(asText(arguments.get("runCode"))),
-                trimToNull(asText(arguments.get("operator"))),
-                attributes
-        );
+        return new McpToolContext(arguments, meta);
+    }
+
+    private Map<String, Object> optionalObject(Object value, String fieldName) {
+        if (value == null) {
+            return Map.of();
+        }
+        if (!(value instanceof Map<?, ?> raw)) {
+            throw new BusinessException(fieldName + " must be an object");
+        }
+        return normalizeObject(raw);
     }
 
     private Map<String, Object> toToolCallResult(McpToolResult result) {
@@ -269,13 +281,6 @@ public class McpInternalController {
 
     private String asText(Object value) {
         return value instanceof String text ? text : null;
-    }
-
-    private String trimToNull(String value) {
-        if (value == null || value.trim().isBlank()) {
-            return null;
-        }
-        return value.trim();
     }
 
     private static final class SessionState {

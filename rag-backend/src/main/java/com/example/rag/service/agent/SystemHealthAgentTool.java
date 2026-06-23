@@ -27,8 +27,18 @@ public class SystemHealthAgentTool implements McpTool {
     }
 
     @Override
-    public McpToolDefinition definition() {
-        return McpToolDefinition.readOnlyLow(TOOL_NAME, TOOL_NAME, toolDescription());
+    public String title() {
+        return TOOL_NAME;
+    }
+
+    @Override
+    public String description() {
+        return "检查 Java 后端关键依赖和服务健康状态。";
+    }
+
+    @Override
+    public Map<String, Object> inputSchema() {
+        return AgentToolSupport.objectSchema(java.util.List.of(), Map.of());
     }
 
     @Override
@@ -39,7 +49,4 @@ public class SystemHealthAgentTool implements McpTool {
         return McpToolResult.success(TOOL_NAME, output, AgentToolSupport.elapsedMillis(startedAt));
     }
 
-    private String toolDescription() {
-        return "检查 Java 后端关键依赖和服务健康状态。";
-    }
 }

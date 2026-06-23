@@ -8,6 +8,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -58,5 +61,8 @@ class QaReadinessAgentToolTest {
         assertThat(tool.definition().name()).isEqualTo(QaReadinessAgentTool.TOOL_NAME);
         assertThat(tool.definition().executionMode()).isEqualTo(AgentToolExecutionMode.READ_ONLY);
         assertThat(tool.definition().maxRiskLevel()).isEqualTo(AgentActionRiskLevel.LOW);
+        assertThat(tool.definition().inputSchema().get("required")).isEqualTo(List.of("kbCode"));
+        assertThat(((Map<?, ?>) tool.definition().inputSchema().get("properties")).containsKey("kbCode")).isTrue();
+        assertThat(tool.definition().inputSchema().get("additionalProperties")).isEqualTo(false);
     }
 }

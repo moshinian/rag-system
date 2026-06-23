@@ -22,9 +22,9 @@ def normalize_tool_arguments(
     request: AgentRuntimeRequest,
     arguments: dict[str, Any] | None = None,
 ) -> NormalizedToolArguments:
-    """补齐并校验 planner 传入的工具参数。
+    """规范并校验 planner 传入的工具参数。
 
-    LLM 可以改写检索 question、补充只读工具参数，但不能切换知识库。
+    LLM 可以显式提供工具参数，但不能切换知识库。
     """
     raw = dict(arguments or {})
     requested_kb_code = raw.pop("kb_code", None) if "kb_code" in raw else raw.get("kbCode")
@@ -32,19 +32,9 @@ def normalize_tool_arguments(
         raise ValueError("decision.arguments.kbCode must match request.kbCode")
 
     tool_question = _normalize_optional_string(raw.get("question"))
-    if tool_question is None:
-        tool_question = request.question
 
     normalized: dict[str, Any] = dict(raw)
-    normalized["kbCode"] = request.kb_code
-    if tool_question is not None:
-        normalized["question"] = tool_question
-
-    attributes = {
-        key: value
-        for key, value in normalized.items()
-        if key not in {"kbCode", "kb_code", "question"}
-    }
+    attributes = normalized.get("attributes") if isinstance(normalized.get("attributes"), dict) else {}
     _validate_lightweight_attributes(attributes)
     return NormalizedToolArguments(
         arguments=normalized,
@@ -81,4 +71,3 @@ def _validate_lightweight_attributes(attributes: dict[str, Any]) -> None:
             raise ValueError("Argument topK must be integer")
         if value < 1 or value > 10:
             raise ValueError("Argument topK must be between 1 and 10")
-

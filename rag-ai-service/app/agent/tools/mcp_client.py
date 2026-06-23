@@ -7,7 +7,6 @@ from uuid import uuid4
 import httpx
 
 from app.agent.state import AgentRuntimeRequest, AgentToolDefinition
-from app.agent.tools.arguments import normalize_tool_arguments
 from app.agent.tools.protocol import AgentToolExecution
 from app.core.config import Settings
 
@@ -54,17 +53,14 @@ class McpAgentToolClient:
         started_at = perf_counter()
         try:
             self._ensure_initialized()
-            normalized = normalize_tool_arguments(request, arguments)
             result = self._rpc(
                 "tools/call",
                 {
                     "name": tool_name,
-                    "arguments": {
-                        "runCode": request.run_code,
-                        "kbCode": normalized.kb_code,
-                        "question": normalized.question,
-                        "operator": "agent-runtime",
-                        "attributes": normalized.attributes,
+                    "arguments": dict(arguments or {}),
+                    "_meta": {
+                        "x-rag.runCode": request.run_code,
+                        "x-rag.operator": "agent-runtime",
                     },
                 },
                 retry_on_missing_session=True,
@@ -159,7 +155,7 @@ class McpAgentToolClient:
             schemaVersion="mcp-2025-06-18",
             description=str(tool.get("description") or tool.get("title") or tool.get("name") or ""),
             inputSchema=tool.get("inputSchema") if isinstance(tool.get("inputSchema"), dict) else {},
-            outputSchema={},
+            outputSchema=tool.get("outputSchema") if isinstance(tool.get("outputSchema"), dict) else {},
             executionMode=str(annotations.get("x-rag.executionMode") or "READ_ONLY"),
             maxRiskLevel=str(annotations.get("x-rag.maxRiskLevel") or "LOW"),
             sourceType="MCP",

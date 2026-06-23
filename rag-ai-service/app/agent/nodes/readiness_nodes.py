@@ -22,28 +22,31 @@ def parse_goal(state: AgentGraphState) -> AgentGraphState:
 
 def system_health_check(state: AgentGraphState) -> AgentGraphState:
     """调用系统健康检查工具。"""
-    return execute_tool_node(state, "system_health_check", "system.health.check")
+    return execute_tool_node(state, "system_health_check", "system.health.check", {})
 
 
 def kb_readiness_check(state: AgentGraphState) -> AgentGraphState:
     """调用知识库 readiness 检查工具。"""
-    return execute_tool_node(state, "kb_readiness_check", "kb.readiness.check")
+    request = state["request"]
+    return execute_tool_node(state, "kb_readiness_check", "kb.readiness.check", {"kbCode": request.kb_code})
 
 
 def documents_status_scan(state: AgentGraphState) -> AgentGraphState:
     """扫描知识库文档状态。"""
-    return execute_tool_node(state, "documents_status_scan", "documents.status.scan")
+    request = state["request"]
+    return execute_tool_node(state, "documents_status_scan", "documents.status.scan", {"kbCode": request.kb_code})
 
 
 def indexing_tasks_scan(state: AgentGraphState) -> AgentGraphState:
     """扫描索引任务状态。"""
-    return execute_tool_node(state, "indexing_tasks_scan", "indexing.tasks.scan")
+    request = state["request"]
+    return execute_tool_node(state, "indexing_tasks_scan", "indexing.tasks.scan", {"kbCode": request.kb_code})
 
 
 def qa_retrieve_probe(state: AgentGraphState) -> AgentGraphState:
     """在有问题文本时执行检索探测，没有 question 时保留 SKIPPED 轨迹。"""
     if state.get("error_message"):
-        return execute_tool_node(state, "qa_retrieve_probe", "qa.retrieve.probe")
+        return execute_tool_node(state, "qa_retrieve_probe", "qa.retrieve.probe", {})
     question = (state["request"].question or "").strip()
     if not question:
         # question 为空不是失败，固定图仍需要记录该节点被有意跳过。
@@ -55,7 +58,13 @@ def qa_retrieve_probe(state: AgentGraphState) -> AgentGraphState:
             status="SKIPPED",
             output={"reason": "question is empty"},
         )
-    return execute_tool_node(state, "qa_retrieve_probe", "qa.retrieve.probe")
+    request = state["request"]
+    return execute_tool_node(
+        state,
+        "qa_retrieve_probe",
+        "qa.retrieve.probe",
+        {"kbCode": request.kb_code, "question": question},
+    )
 
 
 def diagnose(state: AgentGraphState) -> AgentGraphState:

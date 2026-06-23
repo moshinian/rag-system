@@ -1,0 +1,6 @@
+Settlement upload sample text.
+
+This file is intentionally simple and is used to verify:
+1. txt uploads are accepted
+2. metadata is stored correctly
+3. the file can be used as a parsing input in Day 5

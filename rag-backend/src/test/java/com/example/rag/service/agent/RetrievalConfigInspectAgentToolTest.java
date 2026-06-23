@@ -9,6 +9,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Agent 检索配置检查工具测试。 */
@@ -52,5 +55,8 @@ class RetrievalConfigInspectAgentToolTest {
         assertThat(definition.executionMode()).isEqualTo(AgentToolExecutionMode.READ_ONLY);
         assertThat(definition.maxRiskLevel()).isEqualTo(AgentActionRiskLevel.LOW);
         assertThat(definition.requiresConfirmation()).isFalse();
+        assertThat(definition.inputSchema().get("required")).isEqualTo(List.of());
+        assertThat(definition.inputSchema().get("properties")).isEqualTo(Map.of());
+        assertThat(definition.inputSchema().get("additionalProperties")).isEqualTo(false);
     }
 }
