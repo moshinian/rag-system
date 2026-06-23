@@ -1,6 +1,7 @@
 import { Alert, Card, Collapse, Empty, Space, Tag, Timeline, Typography } from "antd";
 import type { AgentStep } from "../../types/agent";
 import { truncateText } from "../../utils/format";
+import { AgentStepInsight } from "./agent-step-insight";
 
 type AgentStepTimelineProps = {
   steps: AgentStep[];
@@ -29,6 +30,7 @@ export function AgentStepTimeline({ steps }: AgentStepTimelineProps) {
               </Typography.Text>
             </Space>
             {step.errorMessage ? <Alert type="error" showIcon message={step.errorMessage} /> : null}
+            <AgentStepInsight step={step} />
             <Collapse
               size="small"
               ghost

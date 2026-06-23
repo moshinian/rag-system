@@ -1,0 +1,74 @@
+package com.example.rag.service.agent;
+
+import com.example.rag.model.enums.AgentActionRiskLevel;
+import com.example.rag.model.enums.AgentToolExecutionMode;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * MCP tools/list 返回的标准工具定义。
+ */
+public record McpToolDefinition(
+        String name,
+        String title,
+        String description,
+        Map<String, Object> inputSchema,
+        Map<String, Object> annotations,
+        AgentToolExecutionMode executionMode,
+        AgentActionRiskLevel maxRiskLevel,
+        boolean requiresConfirmation,
+        Long timeoutMs
+) {
+    /** 构造 READ_ONLY / LOW / 无确认的 MCP 工具定义。 */
+    public static McpToolDefinition readOnlyLow(String name, String title, String description) {
+        return new McpToolDefinition(
+                name,
+                title,
+                description,
+                defaultInputSchema(),
+                defaultAnnotations(AgentToolExecutionMode.READ_ONLY, AgentActionRiskLevel.LOW, false),
+                AgentToolExecutionMode.READ_ONLY,
+                AgentActionRiskLevel.LOW,
+                false,
+                5000L
+        );
+    }
+
+    /** 转为 MCP 协议字段；第一版不返回 outputSchema。 */
+    public Map<String, Object> toProtocol() {
+        Map<String, Object> protocol = new LinkedHashMap<>();
+        protocol.put("name", name);
+        protocol.put("title", title);
+        protocol.put("description", description);
+        protocol.put("inputSchema", inputSchema);
+        protocol.put("annotations", annotations);
+        return protocol;
+    }
+
+    private static Map<String, Object> defaultInputSchema() {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("kbCode", Map.of("type", "string"));
+        properties.put("question", Map.of("type", "string"));
+        properties.put("runCode", Map.of("type", "string"));
+        properties.put("operator", Map.of("type", "string"));
+        properties.put("attributes", Map.of("type", "object"));
+
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        schema.put("required", java.util.List.of("kbCode"));
+        schema.put("properties", properties);
+        schema.put("additionalProperties", true);
+        return schema;
+    }
+
+    private static Map<String, Object> defaultAnnotations(AgentToolExecutionMode executionMode,
+                                                          AgentActionRiskLevel maxRiskLevel,
+                                                          boolean requiresConfirmation) {
+        Map<String, Object> annotations = new LinkedHashMap<>();
+        annotations.put("x-rag.executionMode", executionMode.name());
+        annotations.put("x-rag.maxRiskLevel", maxRiskLevel.name());
+        annotations.put("x-rag.requiresConfirmation", requiresConfirmation);
+        return annotations;
+    }
+}

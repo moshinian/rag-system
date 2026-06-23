@@ -1,19 +1,16 @@
 package com.example.rag.service.agent;
 
-import com.example.rag.model.dto.AgentToolContext;
-import com.example.rag.model.dto.AgentToolDefinition;
-import com.example.rag.model.dto.AgentToolResult;
-import com.example.rag.model.enums.AgentActionRiskLevel;
-import com.example.rag.model.enums.AgentToolExecutionMode;
 import com.example.rag.service.QuestionAnsweringService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
+
+import java.util.Map;
 
 /**
  * Agent 只读问答 readiness 检查工具。
  */
 @Component
-public class QaReadinessAgentTool implements AgentTool {
+public class QaReadinessAgentTool implements McpTool {
     public static final String TOOL_NAME = "kb.readiness.check";
     private final QuestionAnsweringService questionAnsweringService;
     private final ObjectMapper objectMapper;
@@ -25,26 +22,24 @@ public class QaReadinessAgentTool implements AgentTool {
     }
 
     @Override
-    public String toolName() {
+    public String name() {
         return TOOL_NAME;
     }
 
     @Override
-    public AgentToolDefinition definition() {
-        return new AgentToolDefinition(
-                TOOL_NAME,
-                AgentToolExecutionMode.READ_ONLY,
-                AgentActionRiskLevel.LOW
-        );
+    public McpToolDefinition definition() {
+        return McpToolDefinition.readOnlyLow(TOOL_NAME, TOOL_NAME, toolDescription());
     }
 
     @Override
-    public AgentToolResult execute(AgentToolContext context) {
+    public McpToolResult call(McpToolContext context) {
         long startedAt = System.nanoTime();
-        String outputJson = AgentToolSupport.toJson(
-                objectMapper,
-                questionAnsweringService.getReadiness(context.kbCode())
-        );
-        return AgentToolResult.success(TOOL_NAME, outputJson, AgentToolSupport.elapsedMillis(startedAt));
+        Map<String, Object> output = objectMapper.convertValue(questionAnsweringService.getReadiness(context.kbCode()), new com.fasterxml.jackson.core.type.TypeReference<>() {
+        });
+        return McpToolResult.success(TOOL_NAME, output, AgentToolSupport.elapsedMillis(startedAt));
+    }
+
+    private String toolDescription() {
+        return "检查指定知识库是否具备问答 readiness，包括索引、向量和重嵌入状态。";
     }
 }

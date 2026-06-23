@@ -75,12 +75,15 @@ rag:
       chat-completions-path: /v1/chat/completions
       agent-runs-path: /v1/agent/runs
       connect-timeout-millis: 5000
-      read-timeout-millis: 30000
+      read-timeout-millis: 120000
   agent:
     internal-tool-token: ${RAG_AGENT_TOOL_TOKEN:dev-agent-tool-token}
+    mcp-allowed-origins:
+      - ${RAG_MCP_ALLOWED_ORIGIN:http://127.0.0.1:8001}
+      - http://localhost:8001
   llm:
     chat:
-      model: qwen3.7-plus
+      model: deepseek-v4-pro
       temperature: 0.2
       max-output-tokens: 1200
   retrieval:

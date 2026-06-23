@@ -1,15 +1,9 @@
 package com.example.rag.service.agent;
 
-import com.example.rag.model.dto.AgentToolContext;
-import com.example.rag.model.dto.AgentToolDefinition;
-import com.example.rag.model.dto.AgentToolResult;
-import com.example.rag.model.enums.AgentActionRiskLevel;
-import com.example.rag.model.enums.AgentToolExecutionMode;
 import com.example.rag.model.enums.RetrievalMode;
 import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.model.response.RetrievedChunkResponse;
 import com.example.rag.service.QuestionAnsweringService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -23,41 +17,42 @@ import java.util.stream.Collectors;
  * Agent 只读 Dense / Hybrid 检索探测工具。
  */
 @Component
-public class QaRetrieveProbeAgentTool implements AgentTool {
+public class QaRetrieveProbeAgentTool implements McpTool {
     public static final String TOOL_NAME = "qa.retrieve.probe";
     private static final int DEFAULT_TOP_K = 5;
     private final QuestionAnsweringService questionAnsweringService;
-    private final ObjectMapper objectMapper;
 
     /** 构造QaRetrieveProbeAgentTool。 */
-    public QaRetrieveProbeAgentTool(QuestionAnsweringService questionAnsweringService,
-                                    ObjectMapper objectMapper) {
+    public QaRetrieveProbeAgentTool(QuestionAnsweringService questionAnsweringService) {
         this.questionAnsweringService = questionAnsweringService;
-        this.objectMapper = objectMapper;
     }
 
     @Override
-    public String toolName() {
+    public String name() {
         return TOOL_NAME;
     }
 
     @Override
-    public AgentToolDefinition definition() {
-        return new AgentToolDefinition(
-                TOOL_NAME,
-                AgentToolExecutionMode.READ_ONLY,
-                AgentActionRiskLevel.LOW
-        );
+    public McpToolDefinition definition() {
+        return McpToolDefinition.readOnlyLow(TOOL_NAME, TOOL_NAME, toolDescription());
     }
 
     @Override
-    public AgentToolResult execute(AgentToolContext context) {
+    public McpToolResult call(McpToolContext context) {
         long startedAt = System.nanoTime();
         String question = normalizeQuestion(context.question());
         if (question == null) {
-            return AgentToolResult.failure(
+            return McpToolResult.failure(
                     TOOL_NAME,
                     "question must not be blank for qa.retrieve.probe",
+                    AgentToolSupport.elapsedMillis(startedAt)
+            );
+        }
+        Integer topK = resolveTopK(context.attributes());
+        if (topK == null) {
+            return McpToolResult.failure(
+                    TOOL_NAME,
+                    "topK must be an integer between 1 and 10",
                     AgentToolSupport.elapsedMillis(startedAt)
             );
         }
@@ -65,27 +60,31 @@ public class QaRetrieveProbeAgentTool implements AgentTool {
         QuestionRetrievalResponse dense = questionAnsweringService.retrieve(
                 context.kbCode(),
                 question,
-                DEFAULT_TOP_K,
+                topK,
                 RetrievalMode.DENSE
         );
         QuestionRetrievalResponse hybrid = questionAnsweringService.retrieve(
                 context.kbCode(),
                 question,
-                DEFAULT_TOP_K,
+                topK,
                 RetrievalMode.HYBRID
         );
 
         Map<String, Object> output = new LinkedHashMap<>();
         output.put("question", question);
-        output.put("topK", DEFAULT_TOP_K);
+        output.put("topK", topK);
         output.put("dense", toProbeBranch(dense));
         output.put("hybrid", toProbeBranch(hybrid));
         output.put("signals", signals(dense, hybrid));
-        return AgentToolResult.success(
+        return McpToolResult.success(
                 TOOL_NAME,
-                AgentToolSupport.toJson(objectMapper, output),
+                output,
                 AgentToolSupport.elapsedMillis(startedAt)
         );
+    }
+
+    private String toolDescription() {
+        return "对指定问题执行 Dense 与 Hybrid 检索探测，仅返回来源摘要和检索信号。";
     }
 
     private String normalizeQuestion(String question) {
@@ -93,6 +92,30 @@ public class QaRetrieveProbeAgentTool implements AgentTool {
             return null;
         }
         return question.trim();
+    }
+
+    private Integer resolveTopK(Map<String, Object> attributes) {
+        if (attributes == null || !attributes.containsKey("topK")) {
+            return DEFAULT_TOP_K;
+        }
+        Object rawTopK = attributes.get("topK");
+        Integer topK = null;
+        if (rawTopK instanceof Number number) {
+            if (number.doubleValue() != number.intValue()) {
+                return null;
+            }
+            topK = number.intValue();
+        } else if (rawTopK instanceof String text && !text.trim().isBlank()) {
+            try {
+                topK = Integer.parseInt(text.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        if (topK == null || topK < 1 || topK > 10) {
+            return null;
+        }
+        return topK;
     }
 
     private Map<String, Object> toProbeBranch(QuestionRetrievalResponse response) {

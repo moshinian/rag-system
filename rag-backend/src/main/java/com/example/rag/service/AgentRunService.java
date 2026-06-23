@@ -27,6 +27,7 @@ import com.example.rag.persistence.entity.AgentActionEntity;
 import com.example.rag.persistence.entity.AgentRunEntity;
 import com.example.rag.persistence.entity.AgentStepEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
+import com.example.rag.service.agent.RecommendedActionCatalog;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,8 +45,6 @@ public class AgentRunService {
     private static final String RUN_CODE_PREFIX = "AR-";
     private static final String STEP_CODE_PREFIX = "AST-";
     private static final String ACTION_CODE_PREFIX = "ACT-";
-    private static final String RETRY_INDEXING_TASK_TOOL = "document.indexing_task.retry";
-    private static final String SUBMIT_EMBEDDING_REBUILD_TOOL = "embedding.rebuild.submit";
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final AgentRunRepository agentRunRepository;
     private final AgentStepRepository agentStepRepository;
@@ -54,6 +53,7 @@ public class AgentRunService {
     private final AgentRuntimeClient agentRuntimeClient;
     private final DocumentIndexingService documentIndexingService;
     private final EmbeddingRebuildService embeddingRebuildService;
+    private final RecommendedActionCatalog recommendedActionCatalog;
     private final ObjectMapper objectMapper;
 
     /** 构造AgentRunService。 */
@@ -65,6 +65,7 @@ public class AgentRunService {
                            AgentRuntimeClient agentRuntimeClient,
                            DocumentIndexingService documentIndexingService,
                            EmbeddingRebuildService embeddingRebuildService,
+                           RecommendedActionCatalog recommendedActionCatalog,
                            ObjectMapper objectMapper) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.agentRunRepository = agentRunRepository;
@@ -74,6 +75,7 @@ public class AgentRunService {
         this.agentRuntimeClient = agentRuntimeClient;
         this.documentIndexingService = documentIndexingService;
         this.embeddingRebuildService = embeddingRebuildService;
+        this.recommendedActionCatalog = recommendedActionCatalog;
         this.objectMapper = objectMapper;
     }
 
@@ -223,20 +225,16 @@ public class AgentRunService {
         if (action.getRiskLevel() == AgentActionRiskLevel.HIGH) {
             throw new BusinessException("HIGH risk agent action cannot be executed: " + action.getActionCode());
         }
-        if (!RETRY_INDEXING_TASK_TOOL.equals(action.getToolName())
-                && !SUBMIT_EMBEDDING_REBUILD_TOOL.equals(action.getToolName())) {
+        if (!recommendedActionCatalog.isExecutable(action.getToolName(), action.getRiskLevel())) {
             throw new BusinessException("Agent action tool is not executable: " + action.getToolName());
-        }
-        if (action.getRiskLevel() != AgentActionRiskLevel.MEDIUM) {
-            throw new BusinessException("Unsupported risk level for agent action: " + action.getRiskLevel());
         }
     }
 
     /** 执行已确认的 Agent 推荐动作。 */
     private Object executeConfirmedAction(String kbCode, AgentActionEntity action, String operator) {
         return switch (action.getToolName()) {
-            case RETRY_INDEXING_TASK_TOOL -> executeRetryIndexingTask(kbCode, action, operator);
-            case SUBMIT_EMBEDDING_REBUILD_TOOL -> executeEmbeddingRebuildSubmit(kbCode, action, operator);
+            case RecommendedActionCatalog.RETRY_INDEXING_TASK_TOOL -> executeRetryIndexingTask(kbCode, action, operator);
+            case RecommendedActionCatalog.SUBMIT_EMBEDDING_REBUILD_TOOL -> executeEmbeddingRebuildSubmit(kbCode, action, operator);
             default -> throw new BusinessException("Agent action tool is not executable: " + action.getToolName());
         };
     }

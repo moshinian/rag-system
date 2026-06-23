@@ -1,29 +1,26 @@
 package com.example.rag.service.agent;
 
 import com.example.rag.common.exception.BusinessException;
-import com.example.rag.model.dto.AgentToolContext;
-import com.example.rag.model.dto.AgentToolDefinition;
-import com.example.rag.model.dto.AgentToolResult;
-import com.example.rag.model.enums.AgentActionRiskLevel;
-import com.example.rag.model.enums.AgentToolExecutionMode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Agent 工具注册表测试。 */
-class AgentToolRegistryTest {
+/** MCP 工具注册表测试。 */
+class McpToolRegistryTest {
 
     @Test
     void registryShouldFindRegisteredReadOnlyTools() {
-        AgentToolRegistry registry = new AgentToolRegistry(List.of(
+        McpToolRegistry registry = new McpToolRegistry(List.of(
                 stubTool("system.health.check"),
                 stubTool("kb.readiness.check"),
                 stubTool("documents.status.scan"),
                 stubTool("indexing.tasks.scan"),
-                stubTool("qa.retrieve.probe")
+                stubTool("qa.retrieve.probe"),
+                stubTool("retrieval.config.inspect")
         ));
 
         assertThat(registry.find("system.health.check")).isPresent();
@@ -31,55 +28,53 @@ class AgentToolRegistryTest {
         assertThat(registry.find("documents.status.scan")).isPresent();
         assertThat(registry.find("indexing.tasks.scan")).isPresent();
         assertThat(registry.find("qa.retrieve.probe")).isPresent();
+        assertThat(registry.find("retrieval.config.inspect")).isPresent();
         assertThat(registry.find("missing.tool")).isEmpty();
         assertThat(registry.definitions())
-                .extracting(AgentToolDefinition::toolName)
+                .extracting(McpToolDefinition::name)
                 .containsExactlyInAnyOrder(
                         "system.health.check",
                         "kb.readiness.check",
                         "documents.status.scan",
                         "indexing.tasks.scan",
-                        "qa.retrieve.probe"
+                        "qa.retrieve.probe",
+                        "retrieval.config.inspect"
                 );
     }
 
     @Test
     void registryShouldRejectDuplicateToolName() {
-        AgentTool tool = stubTool("system.health.check");
+        McpTool tool = stubTool("system.health.check");
 
-        assertThatThrownBy(() -> new AgentToolRegistry(List.of(tool, tool)))
+        assertThatThrownBy(() -> new McpToolRegistry(List.of(tool, tool)))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Duplicate agent tool");
+                .hasMessageContaining("Duplicate MCP tool");
     }
 
     @Test
     void requireShouldRejectMissingToolName() {
-        AgentToolRegistry registry = new AgentToolRegistry(List.of());
+        McpToolRegistry registry = new McpToolRegistry(List.of());
 
         assertThatThrownBy(() -> registry.require("missing.tool"))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Agent tool not found");
+                .hasMessageContaining("MCP tool not found");
     }
 
-    private AgentTool stubTool(String toolName) {
-        return new AgentTool() {
+    private McpTool stubTool(String toolName) {
+        return new McpTool() {
             @Override
-            public String toolName() {
+            public String name() {
                 return toolName;
             }
 
             @Override
-            public AgentToolDefinition definition() {
-                return new AgentToolDefinition(
-                        toolName,
-                        AgentToolExecutionMode.READ_ONLY,
-                        AgentActionRiskLevel.LOW
-                );
+            public McpToolDefinition definition() {
+                return McpToolDefinition.readOnlyLow(toolName, toolName, toolName);
             }
 
             @Override
-            public AgentToolResult execute(AgentToolContext context) {
-                return AgentToolResult.success(toolName, "{}", 0L);
+            public McpToolResult call(McpToolContext context) {
+                return McpToolResult.success(toolName, Map.of(), 0L);
             }
         };
     }

@@ -1,7 +1,5 @@
 package com.example.rag.service.agent;
 
-import com.example.rag.model.dto.AgentToolContext;
-import com.example.rag.model.dto.AgentToolResult;
 import com.example.rag.model.enums.AgentActionRiskLevel;
 import com.example.rag.model.enums.AgentToolExecutionMode;
 import com.example.rag.model.enums.DocumentStatus;
@@ -30,8 +28,7 @@ class DocumentsStatusAgentToolTest {
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         DocumentsStatusAgentTool tool = new DocumentsStatusAgentTool(
                 knowledgeBaseRepository,
-                documentRepository,
-                objectMapper
+                documentRepository
         );
         KnowledgeBaseEntity knowledgeBase = knowledgeBase(1L, "day20-cn-kb");
         when(knowledgeBaseRepository.findByCode("day20-cn-kb")).thenReturn(Optional.of(knowledgeBase));
@@ -40,11 +37,11 @@ class DocumentsStatusAgentToolTest {
                 document(11L, "DOC-2", "坏文档.pdf", DocumentStatus.FAILED, "parse failed")
         ));
 
-        AgentToolResult result = tool.execute(AgentToolContext.forKnowledgeBase("day20-cn-kb"));
+        McpToolResult result = tool.call(McpToolContext.forKnowledgeBase("day20-cn-kb"));
 
-        assertThat(result.success()).isTrue();
+        assertThat(!result.isError()).isTrue();
         assertThat(result.toolName()).isEqualTo(DocumentsStatusAgentTool.TOOL_NAME);
-        JsonNode json = objectMapper.readTree(result.outputJson());
+        JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(result.structuredContent()));
         assertThat(json.get("kbCode").asText()).isEqualTo("day20-cn-kb");
         assertThat(json.get("totalDocumentCount").asInt()).isEqualTo(2);
         assertThat(json.get("statusCounts").get("INDEXED").asLong()).isEqualTo(1L);
@@ -58,11 +55,10 @@ class DocumentsStatusAgentToolTest {
     void definitionShouldDeclareReadOnlyLowRiskTool() {
         DocumentsStatusAgentTool tool = new DocumentsStatusAgentTool(
                 mock(KnowledgeBaseRepository.class),
-                mock(DocumentRepository.class),
-                new ObjectMapper()
+                mock(DocumentRepository.class)
         );
 
-        assertThat(tool.definition().toolName()).isEqualTo(DocumentsStatusAgentTool.TOOL_NAME);
+        assertThat(tool.definition().name()).isEqualTo(DocumentsStatusAgentTool.TOOL_NAME);
         assertThat(tool.definition().executionMode()).isEqualTo(AgentToolExecutionMode.READ_ONLY);
         assertThat(tool.definition().maxRiskLevel()).isEqualTo(AgentActionRiskLevel.LOW);
     }

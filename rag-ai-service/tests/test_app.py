@@ -135,7 +135,7 @@ def test_settings_accept_provider_specific_api_key_env_vars(monkeypatch):
 
     from app.core.config import Settings
 
-    settings = Settings()
+    settings = Settings(chat_provider="aliyun-bailian-openai-compatible")
 
     assert settings.embedding_api_key == "dashscope-test-key"
     assert settings.chat_api_key == "dashscope-test-key"

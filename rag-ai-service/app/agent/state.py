@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 AgentRunMode = Literal["DIAGNOSE_ONLY", "DIAGNOSE_AND_RECOMMEND", "INTELLIGENT_TOOL_AGENT"]
@@ -14,6 +15,8 @@ AgentToolExecutionMode = Literal["READ_ONLY", "REQUIRES_CONFIRMATION", "WRITE"]
 
 
 class AgentRuntimeRequest(BaseModel):
+    """Java 调 Python Runtime 的请求协议。"""
+
     model_config = ConfigDict(populate_by_name=True)
 
     run_code: str = Field(alias="runCode")
@@ -24,6 +27,8 @@ class AgentRuntimeRequest(BaseModel):
 
 
 class AgentStepResult(BaseModel):
+    """Python Runtime 返回给 Java 持久化的 step 草案。"""
+
     model_config = ConfigDict(populate_by_name=True)
 
     node_name: str = Field(alias="nodeName")
@@ -37,6 +42,8 @@ class AgentStepResult(BaseModel):
 
 
 class AgentActionDraft(BaseModel):
+    """Python 生成的待确认 action 草案，不包含 Java 生成的 actionCode。"""
+
     model_config = ConfigDict(populate_by_name=True)
 
     tool_name: str = Field(alias="toolName")
@@ -48,6 +55,8 @@ class AgentActionDraft(BaseModel):
 
 
 class AgentToolDefinition(BaseModel):
+    """Tool Registry 暴露给 planner 的工具契约。"""
+
     model_config = ConfigDict(populate_by_name=True)
 
     name: str = Field(alias="toolName")
@@ -61,8 +70,31 @@ class AgentToolDefinition(BaseModel):
     requires_confirmation: bool = Field(default=False, alias="requiresConfirmation")
     timeout_ms: int = Field(default=5000, alias="timeoutMs")
 
+    @field_validator("input_schema", "output_schema", mode="before")
+    @classmethod
+    def _normalize_schema(cls, value: Any) -> dict[str, Any]:
+        """兼容 Java 旧版字符串 schema 和新版结构化 JSON schema。"""
+        if value is None:
+            return {}
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return {}
+            try:
+                parsed = json.loads(stripped)
+            except ValueError:
+                return {"description": stripped}
+            if isinstance(parsed, dict):
+                return parsed
+            return {"description": stripped}
+        return {"description": str(value)}
+
 
 class AgentDecision(BaseModel):
+    """planner 每一轮必须输出的严格 JSON 决策。"""
+
     model_config = ConfigDict(populate_by_name=True)
 
     action: AgentDecisionAction
@@ -72,8 +104,18 @@ class AgentDecision(BaseModel):
     final_answer: str | None = Field(default=None, alias="finalAnswer")
     risk_level: AgentActionRiskLevel | None = Field(default=None, alias="riskLevel")
 
+    @field_validator("arguments", mode="before")
+    @classmethod
+    def _normalize_arguments(cls, value: Any) -> dict[str, Any]:
+        """兼容 LLM 在 FINAL_ANSWER 场景把 arguments 返回为 null。"""
+        if value is None:
+            return {}
+        return value
+
 
 class AgentObservation(BaseModel):
+    """工具执行后的观察结果，供后续 planner 决策使用。"""
+
     model_config = ConfigDict(populate_by_name=True)
 
     tool_name: str = Field(alias="toolName")
@@ -85,6 +127,8 @@ class AgentObservation(BaseModel):
 
 
 class AgentRuntimeResponse(BaseModel):
+    """Python Runtime 对 Java 的统一响应协议。"""
+
     model_config = ConfigDict(populate_by_name=True)
 
     status: Literal["SUCCEEDED", "FAILED"]
@@ -98,6 +142,8 @@ class AgentRuntimeResponse(BaseModel):
 
 
 class AgentState(BaseModel):
+    """Pydantic 版状态模型，保留给文档化和后续强类型演进使用。"""
+
     request: AgentRuntimeRequest
     tools: list[AgentToolDefinition] = Field(default_factory=list)
     messages: list[dict[str, Any]] = Field(default_factory=list)

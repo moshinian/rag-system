@@ -1,7 +1,5 @@
 package com.example.rag.service.agent;
 
-import com.example.rag.model.dto.AgentToolContext;
-import com.example.rag.model.dto.AgentToolResult;
 import com.example.rag.model.enums.AgentActionRiskLevel;
 import com.example.rag.model.enums.AgentToolExecutionMode;
 import com.example.rag.model.response.HealthComponentStatusResponse;
@@ -45,12 +43,12 @@ class SystemHealthAgentToolTest {
                 Instant.parse("2026-06-16T10:00:01Z")
         ));
 
-        AgentToolResult result = tool.execute(AgentToolContext.forKnowledgeBase("day20-cn-kb"));
+        McpToolResult result = tool.call(McpToolContext.forKnowledgeBase("day20-cn-kb"));
 
-        assertThat(result.success()).isTrue();
+        assertThat(!result.isError()).isTrue();
         assertThat(result.toolName()).isEqualTo(SystemHealthAgentTool.TOOL_NAME);
         assertThat(result.durationMs()).isNotNegative();
-        JsonNode json = objectMapper.readTree(result.outputJson());
+        JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(result.structuredContent()));
         assertThat(json.get("status").asText()).isEqualTo("UP");
         assertThat(json.get("serviceName").asText()).isEqualTo("rag-service");
         assertThat(json.get("components").get("postgres").get("status").asText()).isEqualTo("UP");
@@ -60,7 +58,7 @@ class SystemHealthAgentToolTest {
     void definitionShouldDeclareReadOnlyLowRiskTool() {
         SystemHealthAgentTool tool = new SystemHealthAgentTool(mock(SystemHealthService.class), new ObjectMapper());
 
-        assertThat(tool.definition().toolName()).isEqualTo(SystemHealthAgentTool.TOOL_NAME);
+        assertThat(tool.definition().name()).isEqualTo(SystemHealthAgentTool.TOOL_NAME);
         assertThat(tool.definition().executionMode()).isEqualTo(AgentToolExecutionMode.READ_ONLY);
         assertThat(tool.definition().maxRiskLevel()).isEqualTo(AgentActionRiskLevel.LOW);
     }

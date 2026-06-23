@@ -1,19 +1,16 @@
 package com.example.rag.service.agent;
 
-import com.example.rag.model.dto.AgentToolContext;
-import com.example.rag.model.dto.AgentToolDefinition;
-import com.example.rag.model.dto.AgentToolResult;
-import com.example.rag.model.enums.AgentActionRiskLevel;
-import com.example.rag.model.enums.AgentToolExecutionMode;
 import com.example.rag.service.SystemHealthService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
+
+import java.util.Map;
 
 /**
  * Agent 只读系统健康检查工具。
  */
 @Component
-public class SystemHealthAgentTool implements AgentTool {
+public class SystemHealthAgentTool implements McpTool {
     public static final String TOOL_NAME = "system.health.check";
     private final SystemHealthService systemHealthService;
     private final ObjectMapper objectMapper;
@@ -25,23 +22,24 @@ public class SystemHealthAgentTool implements AgentTool {
     }
 
     @Override
-    public String toolName() {
+    public String name() {
         return TOOL_NAME;
     }
 
     @Override
-    public AgentToolDefinition definition() {
-        return new AgentToolDefinition(
-                TOOL_NAME,
-                AgentToolExecutionMode.READ_ONLY,
-                AgentActionRiskLevel.LOW
-        );
+    public McpToolDefinition definition() {
+        return McpToolDefinition.readOnlyLow(TOOL_NAME, TOOL_NAME, toolDescription());
     }
 
     @Override
-    public AgentToolResult execute(AgentToolContext context) {
+    public McpToolResult call(McpToolContext context) {
         long startedAt = System.nanoTime();
-        String outputJson = AgentToolSupport.toJson(objectMapper, systemHealthService.currentStatus());
-        return AgentToolResult.success(TOOL_NAME, outputJson, AgentToolSupport.elapsedMillis(startedAt));
+        Map<String, Object> output = objectMapper.convertValue(systemHealthService.currentStatus(), new com.fasterxml.jackson.core.type.TypeReference<>() {
+        });
+        return McpToolResult.success(TOOL_NAME, output, AgentToolSupport.elapsedMillis(startedAt));
+    }
+
+    private String toolDescription() {
+        return "检查 Java 后端关键依赖和服务健康状态。";
     }
 }
