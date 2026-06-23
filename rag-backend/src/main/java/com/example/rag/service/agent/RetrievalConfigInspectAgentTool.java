@@ -25,8 +25,18 @@ public class RetrievalConfigInspectAgentTool implements McpTool {
     }
 
     @Override
-    public McpToolDefinition definition() {
-        return McpToolDefinition.readOnlyLow(TOOL_NAME, TOOL_NAME, toolDescription());
+    public String title() {
+        return TOOL_NAME;
+    }
+
+    @Override
+    public String description() {
+        return "检查当前非敏感检索配置，解释 Dense、Hybrid 和 keyword 分支行为参数。";
+    }
+
+    @Override
+    public Map<String, Object> inputSchema() {
+        return AgentToolSupport.objectSchema(java.util.List.of(), Map.of());
     }
 
     @Override
@@ -49,7 +59,4 @@ public class RetrievalConfigInspectAgentTool implements McpTool {
         );
     }
 
-    private String toolDescription() {
-        return "检查当前非敏感检索配置，解释 Dense、Hybrid 和 keyword 分支行为参数。";
-    }
 }

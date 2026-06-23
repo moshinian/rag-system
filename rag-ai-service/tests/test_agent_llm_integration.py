@@ -56,8 +56,14 @@ class SmokeToolClient:
                     "properties": {
                         "kbCode": {"type": "string"},
                         "question": {"type": "string"},
-                        "topK": {"type": "integer", "minimum": 1, "maximum": 10},
+                        "attributes": {
+                            "type": "object",
+                            "properties": {"topK": {"type": "integer", "minimum": 1, "maximum": 10}},
+                            "required": [],
+                            "additionalProperties": False,
+                        },
                     },
+                    "additionalProperties": False,
                 },
             ),
         ]
@@ -87,7 +93,7 @@ class SmokeToolClient:
                 success=True,
                 output={
                     "question": (arguments or {}).get("question") or request.question,
-                    "topK": (arguments or {}).get("topK", 5),
+                    "topK": ((arguments or {}).get("attributes") or {}).get("topK", 5),
                     "dense": {"retrievalMode": "DENSE", "hitCount": 1},
                     "hybrid": {"retrievalMode": "HYBRID", "hitCount": 1, "keywordHitCount": 1},
                     "signals": {"denseEmpty": False, "hybridEmpty": False, "keywordZeroHit": False},

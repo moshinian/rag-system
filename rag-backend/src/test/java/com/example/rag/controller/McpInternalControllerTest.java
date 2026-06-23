@@ -1,9 +1,9 @@
 package com.example.rag.controller;
 
 import com.example.rag.config.RagAgentProperties;
+import com.example.rag.service.agent.AgentTestSchemas;
 import com.example.rag.service.agent.McpTool;
 import com.example.rag.service.agent.McpToolContext;
-import com.example.rag.service.agent.McpToolDefinition;
 import com.example.rag.service.agent.McpToolRegistry;
 import com.example.rag.service.agent.McpToolResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -127,10 +127,12 @@ class McpInternalControllerTest {
                                     "name": "kb.readiness.check",
                                     "arguments": {
                                       "kbCode": "day20-cn-kb",
-                                      "runCode": " AR-test ",
                                       "question": " 第二百三十八条是什么 ",
-                                      "operator": " agent-runtime ",
                                       "attributes": {"source": "python"}
+                                    },
+                                    "_meta": {
+                                      "x-rag.runCode": "AR-test",
+                                      "x-rag.operator": "agent-runtime"
                                     }
                                   }
                                 }
@@ -143,10 +145,10 @@ class McpInternalControllerTest {
 
         McpToolContext context = executedContext.get();
         assertThat(context.kbCode()).isEqualTo("day20-cn-kb");
-        assertThat(context.runCode()).isEqualTo("AR-test");
         assertThat(context.question()).isEqualTo("第二百三十八条是什么");
-        assertThat(context.operator()).isEqualTo("agent-runtime");
         assertThat(context.attributes()).containsEntry("source", "python");
+        assertThat(context.meta()).containsEntry("x-rag.runCode", "AR-test");
+        assertThat(context.meta()).containsEntry("x-rag.operator", "agent-runtime");
     }
 
     @Test
@@ -162,6 +164,62 @@ class McpInternalControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.error.code").value(-32602))
                 .andExpect(jsonPath("$.error.message").value("MCP tool not found: missing.tool"));
+    }
+
+    @Test
+    void toolsCallShouldValidateArgumentsAgainstToolSchema() throws Exception {
+        String sessionId = initializedSession();
+
+        MvcResult result = mockMvc.perform(post("/api/internal/mcp")
+                        .headers(mcpHeaders(sessionId))
+                        .contentType(jsonMediaType())
+                        .content("""
+                                {"jsonrpc":"2.0","id":"call-1","method":"tools/call","params":{"name":"kb.readiness.check","arguments":{"runCode":"AR-test"}}}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.error.code").value(-32602))
+                .andReturn();
+        assertThat(result.getResponse().getContentAsString())
+                .contains("field=arguments.kbCode")
+                .contains("reason=missing");
+    }
+
+    @Test
+    void toolsCallShouldAllowMissingArgumentsForNoArgumentTool() throws Exception {
+        RagAgentProperties properties = new RagAgentProperties();
+        properties.setInternalToolToken(TOKEN);
+        properties.setMcpAllowedOrigins(List.of(ORIGIN));
+        McpToolRegistry registry = new McpToolRegistry(List.of(
+                stubTool("system.health.check", AgentTestSchemas.objectSchema(Map.of(), List.of()))
+        ));
+        MockMvc noArgMockMvc = MockMvcBuilders.standaloneSetup(new McpInternalController(registry, properties, objectMapper))
+                .build();
+        MvcResult init = noArgMockMvc.perform(post("/api/internal/mcp")
+                        .header("Accept", "application/json, text/event-stream")
+                        .header("Origin", ORIGIN)
+                        .header(INTERNAL_TOOL_TOKEN_HEADER, TOKEN)
+                        .contentType(jsonMediaType())
+                        .content("""
+                                {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18"}}
+                                """))
+                .andReturn();
+        String sessionId = requiredHeader(init, SESSION_ID_HEADER);
+        noArgMockMvc.perform(post("/api/internal/mcp")
+                        .headers(mcpHeaders(sessionId))
+                        .contentType(jsonMediaType())
+                        .content("""
+                                {"jsonrpc":"2.0","method":"notifications/initialized","params":{}}
+                                """))
+                .andExpect(status().isAccepted());
+
+        noArgMockMvc.perform(post("/api/internal/mcp")
+                        .headers(mcpHeaders(sessionId))
+                        .contentType(jsonMediaType())
+                        .content("""
+                                {"jsonrpc":"2.0","id":"call-1","method":"tools/call","params":{"name":"system.health.check"}}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.isError").value(false));
     }
 
     @Test
@@ -270,6 +328,24 @@ class McpInternalControllerTest {
     }
 
     private McpTool stubTool(String toolName) {
+        Map<String, Object> attributes = AgentTestSchemas.objectSchema(
+                Map.of("source", Map.of("type", "string")),
+                List.of()
+        );
+        return stubTool(
+                toolName,
+                AgentTestSchemas.objectSchema(
+                        Map.of(
+                                "kbCode", Map.of("type", "string"),
+                                "question", Map.of("type", "string"),
+                                "attributes", attributes
+                        ),
+                        List.of("kbCode")
+                )
+        );
+    }
+
+    private McpTool stubTool(String toolName, Map<String, Object> inputSchema) {
         return new McpTool() {
             @Override
             public String name() {
@@ -277,8 +353,18 @@ class McpInternalControllerTest {
             }
 
             @Override
-            public McpToolDefinition definition() {
-                return McpToolDefinition.readOnlyLow(toolName, toolName, "stub tool");
+            public String title() {
+                return toolName;
+            }
+
+            @Override
+            public String description() {
+                return "stub tool";
+            }
+
+            @Override
+            public Map<String, Object> inputSchema() {
+                return inputSchema;
             }
 
             @Override

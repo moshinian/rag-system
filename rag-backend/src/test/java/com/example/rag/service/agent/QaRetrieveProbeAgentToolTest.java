@@ -33,11 +33,8 @@ class QaRetrieveProbeAgentToolTest {
                 .thenReturn(retrieval(RetrievalMode.HYBRID, "RRF", 2, 1, 2, 18L, chunk("DOC-2", 2, 0.91D)));
 
         McpToolResult result = tool.call(new McpToolContext(
-                "day20-cn-kb",
-                " 第二百三十八条是什么 ",
-                "AR-test",
-                "frontend",
-                Map.of()
+                Map.of("kbCode", "day20-cn-kb", "question", " 第二百三十八条是什么 "),
+                Map.of("x-rag.runCode", "AR-test", "x-rag.operator", "frontend")
         ));
 
         assertThat(!result.isError()).isTrue();
@@ -67,11 +64,12 @@ class QaRetrieveProbeAgentToolTest {
                 .thenReturn(retrieval(RetrievalMode.HYBRID, "RRF", 1, 1, 1, 18L, chunk("DOC-1", 1, 0.91D)));
 
         McpToolResult result = tool.call(new McpToolContext(
-                "day20-cn-kb",
-                "第二百三十八条是什么",
-                "AR-test",
-                "frontend",
-                Map.of("topK", 3)
+                Map.of(
+                        "kbCode", "day20-cn-kb",
+                        "question", "第二百三十八条是什么",
+                        "attributes", Map.of("topK", 3)
+                ),
+                Map.of("x-rag.runCode", "AR-test", "x-rag.operator", "frontend")
         ));
 
         assertThat(!result.isError()).isTrue();
@@ -87,11 +85,12 @@ class QaRetrieveProbeAgentToolTest {
         QaRetrieveProbeAgentTool tool = new QaRetrieveProbeAgentTool(questionAnsweringService);
 
         McpToolResult result = tool.call(new McpToolContext(
-                "day20-cn-kb",
-                "第二百三十八条是什么",
-                "AR-test",
-                "frontend",
-                Map.of("topK", 11)
+                Map.of(
+                        "kbCode", "day20-cn-kb",
+                        "question", "第二百三十八条是什么",
+                        "attributes", Map.of("topK", 11)
+                ),
+                Map.of("x-rag.runCode", "AR-test", "x-rag.operator", "frontend")
         ));
 
         assertThat(!result.isError()).isFalse();
@@ -120,6 +119,8 @@ class QaRetrieveProbeAgentToolTest {
         assertThat(tool.definition().name()).isEqualTo(QaRetrieveProbeAgentTool.TOOL_NAME);
         assertThat(tool.definition().executionMode()).isEqualTo(AgentToolExecutionMode.READ_ONLY);
         assertThat(tool.definition().maxRiskLevel()).isEqualTo(AgentActionRiskLevel.LOW);
+        assertThat(tool.definition().inputSchema().get("additionalProperties")).isEqualTo(false);
+        assertThat(tool.definition().inputSchema().get("required")).isEqualTo(List.of("kbCode", "question"));
     }
 
     private QuestionRetrievalResponse retrieval(RetrievalMode retrievalMode,

@@ -14,52 +14,54 @@ public record McpToolDefinition(
         String title,
         String description,
         Map<String, Object> inputSchema,
+        Map<String, Object> outputSchema,
         Map<String, Object> annotations,
         AgentToolExecutionMode executionMode,
         AgentActionRiskLevel maxRiskLevel,
         boolean requiresConfirmation,
         Long timeoutMs
 ) {
-    /** 构造 READ_ONLY / LOW / 无确认的 MCP 工具定义。 */
-    public static McpToolDefinition readOnlyLow(String name, String title, String description) {
+    /** 构造显式声明 schema 的 MCP 工具定义。 */
+    public static McpToolDefinition of(String name,
+                                       String title,
+                                       String description,
+                                       Map<String, Object> inputSchema,
+                                       Map<String, Object> outputSchema,
+                                       AgentToolExecutionMode executionMode,
+                                       AgentActionRiskLevel maxRiskLevel,
+                                       boolean requiresConfirmation,
+                                       Long timeoutMs) {
+        McpToolContractValidator.validate(
+                name,
+                inputSchema,
+                outputSchema == null ? Map.of() : outputSchema
+        );
         return new McpToolDefinition(
                 name,
                 title,
                 description,
-                defaultInputSchema(),
-                defaultAnnotations(AgentToolExecutionMode.READ_ONLY, AgentActionRiskLevel.LOW, false),
-                AgentToolExecutionMode.READ_ONLY,
-                AgentActionRiskLevel.LOW,
-                false,
-                5000L
+                inputSchema,
+                outputSchema == null ? Map.of() : outputSchema,
+                defaultAnnotations(executionMode, maxRiskLevel, requiresConfirmation),
+                executionMode,
+                maxRiskLevel,
+                requiresConfirmation,
+                timeoutMs
         );
     }
 
-    /** 转为 MCP 协议字段；第一版不返回 outputSchema。 */
+    /** 转为 MCP 协议字段。 */
     public Map<String, Object> toProtocol() {
         Map<String, Object> protocol = new LinkedHashMap<>();
         protocol.put("name", name);
         protocol.put("title", title);
         protocol.put("description", description);
         protocol.put("inputSchema", inputSchema);
+        if (outputSchema != null && !outputSchema.isEmpty()) {
+            protocol.put("outputSchema", outputSchema);
+        }
         protocol.put("annotations", annotations);
         return protocol;
-    }
-
-    private static Map<String, Object> defaultInputSchema() {
-        Map<String, Object> properties = new LinkedHashMap<>();
-        properties.put("kbCode", Map.of("type", "string"));
-        properties.put("question", Map.of("type", "string"));
-        properties.put("runCode", Map.of("type", "string"));
-        properties.put("operator", Map.of("type", "string"));
-        properties.put("attributes", Map.of("type", "object"));
-
-        Map<String, Object> schema = new LinkedHashMap<>();
-        schema.put("type", "object");
-        schema.put("required", java.util.List.of("kbCode"));
-        schema.put("properties", properties);
-        schema.put("additionalProperties", true);
-        return schema;
     }
 
     private static Map<String, Object> defaultAnnotations(AgentToolExecutionMode executionMode,

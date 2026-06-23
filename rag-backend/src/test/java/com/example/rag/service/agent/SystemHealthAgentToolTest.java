@@ -61,5 +61,8 @@ class SystemHealthAgentToolTest {
         assertThat(tool.definition().name()).isEqualTo(SystemHealthAgentTool.TOOL_NAME);
         assertThat(tool.definition().executionMode()).isEqualTo(AgentToolExecutionMode.READ_ONLY);
         assertThat(tool.definition().maxRiskLevel()).isEqualTo(AgentActionRiskLevel.LOW);
+        assertThat(tool.definition().inputSchema().get("required")).isEqualTo(List.of());
+        assertThat(tool.definition().inputSchema().get("properties")).isEqualTo(Map.of());
+        assertThat(tool.definition().inputSchema().get("additionalProperties")).isEqualTo(false);
     }
 }

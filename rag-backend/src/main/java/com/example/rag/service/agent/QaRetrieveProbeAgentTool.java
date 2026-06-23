@@ -33,8 +33,28 @@ public class QaRetrieveProbeAgentTool implements McpTool {
     }
 
     @Override
-    public McpToolDefinition definition() {
-        return McpToolDefinition.readOnlyLow(TOOL_NAME, TOOL_NAME, toolDescription());
+    public String title() {
+        return TOOL_NAME;
+    }
+
+    @Override
+    public String description() {
+        return "对指定问题执行 Dense 与 Hybrid 检索探测，仅返回来源摘要和检索信号。";
+    }
+
+    @Override
+    public Map<String, Object> inputSchema() {
+        Map<String, Object> attributesProperties = new LinkedHashMap<>();
+        attributesProperties.put("topK", AgentToolSupport.integerProperty("返回检索结果数量。", 1, 10));
+
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("kbCode", AgentToolSupport.stringProperty("知识库编码。"));
+        properties.put("question", AgentToolSupport.stringProperty("检索探测问题。"));
+        properties.put(
+                "attributes",
+                AgentToolSupport.objectProperty("检索探测可选参数。", List.of(), attributesProperties)
+        );
+        return AgentToolSupport.objectSchema(List.of("kbCode", "question"), properties);
     }
 
     @Override
@@ -81,10 +101,6 @@ public class QaRetrieveProbeAgentTool implements McpTool {
                 output,
                 AgentToolSupport.elapsedMillis(startedAt)
         );
-    }
-
-    private String toolDescription() {
-        return "对指定问题执行 Dense 与 Hybrid 检索探测，仅返回来源摘要和检索信号。";
     }
 
     private String normalizeQuestion(String question) {

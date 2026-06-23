@@ -36,8 +36,21 @@ public class DocumentsStatusAgentTool implements McpTool {
     }
 
     @Override
-    public McpToolDefinition definition() {
-        return McpToolDefinition.readOnlyLow(TOOL_NAME, TOOL_NAME, toolDescription());
+    public String title() {
+        return TOOL_NAME;
+    }
+
+    @Override
+    public String description() {
+        return "扫描指定知识库的文档状态分布，并返回少量失败文档摘要。";
+    }
+
+    @Override
+    public Map<String, Object> inputSchema() {
+        return AgentToolSupport.objectSchema(
+                List.of("kbCode"),
+                Map.of("kbCode", AgentToolSupport.stringProperty("知识库编码。"))
+        );
     }
 
     @Override
@@ -69,10 +82,6 @@ public class DocumentsStatusAgentTool implements McpTool {
                 output,
                 AgentToolSupport.elapsedMillis(startedAt)
         );
-    }
-
-    private String toolDescription() {
-        return "扫描指定知识库的文档状态分布，并返回少量失败文档摘要。";
     }
 
     private Map<String, Object> toFailedDocument(DocumentEntity document) {

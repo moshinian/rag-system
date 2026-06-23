@@ -553,7 +553,7 @@ def test_execute_readonly_tool_passes_decision_arguments_to_tool_client():
                 "arguments": {
                     "kbCode": "day20-cn-kb",
                     "question": "改写后的问题",
-                    "topK": 3,
+                    "attributes": {"topK": 3},
                 },
                 "reason": "probe retrieval",
                 "finalAnswer": None,
@@ -583,7 +583,7 @@ def test_execute_readonly_tool_passes_decision_arguments_to_tool_client():
     assert tool_client.executed == [
         (
             "qa.retrieve.probe",
-            {"kbCode": "day20-cn-kb", "question": "改写后的问题", "topK": 3},
+            {"kbCode": "day20-cn-kb", "question": "改写后的问题", "attributes": {"topK": 3}},
         )
     ]
     tool_step = next(step for step in response.steps if step.node_name == "execute_readonly_tool")
@@ -793,12 +793,10 @@ def test_mcp_agent_tool_client_execute_calls_tools_call_and_parses_structured_co
     call_payload = json.loads(requests[-1].content)
     assert call_payload["method"] == "tools/call"
     assert call_payload["params"]["name"] == "kb.readiness.check"
-    assert call_payload["params"]["arguments"] == {
-        "runCode": "AR-test",
-        "kbCode": "day20-cn-kb",
-        "question": "改写问题",
-        "operator": "agent-runtime",
-        "attributes": {},
+    assert call_payload["params"]["arguments"] == {"question": "改写问题"}
+    assert call_payload["params"]["_meta"] == {
+        "x-rag.runCode": "AR-test",
+        "x-rag.operator": "agent-runtime",
     }
 
 
@@ -881,7 +879,7 @@ class TestToolClient:
         request: AgentRuntimeRequest,
         arguments: dict | None = None,
     ) -> AgentToolExecution:
-        arguments = arguments or {"kbCode": request.kb_code}
+        arguments = dict(arguments or {})
         if tool_name == "system.health.check":
             output = {"status": "UP", "serviceName": "rag-backend", "components": []}
         elif tool_name == "kb.readiness.check":
@@ -908,9 +906,10 @@ class TestToolClient:
             }
         elif tool_name == "qa.retrieve.probe":
             keyword_zero_hit = "关键词零命中" in (arguments.get("question") or request.question or "")
+            attributes = arguments.get("attributes") if isinstance(arguments.get("attributes"), dict) else {}
             output = {
                 "question": arguments.get("question"),
-                "topK": arguments.get("topK", 5),
+                "topK": attributes.get("topK", 5),
                 "dense": {"retrievalMode": "DENSE", "hitCount": 1, "denseHitCount": 1, "keywordHitCount": 0},
                 "hybrid": {"retrievalMode": "HYBRID", "hitCount": 1, "denseHitCount": 1, "keywordHitCount": 0 if keyword_zero_hit else 1},
                 "signals": {"keywordZeroHit": keyword_zero_hit, "hybridNoGain": keyword_zero_hit},
@@ -971,7 +970,10 @@ class CapturingToolClient:
         return AgentToolExecution(
             tool_name=tool_name,
             success=True,
-            output={"question": (arguments or {}).get("question"), "topK": (arguments or {}).get("topK")},
+            output={
+                "question": (arguments or {}).get("question"),
+                "topK": ((arguments or {}).get("attributes") or {}).get("topK"),
+            },
             duration_ms=1,
         )
 
@@ -1052,8 +1054,14 @@ def _test_tool_definitions() -> list[AgentToolDefinition]:
                 "properties": {
                     "kbCode": {"type": "string"},
                     "question": {"type": "string"},
-                    "topK": {"type": "integer", "minimum": 1, "maximum": 10},
+                    "attributes": {
+                        "type": "object",
+                        "properties": {"topK": {"type": "integer", "minimum": 1, "maximum": 10}},
+                        "required": [],
+                        "additionalProperties": False,
+                    },
                 },
+                "additionalProperties": False,
             },
         ),
         AgentToolDefinition(toolName="retrieval.config.inspect"),

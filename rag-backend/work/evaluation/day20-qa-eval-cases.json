@@ -1,0 +1,55 @@
+{
+  "kbCode": "day20-cn-kb",
+  "language": "zh-CN",
+  "topK": 3,
+  "cases": [
+    {
+      "caseCode": "DAY20-001",
+      "category": "FACT",
+      "question": "结算异常应该先检查什么",
+      "expectedDocument": "结算异常处理指南",
+      "expectedKeywords": ["结算", "异常", "检查"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY20-002",
+      "category": "PROCESS",
+      "question": "对账差异如何处理",
+      "expectedDocument": "对账常见问题",
+      "expectedKeywords": ["对账", "差异", "处理"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY20-003",
+      "category": "SUMMARY",
+      "question": "值班巡检需要关注哪些项目",
+      "expectedDocument": "值班巡检清单",
+      "expectedKeywords": ["值班", "巡检", "清单"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY20-004",
+      "category": "FACT",
+      "question": "失败任务重试前要确认什么",
+      "expectedDocument": "结算异常处理指南",
+      "expectedKeywords": ["失败", "任务", "重试"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY20-005",
+      "category": "PROCESS",
+      "question": "清算文件导入后如何核对金额",
+      "expectedDocument": "对账常见问题",
+      "expectedKeywords": ["清算", "导入", "金额"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY20-006",
+      "category": "NO_ANSWER",
+      "question": "如何申请办公电脑维修",
+      "expectedDocument": "",
+      "expectedKeywords": ["办公", "电脑", "维修"],
+      "expectationType": "SHOULD_REJECT"
+    }
+  ]
+}

@@ -14,24 +14,42 @@ def default_tool_definitions(settings: Settings | None = None) -> list[AgentTool
 def default_java_tool_definitions() -> list[AgentToolDefinition]:
     """定义 Java 侧工具的默认契约，用作 Java Tool Registry 不可用时的 fallback。"""
     return [
-        tool_definition("system.health.check", "检查系统健康状态。"),
-        tool_definition("kb.readiness.check", "检查知识库问答 readiness。"),
-        tool_definition("documents.status.scan", "扫描知识库文档状态。"),
-        tool_definition("indexing.tasks.scan", "扫描索引任务状态。"),
+        tool_definition("system.health.check", "检查系统健康状态。", input_schema=object_schema({}, [])),
+        tool_definition(
+            "kb.readiness.check",
+            "检查知识库问答 readiness。",
+            input_schema=object_schema({"kbCode": {"type": "string"}}, ["kbCode"]),
+        ),
+        tool_definition(
+            "documents.status.scan",
+            "扫描知识库文档状态。",
+            input_schema=object_schema({"kbCode": {"type": "string"}}, ["kbCode"]),
+        ),
+        tool_definition(
+            "indexing.tasks.scan",
+            "扫描索引任务状态。",
+            input_schema=object_schema({"kbCode": {"type": "string"}}, ["kbCode"]),
+        ),
         tool_definition(
             "qa.retrieve.probe",
             "执行 Dense / Hybrid 检索探测。",
-            input_schema={
-                "type": "object",
-                "required": ["kbCode", "question"],
-                "properties": {
+            input_schema=object_schema(
+                {
                     "kbCode": {"type": "string"},
                     "question": {"type": "string"},
-                    "topK": {"type": "integer", "minimum": 1, "maximum": 10},
+                    "attributes": object_schema(
+                        {"topK": {"type": "integer", "minimum": 1, "maximum": 10}},
+                        [],
+                    ),
                 },
-            },
+                ["kbCode", "question"],
+            ),
         ),
-        tool_definition("retrieval.config.inspect", "检查当前检索配置和 Dense / Hybrid / keyword 行为参数。"),
+        tool_definition(
+            "retrieval.config.inspect",
+            "检查当前检索配置和 Dense / Hybrid / keyword 行为参数。",
+            input_schema=object_schema({}, []),
+        ),
     ]
 
 
@@ -74,13 +92,7 @@ def tool_definition(
         toolName=name,
         schemaVersion="v2",
         description=description,
-        inputSchema=input_schema or {
-            "type": "object",
-            "properties": {
-                "kbCode": {"type": "string"},
-                "question": {"type": "string"},
-            },
-        },
+        inputSchema=input_schema or object_schema({}, []),
         outputSchema=output_schema or {"type": "object"},
         executionMode=execution_mode,
         maxRiskLevel=risk_level,
@@ -99,3 +111,13 @@ def merge_tool_definitions(
     for tool in fallback:
         merged.setdefault(tool.name, tool)
     return list(merged.values())
+
+
+def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
+    """构造 Java 内置 MCP tool 的 strict object schema。"""
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": required,
+        "additionalProperties": False,
+    }

@@ -1,0 +1,45 @@
+{
+  "kbCode": "day20-cn-kb",
+  "baselineDataset": "day25-hybrid-eval-cases.json",
+  "language": "zh-CN",
+  "topK": 3,
+  "comparisonModes": ["DENSE", "HYBRID"],
+  "cases": [
+    {
+      "caseCode": "DAY26-SUP-001",
+      "category": "FACT",
+      "comparisonFocus": "ASCII_TERM",
+      "question": "失败状态对应的英文状态应该如何定位",
+      "expectedDocument": "结算异常处理指南",
+      "expectedKeywords": ["失败", "FAILED", "状态"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY26-SUP-002",
+      "category": "PROCESS",
+      "comparisonFocus": "ASCII_TERM",
+      "question": "重试次数字段异常时如何排查",
+      "expectedDocument": "结算异常处理指南",
+      "expectedKeywords": ["重试", "retryCount", "排查"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY26-SUP-003",
+      "category": "SUMMARY",
+      "comparisonFocus": "PROCESS_KEYWORD",
+      "question": "巡检时发现任务堆积应先看什么",
+      "expectedDocument": "值班巡检清单",
+      "expectedKeywords": ["巡检", "任务", "堆积"],
+      "expectationType": "SHOULD_ANSWER"
+    },
+    {
+      "caseCode": "DAY26-SUP-004",
+      "category": "FACT",
+      "comparisonFocus": "FIELD_NAME",
+      "question": "商户映射变化会影响哪类核对",
+      "expectedDocument": "对账常见问题",
+      "expectedKeywords": ["商户", "映射", "核对"],
+      "expectationType": "SHOULD_ANSWER"
+    }
+  ]
+}

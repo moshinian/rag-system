@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -61,6 +62,9 @@ class DocumentsStatusAgentToolTest {
         assertThat(tool.definition().name()).isEqualTo(DocumentsStatusAgentTool.TOOL_NAME);
         assertThat(tool.definition().executionMode()).isEqualTo(AgentToolExecutionMode.READ_ONLY);
         assertThat(tool.definition().maxRiskLevel()).isEqualTo(AgentActionRiskLevel.LOW);
+        assertThat(tool.definition().inputSchema().get("required")).isEqualTo(List.of("kbCode"));
+        assertThat(((Map<?, ?>) tool.definition().inputSchema().get("properties")).containsKey("kbCode")).isTrue();
+        assertThat(tool.definition().inputSchema().get("additionalProperties")).isEqualTo(false);
     }
 
     private KnowledgeBaseEntity knowledgeBase(Long id, String kbCode) {

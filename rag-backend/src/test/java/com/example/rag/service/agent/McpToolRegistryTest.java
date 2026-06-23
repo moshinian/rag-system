@@ -60,7 +60,25 @@ class McpToolRegistryTest {
                 .hasMessageContaining("MCP tool not found");
     }
 
+    @Test
+    void registryShouldRejectInvalidInputSchema() {
+        McpTool tool = stubTool("broken.tool", Map.of("type", "string"));
+
+        assertThatThrownBy(() -> new McpToolRegistry(List.of(tool)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("tool=broken.tool")
+                .hasMessageContaining("field=inputSchema.type")
+                .hasMessageContaining("reason=type is not object");
+    }
+
     private McpTool stubTool(String toolName) {
+        return stubTool(
+                toolName,
+                AgentTestSchemas.objectSchema(Map.of("kbCode", Map.of("type", "string")), List.of("kbCode"))
+        );
+    }
+
+    private McpTool stubTool(String toolName, Map<String, Object> inputSchema) {
         return new McpTool() {
             @Override
             public String name() {
@@ -68,8 +86,18 @@ class McpToolRegistryTest {
             }
 
             @Override
-            public McpToolDefinition definition() {
-                return McpToolDefinition.readOnlyLow(toolName, toolName, toolName);
+            public String title() {
+                return toolName;
+            }
+
+            @Override
+            public String description() {
+                return toolName;
+            }
+
+            @Override
+            public Map<String, Object> inputSchema() {
+                return inputSchema;
             }
 
             @Override

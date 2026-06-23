@@ -11,6 +11,7 @@ def execute_tool_node(
     state: AgentGraphState,
     node_name: str,
     tool_name: str,
+    arguments: dict[str, Any] | None = None,
 ) -> AgentGraphState:
     """执行固定图中的工具节点，并统一写入 tool_results 和 step。"""
     if state.get("error_message"):
@@ -24,7 +25,7 @@ def execute_tool_node(
             output={"reason": "previous step failed"},
         )
 
-    execution = state["tool_client"].execute(tool_name, state["request"])
+    execution = state["tool_client"].execute(tool_name, state["request"], arguments or {})
     # tool_results 是诊断节点读取工具原始输出的统一位置。
     tool_results = dict(state.get("tool_results", {}))
     tool_results[tool_name] = {
