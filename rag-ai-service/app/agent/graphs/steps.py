@@ -68,6 +68,7 @@ def append_step(
     """追加一个 AgentStepResult，保持 Python 返回的 timeline 可审计。"""
     next_state = dict(state)
     steps = list(next_state.get("steps", []))
+    # Step 只追加不原地覆盖，保证图状态在分支和测试中保持可追溯。
     steps.append(
         AgentStepResult(
             node_name=node_name,
@@ -87,6 +88,7 @@ def append_step(
 def summarize_observation(output: dict[str, Any]) -> dict[str, Any]:
     """裁剪工具输出，只把适合回灌 planner 的摘要字段保留下来。"""
     summary: dict[str, Any] = {}
+    # 白名单字段控制回灌模型的上下文体积，也避免把完整正文或敏感信息带入 prompt。
     for key in [
         "status",
         "kbCode",
@@ -131,6 +133,7 @@ def summarize_observation(output: dict[str, Any]) -> dict[str, Any]:
     for key in ["failedTasks", "failedDocuments", "sources"]:
         value = output.get(key)
         if isinstance(value, list):
+            # 列表只保留前三项，足够判断问题且不会随数据量线性放大 prompt。
             summary[key] = value[:3]
     return summary or {"keys": sorted(output.keys())[:10]}
 

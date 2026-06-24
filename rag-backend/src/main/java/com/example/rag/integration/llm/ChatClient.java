@@ -14,7 +14,7 @@ public class ChatClient {
     private final RagLlmProperties ragLlmProperties;
     private final AiGatewayClient aiGatewayClient;
 
-    /** 构造ChatClient。 */
+    /** 注入 LLM 默认配置和统一 AI Gateway 客户端。 */
     public ChatClient(RagLlmProperties ragLlmProperties,
                       AiGatewayClient aiGatewayClient) {
         this.ragLlmProperties = ragLlmProperties;
@@ -25,6 +25,7 @@ public class ChatClient {
     public ChatResult chat(String systemPrompt, String userPrompt) {
         RagLlmProperties.ChatProperties chat = ragLlmProperties.getChat();
         AiGatewayClient.GatewayHealthSnapshot gatewayHealth = aiGatewayClient.probeGatewayHealth();
+        // Gateway 暴露的运行时默认模型优先，避免 Java 静态配置与 Python 实际 provider 漂移。
         String effectiveModel = hasText(gatewayHealth.chatDefaultModel())
                 ? gatewayHealth.chatDefaultModel()
                 : chat.getModel();
@@ -48,10 +49,12 @@ public class ChatClient {
                 : ragLlmProperties.getChat().getModel();
     }
 
+    /** 判断模型配置是否包含非空白文本。 */
     private boolean hasText(String value) {
         return value != null && !value.trim().isBlank();
     }
 
+    /** 返回模型回答及本次实际使用的模型名称。 */
     public record ChatResult(
             String answer,
             String model

@@ -22,26 +22,30 @@ public class QaRetrieveProbeAgentTool implements McpTool {
     private static final int DEFAULT_TOP_K = 5;
     private final QuestionAnsweringService questionAnsweringService;
 
-    /** 构造QaRetrieveProbeAgentTool。 */
+    /** 注入统一检索服务。 */
     public QaRetrieveProbeAgentTool(QuestionAnsweringService questionAnsweringService) {
         this.questionAnsweringService = questionAnsweringService;
     }
 
+    /** 返回 MCP 工具唯一名称。 */
     @Override
     public String name() {
         return TOOL_NAME;
     }
 
+    /** 返回工具展示标题。 */
     @Override
     public String title() {
         return TOOL_NAME;
     }
 
+    /** 返回供 planner 理解双路检索探测用途的描述。 */
     @Override
     public String description() {
         return "对指定问题执行 Dense 与 Hybrid 检索探测，仅返回来源摘要和检索信号。";
     }
 
+    /** 声明 kbCode、question 和可选 attributes.topK 的递归严格 schema。 */
     @Override
     public Map<String, Object> inputSchema() {
         Map<String, Object> attributesProperties = new LinkedHashMap<>();
@@ -57,6 +61,7 @@ public class QaRetrieveProbeAgentTool implements McpTool {
         return AgentToolSupport.objectSchema(List.of("kbCode", "question"), properties);
     }
 
+    /** 分别执行 Dense 与 Hybrid 检索，并生成对比诊断信号。 */
     @Override
     public McpToolResult call(McpToolContext context) {
         long startedAt = System.nanoTime();
@@ -103,6 +108,7 @@ public class QaRetrieveProbeAgentTool implements McpTool {
         );
     }
 
+    /** 清理问题文本，空白问题返回 null。 */
     private String normalizeQuestion(String question) {
         if (question == null || question.trim().isBlank()) {
             return null;
@@ -110,6 +116,7 @@ public class QaRetrieveProbeAgentTool implements McpTool {
         return question.trim();
     }
 
+    /** 解析可选 topK；缺省使用 5，并限制在 schema 声明的 1 到 10。 */
     private Integer resolveTopK(Map<String, Object> attributes) {
         if (attributes == null || !attributes.containsKey("topK")) {
             return DEFAULT_TOP_K;
@@ -134,6 +141,7 @@ public class QaRetrieveProbeAgentTool implements McpTool {
         return topK;
     }
 
+    /** 把完整检索响应裁剪成探测分支摘要。 */
     private Map<String, Object> toProbeBranch(QuestionRetrievalResponse response) {
         Map<String, Object> branch = new LinkedHashMap<>();
         branch.put("retrievalMode", response.retrievalMode());
@@ -149,6 +157,7 @@ public class QaRetrieveProbeAgentTool implements McpTool {
         return branch;
     }
 
+    /** 只保留定位来源所需字段，避免把完整 chunk 正文送回 planner。 */
     private Map<String, Object> toSource(RetrievedChunkResponse chunk) {
         Map<String, Object> source = new LinkedHashMap<>();
         source.put("documentCode", chunk.documentCode());
@@ -159,6 +168,7 @@ public class QaRetrieveProbeAgentTool implements McpTool {
         return source;
     }
 
+    /** 比较 Dense 与 Hybrid 结果，生成可直接用于诊断的布尔信号。 */
     private Map<String, Object> signals(QuestionRetrievalResponse dense, QuestionRetrievalResponse hybrid) {
         boolean denseEmpty = dense.hitCount() == 0;
         boolean hybridEmpty = hybrid.hitCount() == 0;
@@ -175,12 +185,14 @@ public class QaRetrieveProbeAgentTool implements McpTool {
         return signals;
     }
 
+    /** 判断两条检索分支是否返回相同的来源集合。 */
     private boolean sameTopSourceSet(List<RetrievedChunkResponse> left, List<RetrievedChunkResponse> right) {
         Set<String> leftKeys = left.stream().map(this::sourceKey).collect(Collectors.toCollection(java.util.LinkedHashSet::new));
         Set<String> rightKeys = right.stream().map(this::sourceKey).collect(Collectors.toCollection(java.util.LinkedHashSet::new));
         return leftKeys.equals(rightKeys);
     }
 
+    /** 返回首条来源的稳定标识，无命中时返回 null。 */
     private String topSourceKey(List<RetrievedChunkResponse> chunks) {
         if (chunks == null || chunks.isEmpty()) {
             return null;
@@ -188,6 +200,7 @@ public class QaRetrieveProbeAgentTool implements McpTool {
         return sourceKey(chunks.get(0));
     }
 
+    /** 用文档编码和 chunk 序号构造来源稳定标识。 */
     private String sourceKey(RetrievedChunkResponse chunk) {
         return chunk.documentCode() + "#" + chunk.chunkIndex();
     }

@@ -68,6 +68,7 @@ def run_agent(
     response: Response,
     agent_runtime: AgentRuntime = Depends(get_agent_runtime),
 ) -> AgentRuntimeResponse:
+    """执行一次 Agent Runtime，并透传 requestId 响应头。"""
     request_id = request.state.request_id
     response.headers["X-Request-Id"] = request_id
     return agent_runtime.run(payload)

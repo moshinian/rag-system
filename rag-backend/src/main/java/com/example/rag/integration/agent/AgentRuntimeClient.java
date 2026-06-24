@@ -29,7 +29,7 @@ public class AgentRuntimeClient {
     private final RagAiGatewayProperties ragAiGatewayProperties;
     private final ObjectMapper objectMapper;
 
-    /** 构造AgentRuntimeClient。 */
+    /** 注入 Agent Runtime 地址配置和 JSON 序列化器。 */
     public AgentRuntimeClient(RagAiGatewayProperties ragAiGatewayProperties,
                               ObjectMapper objectMapper) {
         this.ragAiGatewayProperties = ragAiGatewayProperties;
@@ -63,6 +63,7 @@ public class AgentRuntimeClient {
         }
     }
 
+    /** 以 JSON POST 调用 Runtime，并在连接关闭前完成状态码和响应体处理。 */
     private <T> T postJson(String path, Object payload, Class<T> responseType) throws IOException {
         byte[] jsonBytes = toJson(payload).getBytes(StandardCharsets.UTF_8);
         HttpURLConnection connection = openConnection(joinUrl(ragAiGatewayProperties.getBaseUrl(), path));
@@ -75,6 +76,7 @@ public class AgentRuntimeClient {
         connection.setFixedLengthStreamingMode(jsonBytes.length);
         String requestId = MDC.get("requestId");
         if (hasText(requestId)) {
+            // Java 入口生成的 requestId 继续透传给 Python，保证跨服务日志可以串联。
             connection.setRequestProperty("X-Request-Id", requestId);
         }
 
@@ -94,6 +96,7 @@ public class AgentRuntimeClient {
         }
     }
 
+    /** 根据 HTTP 状态选择正常或错误响应流，并以 UTF-8 读取完整响应。 */
     private String readResponseBody(HttpURLConnection connection, int statusCode) throws IOException {
         InputStream stream = statusCode >= 200 && statusCode < 300
                 ? connection.getInputStream()
@@ -111,18 +114,21 @@ public class AgentRuntimeClient {
         return (HttpURLConnection) new URL(url).openConnection();
     }
 
+    /** 读取连接超时，未配置时使用 5 秒保护值。 */
     private int resolveConnectTimeoutMillis() {
         return ragAiGatewayProperties.getConnectTimeoutMillis() == null
                 ? 5_000
                 : ragAiGatewayProperties.getConnectTimeoutMillis();
     }
 
+    /** 读取响应超时，未配置时使用 30 秒保护值。 */
     private int resolveReadTimeoutMillis() {
         return ragAiGatewayProperties.getReadTimeoutMillis() == null
                 ? 30_000
                 : ragAiGatewayProperties.getReadTimeoutMillis();
     }
 
+    /** 规范拼接 baseUrl 和 path，并在关键地址为空时立即失败。 */
     private String joinUrl(String baseUrl, String path) {
         String normalizedBaseUrl = baseUrl == null ? "" : baseUrl.trim();
         String normalizedPath = path == null ? "" : path.trim();
@@ -141,6 +147,7 @@ public class AgentRuntimeClient {
         return normalizedBaseUrl + normalizedPath;
     }
 
+    /** 序列化 Runtime 请求，失败时转换为统一业务异常。 */
     private String toJson(Object payload) {
         try {
             return objectMapper.writeValueAsString(payload);
@@ -149,6 +156,7 @@ public class AgentRuntimeClient {
         }
     }
 
+    /** 判断字符串是否包含非空白内容。 */
     private boolean hasText(String value) {
         return value != null && !value.trim().isBlank();
     }

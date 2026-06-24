@@ -19,6 +19,7 @@ public final class McpToolArgumentsValidator {
         validateObject(toolName, "arguments", inputSchema, arguments);
     }
 
+    /** 递归校验 object 的 required、properties 与 additionalProperties 约束。 */
     private static void validateObject(String toolName,
                                        String fieldPath,
                                        Map<?, ?> schema,
@@ -51,6 +52,7 @@ public final class McpToolArgumentsValidator {
         }
     }
 
+    /** 根据 schema type 分派单值校验，并继续处理嵌套 object。 */
     private static void validateValue(String toolName, String fieldPath, Map<?, ?> schema, Object value) {
         Object type = schema.get("type");
         if ("string".equals(type) && !(value instanceof String)) {
@@ -84,6 +86,7 @@ public final class McpToolArgumentsValidator {
         }
     }
 
+    /** 校验 number/integer 的 minimum 和 maximum 边界。 */
     private static void validateNumberRange(String toolName,
                                             String fieldPath,
                                             Map<?, ?> schema,
@@ -98,6 +101,7 @@ public final class McpToolArgumentsValidator {
         }
     }
 
+    /** 把 Jackson 可能产生的各类整数 Number 无损转换为 BigInteger。 */
     private static BigInteger toInteger(Object value) {
         if (value instanceof Boolean || !(value instanceof Number number)) {
             return null;
@@ -115,6 +119,7 @@ public final class McpToolArgumentsValidator {
         return decimal.toBigIntegerExact();
     }
 
+    /** 把有限 Number 统一转换为 BigDecimal，便于精确比较 schema 数值边界。 */
     private static BigDecimal toNumber(Object value) {
         if (value instanceof Boolean || !(value instanceof Number number)) {
             return null;
@@ -135,6 +140,7 @@ public final class McpToolArgumentsValidator {
         return BigDecimal.valueOf(doubleValue);
     }
 
+    /** 构造包含工具名、字段路径和失败原因的参数异常。 */
     private static BusinessException invalid(String toolName, String fieldPath, String reason) {
         return new BusinessException(
                 "MCP tool arguments invalid: tool=" + toolName

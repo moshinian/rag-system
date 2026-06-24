@@ -8,7 +8,7 @@ from app.agent.state import AgentRuntimeRequest
 
 @dataclass(frozen=True)
 class NormalizedToolArguments:
-    """工具调用参数的统一视图，确保 kbCode 权威来源始终是 Runtime request。"""
+    """工具调用参数的统一视图，并保留 Runtime request 中的权威上下文。"""
 
     arguments: dict[str, Any]
     attributes: dict[str, Any]
@@ -27,6 +27,7 @@ def normalize_tool_arguments(
     LLM 可以显式提供工具参数，但不能切换知识库。
     """
     raw = dict(arguments or {})
+    # 只校验 planner 不能跨知识库，不把 request.kb_code 自动注入所有工具参数。
     requested_kb_code = raw.pop("kb_code", None) if "kb_code" in raw else raw.get("kbCode")
     if requested_kb_code is not None and str(requested_kb_code).strip() != request.kb_code:
         raise ValueError("decision.arguments.kbCode must match request.kbCode")
@@ -35,6 +36,7 @@ def normalize_tool_arguments(
 
     normalized: dict[str, Any] = dict(raw)
     attributes = normalized.get("attributes") if isinstance(normalized.get("attributes"), dict) else {}
+    # 轻量预校验用于尽早反馈 planner；Java MCP server 仍执行最终 schema 校验。
     _validate_lightweight_attributes(attributes)
     return NormalizedToolArguments(
         arguments=normalized,

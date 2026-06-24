@@ -79,6 +79,7 @@ public class DocumentEmbeddingService {
         return embedInternal(kbCode, documentCode, true, buildContext("system", null));
     }
 
+    /** 全量重嵌入内部入口，记录操作人和 rebuild run 关联信息。 */
     DocumentEmbeddingResponse embedForRebuild(String kbCode, String documentCode, String operator, Long rebuildRunId) {
         return embedInternal(kbCode, documentCode, true, buildContext(operator, rebuildRunId));
     }

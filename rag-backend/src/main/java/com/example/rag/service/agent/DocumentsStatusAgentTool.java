@@ -23,28 +23,32 @@ public class DocumentsStatusAgentTool implements McpTool {
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentRepository documentRepository;
 
-    /** 构造DocumentsStatusAgentTool。 */
+    /** 注入知识库和文档查询能力。 */
     public DocumentsStatusAgentTool(KnowledgeBaseRepository knowledgeBaseRepository,
                                     DocumentRepository documentRepository) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentRepository = documentRepository;
     }
 
+    /** 返回 MCP 工具唯一名称。 */
     @Override
     public String name() {
         return TOOL_NAME;
     }
 
+    /** 返回工具展示标题。 */
     @Override
     public String title() {
         return TOOL_NAME;
     }
 
+    /** 返回供 planner 理解工具用途的描述。 */
     @Override
     public String description() {
         return "扫描指定知识库的文档状态分布，并返回少量失败文档摘要。";
     }
 
+    /** 声明仅接收必填 kbCode 的严格输入 schema。 */
     @Override
     public Map<String, Object> inputSchema() {
         return AgentToolSupport.objectSchema(
@@ -53,6 +57,7 @@ public class DocumentsStatusAgentTool implements McpTool {
         );
     }
 
+    /** 汇总文档状态分布，并裁剪少量失败文档供诊断使用。 */
     @Override
     public McpToolResult call(McpToolContext context) {
         long startedAt = System.nanoTime();
@@ -63,6 +68,7 @@ public class DocumentsStatusAgentTool implements McpTool {
         for (DocumentStatus status : DocumentStatus.values()) {
             statusCounts.put(status, 0L);
         }
+        // 先预置全部枚举值，保证没有文档的状态也稳定返回 0。
         for (DocumentEntity document : documents) {
             DocumentStatus status = document.getStatus();
             statusCounts.put(status, statusCounts.getOrDefault(status, 0L) + 1);
@@ -84,6 +90,7 @@ public class DocumentsStatusAgentTool implements McpTool {
         );
     }
 
+    /** 把失败文档裁剪为 Agent 诊断需要的最小字段集合。 */
     private Map<String, Object> toFailedDocument(DocumentEntity document) {
         Map<String, Object> failedDocument = new LinkedHashMap<>();
         failedDocument.put("documentCode", document.getDocumentCode());
@@ -93,6 +100,7 @@ public class DocumentsStatusAgentTool implements McpTool {
         return failedDocument;
     }
 
+    /** 优先返回用户可读名称，缺失时退回原始文件名。 */
     private String displayName(DocumentEntity document) {
         if (document.getDisplayName() != null && !document.getDisplayName().isBlank()) {
             return document.getDisplayName();

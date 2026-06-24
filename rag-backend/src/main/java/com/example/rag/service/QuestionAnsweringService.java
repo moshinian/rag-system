@@ -385,30 +385,36 @@ public class QuestionAnsweringService {
         return normalizedQuestion;
     }
 
+    /** 判断问题中是否包含连续中文字符。 */
     private boolean containsCjk(String normalizedQuestion) {
         return CJK_SEGMENT_PATTERN.matcher(normalizedQuestion).find();
     }
 
+    /** 解析 PostgreSQL FTS 配置名，空值回退为 simple。 */
     private String resolveKeywordTsConfig() {
         String configured = ragRetrievalProperties.getKeywordTsConfig();
         return configured == null || configured.isBlank() ? "simple" : configured.trim();
     }
 
+    /** 解析 FTS 排名函数，仅允许 ts_rank 或默认 ts_rank_cd。 */
     private String resolveKeywordRankFunction() {
         String configured = ragRetrievalProperties.getKeywordRankFunction();
         return "ts_rank".equalsIgnoreCase(configured) ? "ts_rank" : "ts_rank_cd";
     }
 
+    /** 解析 LIKE 短语命中的权重。 */
     private double resolveLikePhraseWeight() {
         Double configured = ragRetrievalProperties.getKeywordLikePhraseWeight();
         return configured == null || configured <= 0D ? 3D : configured;
     }
 
+    /** 解析 LIKE 标题命中的权重。 */
     private double resolveLikeTitleWeight() {
         Double configured = ragRetrievalProperties.getKeywordLikeTitleWeight();
         return configured == null || configured <= 0D ? 1.5D : configured;
     }
 
+    /** 解析 keyword 候选最低命中阈值。 */
     private double resolveKeywordMinHitThreshold() {
         Double configured = ragRetrievalProperties.getKeywordMinHitThreshold();
         return configured == null || configured < 0D ? 0.5D : configured;
@@ -513,34 +519,42 @@ public class QuestionAnsweringService {
             this.candidate = candidate;
         }
 
+        /** 返回当前用于输出的候选 chunk。 */
         private RetrievedChunkCandidate getCandidate() {
             return candidate;
         }
 
+        /** 在另一召回分支信息更完整时替换候选对象。 */
         private void setCandidate(RetrievedChunkCandidate candidate) {
             this.candidate = candidate;
         }
 
+        /** 返回候选在 Dense 召回中的名次。 */
         private Integer getDenseRank() {
             return denseRank;
         }
 
+        /** 记录候选在 Dense 召回中的名次。 */
         private void setDenseRank(Integer denseRank) {
             this.denseRank = denseRank;
         }
 
+        /** 返回候选在 keyword 召回中的名次。 */
         private Integer getKeywordRank() {
             return keywordRank;
         }
 
+        /** 记录候选在 keyword 召回中的名次。 */
         private void setKeywordRank(Integer keywordRank) {
             this.keywordRank = keywordRank;
         }
 
+        /** 返回根据双路名次计算的 RRF 分数。 */
         private double getFusedScore() {
             return fusedScore;
         }
 
+        /** 保存根据双路名次计算的 RRF 分数。 */
         private void setFusedScore(double fusedScore) {
             this.fusedScore = fusedScore;
         }

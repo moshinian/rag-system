@@ -33,6 +33,7 @@ final class McpToolContractValidator {
         }
     }
 
+    /** 校验顶层 object schema，并按 strict profile 要求 inputSchema 必须声明 properties。 */
     private static void validateObjectSchema(String toolName,
                                              String fieldPath,
                                              Map<String, Object> schema,
@@ -69,6 +70,7 @@ final class McpToolContractValidator {
         }
     }
 
+    /** 校验 required 为字符串数组，且每个必填字段都存在于 properties。 */
     private static void validateRequired(String toolName,
                                          String fieldPath,
                                          Object requiredObject,
@@ -93,6 +95,7 @@ final class McpToolContractValidator {
         }
     }
 
+    /** 校验单个 property schema，并递归检查嵌套 object。 */
     private static void validatePropertySchema(String toolName, String fieldPath, Map<?, ?> schema) {
         Object type = schema.get("type");
         if (type != null && !JSON_SCHEMA_TYPES.contains(type)) {
@@ -119,6 +122,7 @@ final class McpToolContractValidator {
         }
     }
 
+    /** 构造包含工具名、定义字段和失败原因的契约异常。 */
     private static BusinessException invalid(String toolName, String fieldPath, String reason) {
         return new BusinessException(
                 "MCP tool contract invalid: tool=" + toolName

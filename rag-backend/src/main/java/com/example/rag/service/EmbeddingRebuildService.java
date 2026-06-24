@@ -166,6 +166,7 @@ public class EmbeddingRebuildService {
         }
     }
 
+    /** 把指定重嵌入运行投递到索引执行器，拒绝时立即标记派发失败。 */
     void dispatchRun(Long runId) {
         try {
             indexingExecutor.execute(() -> runAsync(runId));
