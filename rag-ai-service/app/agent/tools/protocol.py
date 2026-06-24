@@ -18,6 +18,8 @@ class AgentToolExecution:
 
 
 class AgentToolClient(Protocol):
+    """Agent 工具客户端协议，统一工具发现与执行入口。"""
+
     def definitions(self) -> list[AgentToolDefinition]:
         """返回当前 Runtime 可见的工具定义。"""
 

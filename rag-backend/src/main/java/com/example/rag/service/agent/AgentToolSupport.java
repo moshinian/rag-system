@@ -79,6 +79,7 @@ final class AgentToolSupport {
         return property;
     }
 
+    /** 构造带 type 和可选 description 的基础 property schema。 */
     private static Map<String, Object> typedProperty(String type, String description) {
         Map<String, Object> property = new LinkedHashMap<>();
         property.put("type", type);

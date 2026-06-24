@@ -53,10 +53,14 @@ public class ExecutorConfig {
         executor.initialize();
         return executor;
     }
+
+    /** 归一化核心线程数，非法配置回退为 4。 */
     private int normalizeCorePoolSize() {
         Integer configured = ragExecutorProperties.getCorePoolSize();
         return configured == null || configured < 1 ? 4 : configured;
     }
+
+    /** 归一化最大线程数，并保证不小于核心线程数。 */
     private int normalizeMaxPoolSize() {
         Integer configured = ragExecutorProperties.getMaxPoolSize();
         int minValue = normalizeCorePoolSize();
@@ -65,14 +69,20 @@ public class ExecutorConfig {
         }
         return configured;
     }
+
+    /** 归一化任务队列容量，非法配置回退为 100。 */
     private int normalizeQueueCapacity() {
         Integer configured = ragExecutorProperties.getQueueCapacity();
         return configured == null || configured < 1 ? 100 : configured;
     }
+
+    /** 归一化停机等待秒数，非法配置回退为 30 秒。 */
     private int normalizeAwaitTerminationSeconds() {
         Integer configured = ragExecutorProperties.getAwaitTerminationSeconds();
         return configured == null || configured < 1 ? 30 : configured;
     }
+
+    /** 归一化线程名前缀，便于从日志识别索引工作线程。 */
     private String normalizeThreadNamePrefix() {
         String configured = ragExecutorProperties.getThreadNamePrefix();
         return configured == null || configured.isBlank() ? "rag-indexing-" : configured.trim();

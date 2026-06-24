@@ -53,6 +53,7 @@ class McpAgentToolClient:
         started_at = perf_counter()
         try:
             self._ensure_initialized()
+            # arguments 完全来自具体节点/planner；runCode 等调用元数据只进入 MCP _meta。
             result = self._rpc(
                 "tools/call",
                 {
@@ -66,6 +67,7 @@ class McpAgentToolClient:
                 retry_on_missing_session=True,
             )
             structured = result.get("structuredContent")
+            # MCP content 可用于展示错误文本，业务 observation 只消费 structuredContent。
             return AgentToolExecution(
                 tool_name=tool_name,
                 success=not bool(result.get("isError")),
@@ -164,6 +166,7 @@ class McpAgentToolClient:
         )
 
     def _endpoint_url(self) -> str:
+        """规范拼接 Java MCP base URL 与 endpoint。"""
         base_url = self._settings.mcp_tool_base_url.rstrip("/")
         endpoint = self._settings.mcp_tool_endpoint.strip()
         if not endpoint.startswith("/"):
@@ -171,6 +174,7 @@ class McpAgentToolClient:
         return f"{base_url}{endpoint}"
 
     def _tool_error_message(self, result: dict[str, Any]) -> str | None:
+        """从 MCP content 中提取工具错误文本。"""
         if not bool(result.get("isError")):
             return None
         content = result.get("content")
@@ -180,8 +184,10 @@ class McpAgentToolClient:
         return "MCP tool returned isError=true"
 
     def _request_id(self) -> str:
+        """为每个 JSON-RPC request 生成独立 ID。"""
         return f"mcp-{uuid4()}"
 
     @staticmethod
     def _elapsed_ms(started_at: float) -> int:
+        """计算工具调用耗时毫秒数。"""
         return max(0, int((perf_counter() - started_at) * 1000))

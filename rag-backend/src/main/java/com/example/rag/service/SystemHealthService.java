@@ -266,10 +266,12 @@ public class SystemHealthService {
         }
     }
 
+    /** 判断健康探针配置是否包含非空白文本。 */
     private boolean hasText(String value) {
         return value != null && !value.trim().isBlank();
     }
 
+    /** 把健康展示中的空文本转换为占位符。 */
     private String nullSafe(String value) {
         return hasText(value) ? value : "-";
     }

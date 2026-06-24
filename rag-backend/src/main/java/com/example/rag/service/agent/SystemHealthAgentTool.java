@@ -15,32 +15,37 @@ public class SystemHealthAgentTool implements McpTool {
     private final SystemHealthService systemHealthService;
     private final ObjectMapper objectMapper;
 
-    /** 构造SystemHealthAgentTool。 */
+    /** 注入系统健康服务和对象映射器。 */
     public SystemHealthAgentTool(SystemHealthService systemHealthService, ObjectMapper objectMapper) {
         this.systemHealthService = systemHealthService;
         this.objectMapper = objectMapper;
     }
 
+    /** 返回 MCP 工具唯一名称。 */
     @Override
     public String name() {
         return TOOL_NAME;
     }
 
+    /** 返回工具展示标题。 */
     @Override
     public String title() {
         return TOOL_NAME;
     }
 
+    /** 返回供 planner 理解健康检查范围的描述。 */
     @Override
     public String description() {
         return "检查 Java 后端关键依赖和服务健康状态。";
     }
 
+    /** 声明不接收业务参数的严格空 object schema。 */
     @Override
     public Map<String, Object> inputSchema() {
         return AgentToolSupport.objectSchema(java.util.List.of(), Map.of());
     }
 
+    /** 执行系统健康检查，并转换为结构化工具输出。 */
     @Override
     public McpToolResult call(McpToolContext context) {
         long startedAt = System.nanoTime();

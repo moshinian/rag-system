@@ -28,6 +28,7 @@ class LlmAgentDecisionClient:
     def decide(self, state: AgentGraphState) -> str:
         """遵守 AgentDecisionClient 协议，返回严格 JSON 字符串。"""
         request = state["request"]
+        # Planner 只复用 chat provider，不直接接触 Java、MCP 或写操作。
         target = ProviderTarget(
             capability="chat",
             provider=self._settings.chat_provider,
@@ -75,6 +76,7 @@ def _planner_context(state: AgentGraphState) -> str:
     }
     planner_error = state.get("planner_error_message")
     if planner_error:
+        # 重试只提供裁剪后的校验错误，不回灌内部异常栈或完整原始输出。
         context["previousInvalidDecisionError"] = planner_error[:1000]
         context["retryInstruction"] = (
             "Your previous output was rejected by validation. "

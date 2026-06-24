@@ -80,6 +80,7 @@ public class McpInternalController {
         String method = asText(rpc.get("method"));
         Object id = rpc.get("id");
 
+        // initialize 是唯一不依赖既有 session 的方法，必须在读取 session 前单独处理。
         if ("initialize".equals(method)) {
             return handleInitialize(id);
         }
@@ -102,6 +103,7 @@ public class McpInternalController {
         };
     }
 
+    /** 创建 MCP session，并返回客户端后续请求必须携带的 sessionId。 */
     private ResponseEntity<?> handleInitialize(Object id) {
         String sessionId = UUID.randomUUID().toString();
         sessions.put(sessionId, new SessionState());
@@ -112,6 +114,7 @@ public class McpInternalController {
         return jsonRpcResult(id, result, Map.of(SESSION_ID_HEADER, sessionId));
     }
 
+    /** 返回注册表中已经通过 contract 校验的工具定义。 */
     private ResponseEntity<?> handleToolsList(Object id) {
         List<Map<String, Object>> tools = mcpToolRegistry.definitions().stream()
                 .map(McpToolDefinition::toProtocol)
@@ -119,6 +122,7 @@ public class McpInternalController {
         return jsonRpcResult(id, Map.of("tools", tools), Map.of());
     }
 
+    /** 校验并执行一次 tools/call，把业务结果转换成 MCP 协议结果。 */
     private ResponseEntity<?> handleToolsCall(Object id, Object params) {
         if (!(params instanceof Map<?, ?> paramsMap)) {
             return jsonRpcError(id, -32602, "tools/call params must be an object");
@@ -137,6 +141,7 @@ public class McpInternalController {
         }
         Map<String, Object> arguments;
         try {
+            // arguments 缺省时按空对象处理，具体缺少哪些字段由当前工具 schema 决定。
             arguments = optionalObject(paramsMap.get("arguments"), "tools/call params.arguments");
             McpToolArgumentsValidator.validate(name, definition.inputSchema(), arguments);
         } catch (BusinessException ex) {
@@ -164,6 +169,7 @@ public class McpInternalController {
         return jsonRpcResult(id, toToolCallResult(toolResult), Map.of());
     }
 
+    /** 用业务 arguments 和调用元数据创建工具上下文，两者保持独立。 */
     private McpToolContext toContext(Map<String, Object> arguments, Map<String, Object> meta) {
         Object attributesObject = arguments.get("attributes");
         if (attributesObject != null && !(attributesObject instanceof Map<?, ?>)) {
@@ -172,6 +178,7 @@ public class McpInternalController {
         return new McpToolContext(arguments, meta);
     }
 
+    /** 把可选 JSON object 字段归一化为字符串键 Map，缺省值返回空对象。 */
     private Map<String, Object> optionalObject(Object value, String fieldName) {
         if (value == null) {
             return Map.of();
@@ -182,6 +189,7 @@ public class McpInternalController {
         return normalizeObject(raw);
     }
 
+    /** 把内部工具结果映射为 MCP content、structuredContent 和 isError 字段。 */
     private Map<String, Object> toToolCallResult(McpToolResult result) {
         Map<String, Object> structuredContent = result.structuredContent() == null
                 ? Map.of()
@@ -196,6 +204,7 @@ public class McpInternalController {
         return protocol;
     }
 
+    /** 在进入 JSON-RPC 方法分派前校验 transport、鉴权、来源和协议版本。 */
     private ResponseEntity<?> validateTransport(HttpHeaders headers, HttpServletRequest request, Object body) {
         String contentType = headers.getFirst(HttpHeaders.CONTENT_TYPE);
         if (contentType == null || !contentType.toLowerCase().contains(MediaType.APPLICATION_JSON_VALUE)) {
@@ -229,6 +238,7 @@ public class McpInternalController {
         return null;
     }
 
+    /** 查询已创建的 MCP session；缺少或空白 sessionId 时返回 null。 */
     private SessionState requireSession(String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
             return null;
@@ -236,6 +246,7 @@ public class McpInternalController {
         return sessions.get(sessionId);
     }
 
+    /** 构造成功的 JSON-RPC 2.0 响应，并附加 transport 级响应头。 */
     private ResponseEntity<Map<String, Object>> jsonRpcResult(Object id, Object result, Map<String, String> extraHeaders) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("jsonrpc", "2.0");
@@ -246,6 +257,7 @@ public class McpInternalController {
         return builder.body(body);
     }
 
+    /** 构造协议内 JSON-RPC 错误；transport 本身仍返回 HTTP 200。 */
     private ResponseEntity<Map<String, Object>> jsonRpcError(Object id, int code, String message) {
         Map<String, Object> error = new LinkedHashMap<>();
         error.put("code", code);
@@ -257,10 +269,12 @@ public class McpInternalController {
         return ResponseEntity.ok().contentType(jsonMediaType()).body(body);
     }
 
+    /** 返回非空 JSON 媒体类型，满足 Spring null-safety 契约。 */
     private @NonNull MediaType jsonMediaType() {
         return Objects.requireNonNull(MediaType.APPLICATION_JSON);
     }
 
+    /** 丢弃非字符串键，把反序列化后的通用 Map 转为协议对象。 */
     private Map<String, Object> normalizeObject(Map<?, ?> raw) {
         Map<String, Object> normalized = new LinkedHashMap<>();
         raw.forEach((key, value) -> {
@@ -271,6 +285,7 @@ public class McpInternalController {
         return normalized;
     }
 
+    /** 把 structuredContent 序列化为文本 content；序列化失败时返回空对象文本。 */
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -279,10 +294,12 @@ public class McpInternalController {
         }
     }
 
+    /** 仅接受真实字符串，避免隐式 toString 掩盖协议字段类型错误。 */
     private String asText(Object value) {
         return value instanceof String text ? text : null;
     }
 
+    /** 保存单个 MCP session 是否已完成 initialized 通知。 */
     private static final class SessionState {
         private boolean initialized;
     }

@@ -7,5 +7,7 @@ if TYPE_CHECKING:
 
 
 class AgentDecisionClient(Protocol):
+    """Planner 客户端协议，屏蔽真实 LLM 与测试替身的实现差异。"""
+
     def decide(self, state: "AgentGraphState") -> str:
-        """Return a strict JSON AgentDecision string."""
+        """返回严格符合 AgentDecision 的 JSON 字符串。"""

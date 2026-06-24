@@ -46,6 +46,7 @@ def validate_arguments(arguments: dict[str, Any], schema: dict[str, Any]) -> Non
 
 
 def _validate_object(arguments: dict[str, Any], schema: dict[str, Any], field_path: str) -> None:
+    """递归校验 object 的 required、properties 和额外字段策略。"""
     required = schema.get("required", [])
     if isinstance(required, list):
         for name in required:
@@ -65,6 +66,7 @@ def _validate_object(arguments: dict[str, Any], schema: dict[str, Any], field_pa
 
 
 def _validate_value(value: Any, spec: dict[str, Any], field_path: str) -> None:
+    """按 property type 校验单值，并处理嵌套 object 与数值边界。"""
     expected_type = spec.get("type")
     if expected_type == "string" and not isinstance(value, str):
         raise ValueError(f"Argument {field_path} must be string")

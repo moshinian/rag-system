@@ -28,7 +28,7 @@ public class IndexingTasksScanAgentTool implements McpTool {
     private final DocumentRepository documentRepository;
     private final IndexingTaskRepository indexingTaskRepository;
 
-    /** 构造IndexingTasksScanAgentTool。 */
+    /** 注入知识库、文档和索引任务查询能力。 */
     public IndexingTasksScanAgentTool(KnowledgeBaseRepository knowledgeBaseRepository,
                                       DocumentRepository documentRepository,
                                       IndexingTaskRepository indexingTaskRepository) {
@@ -37,21 +37,25 @@ public class IndexingTasksScanAgentTool implements McpTool {
         this.indexingTaskRepository = indexingTaskRepository;
     }
 
+    /** 返回 MCP 工具唯一名称。 */
     @Override
     public String name() {
         return TOOL_NAME;
     }
 
+    /** 返回工具展示标题。 */
     @Override
     public String title() {
         return TOOL_NAME;
     }
 
+    /** 返回供 planner 理解工具用途的描述。 */
     @Override
     public String description() {
         return "扫描指定知识库最近索引任务状态，并返回少量失败任务摘要。";
     }
 
+    /** 声明仅接收必填 kbCode 的严格输入 schema。 */
     @Override
     public Map<String, Object> inputSchema() {
         return AgentToolSupport.objectSchema(
@@ -60,6 +64,7 @@ public class IndexingTasksScanAgentTool implements McpTool {
         );
     }
 
+    /** 扫描最近索引任务并汇总状态与失败样本。 */
     @Override
     public McpToolResult call(McpToolContext context) {
         long startedAt = System.nanoTime();
@@ -74,6 +79,7 @@ public class IndexingTasksScanAgentTool implements McpTool {
         for (IndexingTaskStatus status : IndexingTaskStatus.values()) {
             statusCounts.put(status, 0L);
         }
+        // 状态分布只针对本次受上限保护的最近任务窗口。
         for (IndexingTaskEntity task : tasks) {
             IndexingTaskStatus status = task.getStatus();
             statusCounts.put(status, statusCounts.getOrDefault(status, 0L) + 1);
@@ -95,6 +101,7 @@ public class IndexingTasksScanAgentTool implements McpTool {
         );
     }
 
+    /** 补充关联文档编码，并裁剪失败任务的诊断字段。 */
     private Map<String, Object> toFailedTask(IndexingTaskEntity task) {
         Optional<DocumentEntity> document = documentRepository.findById(task.getDocumentId());
         Map<String, Object> failedTask = new LinkedHashMap<>();

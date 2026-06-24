@@ -41,6 +41,7 @@ public record McpToolContext(
         return java.util.Collections.unmodifiableMap(attributes);
     }
 
+    /** 去除参数首尾空白，并把空白字符串归一化为 null。 */
     private String trimToNull(String value) {
         String trimmed = value == null ? null : value.trim();
         return trimmed == null || trimmed.isBlank() ? null : trimmed;

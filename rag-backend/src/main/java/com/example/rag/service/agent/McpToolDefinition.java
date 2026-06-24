@@ -64,6 +64,7 @@ public record McpToolDefinition(
         return protocol;
     }
 
+    /** 构造项目私有 x-rag annotations，不污染工具业务 arguments。 */
     private static Map<String, Object> defaultAnnotations(AgentToolExecutionMode executionMode,
                                                           AgentActionRiskLevel maxRiskLevel,
                                                           boolean requiresConfirmation) {
