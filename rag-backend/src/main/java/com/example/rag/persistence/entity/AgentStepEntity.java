@@ -26,6 +26,9 @@ public class AgentStepEntity {
     @TableField("run_code")
     private String runCode;
 
+    @TableField("node_invocation_id")
+    private String nodeInvocationId;
+
     @TableField("step_code")
     private String stepCode;
 

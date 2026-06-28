@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import StreamingResponse
 
 from app.agent.runtime import AgentRuntime, get_agent_runtime
 from app.agent.state import AgentRuntimeRequest, AgentRuntimeResponse
@@ -72,3 +73,23 @@ def run_agent(
     request_id = request.state.request_id
     response.headers["X-Request-Id"] = request_id
     return agent_runtime.run(payload)
+
+
+@router.post("/v1/agent/runs/stream")
+def stream_agent(
+    payload: AgentRuntimeRequest,
+    request: Request,
+    agent_runtime: AgentRuntime = Depends(get_agent_runtime),
+) -> StreamingResponse:
+    """以 SSE 返回 Agent Runtime 的 step 级事件。"""
+    request_id = request.state.request_id
+    response = StreamingResponse(
+        agent_runtime.stream_sse(payload),
+        media_type="text/event-stream",
+        headers={
+            "X-Request-Id": request_id,
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+    return response

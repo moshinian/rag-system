@@ -31,7 +31,7 @@ class McpToolRegistryTest {
         assertThat(registry.find("retrieval.config.inspect")).isPresent();
         assertThat(registry.find("missing.tool")).isEmpty();
         assertThat(registry.definitions())
-                .extracting(McpToolDefinition::name)
+                .extracting(definition -> definition.name())
                 .containsExactlyInAnyOrder(
                         "system.health.check",
                         "kb.readiness.check",

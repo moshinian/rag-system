@@ -86,7 +86,7 @@ class KnowledgeBaseServiceTest {
 
         assertThat(response.total()).isEqualTo(1);
         assertThat(response.records()).singleElement()
-                .extracting(KnowledgeBaseResponse::kbCode, KnowledgeBaseResponse::status)
+                .extracting(responseItem -> responseItem.kbCode(), responseItem -> responseItem.status())
                 .containsExactly("settlement-kb", "ACTIVE");
     }
 

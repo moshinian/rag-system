@@ -12,6 +12,7 @@ import java.util.Optional;
  * Agent 执行步骤访问层。
  */
 @Repository
+@SuppressWarnings("null") // MyBatis-Plus lambda 字段引用会被 JDT 误判为 NonNull 泛型转换告警。
 public class AgentStepRepository {
     private final AgentStepMapper mapper;
 
@@ -35,6 +36,15 @@ public class AgentStepRepository {
     /** 按主键查询执行步骤。 */
     public Optional<AgentStepEntity> findById(Long id) {
         return Optional.ofNullable(mapper.selectById(id));
+    }
+
+    /** 按 runCode 和 nodeInvocationId 精确查询 streaming step。 */
+    public Optional<AgentStepEntity> findByRunCodeAndNodeInvocationId(String runCode,
+                                                                      String nodeInvocationId) {
+        LambdaQueryWrapper<AgentStepEntity> query = new LambdaQueryWrapper<AgentStepEntity>()
+                .eq(AgentStepEntity::getRunCode, runCode)
+                .eq(AgentStepEntity::getNodeInvocationId, nodeInvocationId);
+        return Optional.ofNullable(mapper.selectOne(query));
     }
 
     /** 按运行编码查询执行步骤。 */

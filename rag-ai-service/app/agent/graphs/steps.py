@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.agent.events import emit_runtime_event
 from app.agent.graphs.state import AgentGraphState
 from app.agent.state import AgentStepResult
 
@@ -25,6 +26,14 @@ def execute_tool_node(
             output={"reason": "previous step failed"},
         )
 
+    emit_runtime_event(
+        state,
+        "TOOL_CALL_STARTED",
+        tool_name=tool_name,
+        status="RUNNING",
+        message=f"{tool_name} 开始调用",
+        payload={"arguments": arguments or {}},
+    )
     execution = state["tool_client"].execute(tool_name, state["request"], arguments or {})
     # tool_results 是诊断节点读取工具原始输出的统一位置。
     tool_results = dict(state.get("tool_results", {}))
@@ -40,6 +49,34 @@ def execute_tool_node(
     if not execution.success:
         # 工具失败后不抛异常，而是把错误写进状态，让图进入失败报告路径。
         next_state["error_message"] = execution.error_message or f"{tool_name} failed"
+
+    tool_event_type = "TOOL_CALL_COMPLETED" if execution.success else "TOOL_CALL_FAILED"
+    emit_runtime_event(
+        next_state,
+        tool_event_type,
+        tool_name=tool_name,
+        status="SUCCEEDED" if execution.success else "FAILED",
+        message=execution.error_message or f"{tool_name} 调用完成",
+        payload={
+            "success": execution.success,
+            "durationMs": execution.duration_ms,
+            "summary": summarize_observation(execution.output or {}),
+            "errorMessage": execution.error_message,
+        },
+    )
+    emit_runtime_event(
+        next_state,
+        "OBSERVATION_CREATED",
+        tool_name=tool_name,
+        status="SUCCEEDED" if execution.success else "FAILED",
+        message=f"{tool_name} observation 已生成",
+        payload={
+            "success": execution.success,
+            "summary": summarize_observation(execution.output or {}),
+            "durationMs": execution.duration_ms,
+            "errorMessage": execution.error_message,
+        },
+    )
 
     return append_step(
         next_state,

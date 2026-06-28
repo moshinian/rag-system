@@ -13,6 +13,7 @@ import java.util.Optional;
  * 全量重嵌入运行记录访问层。
  */
 @Repository
+@SuppressWarnings("null") // MyBatis-Plus lambda 字段引用会被 JDT 误判为 NonNull 泛型转换告警。
 public class EmbeddingRebuildRunRepository {
     private final EmbeddingRebuildRunMapper mapper;
 

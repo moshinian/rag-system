@@ -63,7 +63,12 @@ class DocumentIndexingServiceTest {
     @Mock
     private SnowflakeIdGenerator snowflakeIdGenerator;
 
-    private final Executor directExecutor = Runnable::run;
+    private final Executor directExecutor = new Executor() {
+        @Override
+        public void execute(Runnable command) {
+            command.run();
+        }
+    };
 
     @Test
     void submitShouldQueueAndCompleteAsyncIndexingTask() {
@@ -649,7 +654,7 @@ class DocumentIndexingServiceTest {
 
         assertThat(service.listTasks("settlement-kb", "DOC-1"))
                 .singleElement()
-                .extracting(DocumentIndexingTaskResponse::taskStage)
+                .extracting(response -> response.taskStage())
                 .isEqualTo("COMPLETED");
     }
 
@@ -682,7 +687,7 @@ class DocumentIndexingServiceTest {
 
         assertThat(service.listTasks("settlement-kb", "DOC-1"))
                 .singleElement()
-                .extracting(DocumentIndexingTaskResponse::taskType)
+                .extracting(response -> response.taskType())
                 .isEqualTo("DOCUMENT_INDEXING");
     }
 

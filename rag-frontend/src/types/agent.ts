@@ -2,6 +2,23 @@ export type AgentRunMode = "DIAGNOSE_ONLY" | "DIAGNOSE_AND_RECOMMEND" | "INTELLI
 
 export type AgentRunStatus = "RUNNING" | "WAITING_CONFIRMATION" | "SUCCEEDED" | "FAILED";
 
+export type AgentRunEventType =
+  | "RUN_STARTED"
+  | "STEP_STARTED"
+  | "STEP_COMPLETED"
+  | "STEP_FAILED"
+  | "PLANNER_DECISION"
+  | "TOOL_CALL_STARTED"
+  | "TOOL_CALL_COMPLETED"
+  | "TOOL_CALL_FAILED"
+  | "OBSERVATION_CREATED"
+  | "ACTION_RECOMMENDED"
+  | "RUN_COMPLETED"
+  | "RUN_FAILED"
+  | "RUN_WAITING_CONFIRMATION";
+
+export type AgentRunEventConnectionStatus = "IDLE" | "CONNECTING" | "OPEN" | "RECONNECTING" | "ENDED";
+
 export type AgentStepType = "NODE" | "TOOL_CALL" | "LLM_CALL" | "LLM_DECISION";
 
 export type AgentStepStatus = "RUNNING" | "SUCCEEDED" | "FAILED" | "SKIPPED";
@@ -81,4 +98,19 @@ export type AgentRun = {
   createdAt?: string;
   updatedAt?: string;
   finishedAt?: string;
+};
+
+export type AgentRunEvent = {
+  databaseId: number;
+  eventId: string;
+  runCode: string;
+  type: AgentRunEventType;
+  nodeInvocationId?: string;
+  nodeName?: string;
+  toolName?: string;
+  status?: string;
+  message?: string;
+  payloadJson?: string;
+  terminal: boolean;
+  createdAt?: string;
 };

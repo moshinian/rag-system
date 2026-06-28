@@ -107,7 +107,7 @@ public class IndexingTasksScanAgentTool implements McpTool {
         Map<String, Object> failedTask = new LinkedHashMap<>();
         failedTask.put("taskId", task.getId());
         failedTask.put("documentId", task.getDocumentId());
-        failedTask.put("documentCode", document.map(DocumentEntity::getDocumentCode).orElse(null));
+        failedTask.put("documentCode", document.map(entity -> entity.getDocumentCode()).orElse(null));
         failedTask.put("taskType", task.getTaskType());
         failedTask.put("taskStage", task.getTaskStage());
         failedTask.put("retryCount", task.getRetryCount());

@@ -9,7 +9,6 @@ import com.example.rag.persistence.DocumentRepository;
 import com.example.rag.persistence.KnowledgeBaseRepository;
 import com.example.rag.persistence.IndexingTaskRepository;
 import com.example.rag.persistence.entity.DocumentEntity;
-import com.example.rag.persistence.entity.IndexingTaskEntity;
 import com.example.rag.persistence.entity.KnowledgeBaseEntity;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -106,10 +105,10 @@ class DocumentProcessingIntegrationTest {
         assertThat(documentChunkRepository.findByDocumentIdOrderByChunkIndex(documentId)).isNotEmpty();
         assertThat(documentRepository.findByCode(documentCode))
                 .get()
-                .extracting(DocumentEntity::getStatus)
+                .extracting(savedDocument -> savedDocument.getStatus())
                 .isEqualTo(DocumentStatus.INDEXED);
         assertThat(indexingTaskRepository.findByDocumentIdOrderByCreatedAtDesc(documentId))
-                .extracting(IndexingTaskEntity::getChunkCount)
+                .extracting(task -> task.getChunkCount())
                 .first()
                 .isEqualTo(response.chunkCount());
     }

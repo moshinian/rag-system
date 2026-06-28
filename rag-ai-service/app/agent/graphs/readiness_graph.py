@@ -13,6 +13,7 @@ warnings.filterwarnings(
 
 from langgraph.graph import END, StateGraph
 
+from app.agent.events import traced_node
 from app.agent.graphs.state import AgentGraphState
 from app.agent.nodes.readiness_nodes import (
     diagnose,
@@ -31,15 +32,36 @@ def build_readiness_diagnosis_graph():
     """构建确定性 readiness 诊断图。"""
     workflow = StateGraph(AgentGraphState)
     # 节点名会进入 Java agent_step.node_name，重构时必须保持稳定。
-    workflow.add_node("parse_goal", parse_goal)
-    workflow.add_node("system_health_check", system_health_check)
-    workflow.add_node("kb_readiness_check", kb_readiness_check)
-    workflow.add_node("documents_status_scan", documents_status_scan)
-    workflow.add_node("indexing_tasks_scan", indexing_tasks_scan)
-    workflow.add_node("qa_retrieve_probe", qa_retrieve_probe)
-    workflow.add_node("diagnose", diagnose)
-    workflow.add_node("recommend_actions", recommend_actions)
-    workflow.add_node("generate_report", generate_report)
+    workflow.add_node("parse_goal", traced_node("parse_goal", parse_goal))
+    workflow.add_node(
+        "system_health_check",
+        traced_node("system_health_check", system_health_check),
+    )
+    workflow.add_node(
+        "kb_readiness_check",
+        traced_node("kb_readiness_check", kb_readiness_check),
+    )
+    workflow.add_node(
+        "documents_status_scan",
+        traced_node("documents_status_scan", documents_status_scan),
+    )
+    workflow.add_node(
+        "indexing_tasks_scan",
+        traced_node("indexing_tasks_scan", indexing_tasks_scan),
+    )
+    workflow.add_node(
+        "qa_retrieve_probe",
+        traced_node("qa_retrieve_probe", qa_retrieve_probe),
+    )
+    workflow.add_node("diagnose", traced_node("diagnose", diagnose))
+    workflow.add_node(
+        "recommend_actions",
+        traced_node("recommend_actions", recommend_actions),
+    )
+    workflow.add_node(
+        "generate_report",
+        traced_node("generate_report", generate_report),
+    )
 
     workflow.set_entry_point("parse_goal")
     # 固定图按业务诊断顺序串行执行，便于演示和问题复盘。

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.agent.diagnostics.readiness import failed_tasks, retrieve_signals, tool_output
+from app.agent.events import emit_runtime_event
 from app.agent.graphs.state import AgentGraphState
 from app.agent.graphs.steps import append_step, execute_tool_node, to_json
 from app.agent.state import AgentActionDraft
@@ -202,6 +203,15 @@ def recommend_actions(state: AgentGraphState) -> AgentGraphState:
 
     next_state = dict(state)
     next_state["recommended_actions"] = actions
+    for action in actions[len(state.get("recommended_actions", [])) :]:
+        emit_runtime_event(
+            next_state,
+            "ACTION_RECOMMENDED",
+            tool_name=action.tool_name,
+            status="PENDING_CONFIRMATION",
+            message=action.title,
+            payload=action.model_dump(by_alias=True),
+        )
     return append_step(next_state, "recommend_actions", output=output)
 
 

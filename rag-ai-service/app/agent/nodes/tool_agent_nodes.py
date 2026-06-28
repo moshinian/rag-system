@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import time
+
 from pydantic import ValidationError
 
+from app.agent.events import emit_runtime_event
 from app.agent.graphs.state import AgentGraphState
 from app.agent.graphs.steps import append_step, summarize_observation, to_json
 from app.agent.planners.validation import tool_by_name, validate_decision
@@ -32,14 +35,32 @@ def llm_plan(state: AgentGraphState) -> AgentGraphState:
     next_state = dict(state)
     decision_client = state["decision_client"]
     last_error: str | None = None
+    attempt_count = 0
+    started_at = time.perf_counter()
 
     for attempt in range(2):
+        # attemptCount 在进入 attempt 时递增，覆盖模型调用异常、JSON 解析失败和校验失败。
+        attempt_count += 1
         try:
             raw_decision = decision_client.decide(next_state)
             decision = AgentDecision.model_validate_json(raw_decision)
             # 所有 planner 输出都必须先过工具白名单和参数 schema 校验。
             validate_decision(decision, state.get("tools", []), state["request"])
             next_state["decision"] = decision
+            duration_ms = _elapsed_millis(started_at)
+            emit_runtime_event(
+                next_state,
+                "PLANNER_DECISION",
+                status="SUCCEEDED",
+                message="planner 决策完成",
+                payload={
+                    "attempt": attempt_count,
+                    "attemptCount": attempt_count,
+                    "durationMs": duration_ms,
+                    "decision": decision.model_dump(by_alias=True),
+                    "validated": True,
+                },
+            )
             return append_step(
                 next_state,
                 "llm_plan",
@@ -47,9 +68,12 @@ def llm_plan(state: AgentGraphState) -> AgentGraphState:
                 status="SUCCEEDED",
                 output={
                     "attempt": attempt + 1,
+                    "attemptCount": attempt_count,
+                    "durationMs": duration_ms,
                     "decision": decision.model_dump(by_alias=True),
                     "validated": True,
                 },
+                duration_ms=duration_ms,
             )
         except (ValidationError, ValueError) as exc:
             # 非法 JSON 或非法决策只重试一次，避免 Agent 无限自修复。
@@ -60,14 +84,27 @@ def llm_plan(state: AgentGraphState) -> AgentGraphState:
             break
 
     next_state["error_message"] = f"Invalid AgentDecision JSON: {last_error}"
+    duration_ms = _elapsed_millis(started_at)
+    # 没有合法 AgentDecision 时不发送 PLANNER_DECISION，避免前端误认为产生了可执行决策。
     return append_step(
         next_state,
         "llm_plan",
         step_type="LLM_DECISION",
         status="FAILED",
-        output={"validated": False, "errorSummary": last_error},
+        output={
+            "validated": False,
+            "errorSummary": last_error,
+            "attemptCount": attempt_count,
+            "durationMs": duration_ms,
+        },
+        duration_ms=duration_ms,
         error_message=next_state["error_message"],
     )
+
+
+def _elapsed_millis(started_at: float) -> int:
+    """按单调时钟计算 planner node 总耗时。"""
+    return max(0, int((time.perf_counter() - started_at) * 1000))
 
 
 def route_decision(state: AgentGraphState) -> AgentGraphState:
@@ -94,6 +131,14 @@ def execute_readonly_tool(state: AgentGraphState) -> AgentGraphState:
         return next_state
 
     normalized_arguments = normalize_tool_arguments(state["request"], decision.arguments)
+    emit_runtime_event(
+        state,
+        "TOOL_CALL_STARTED",
+        tool_name=decision.tool_name,
+        status="RUNNING",
+        message=f"{decision.tool_name} 开始调用",
+        payload={"arguments": normalized_arguments.arguments},
+    )
     execution = state["tool_client"].execute(decision.tool_name, state["request"], normalized_arguments.arguments)
     raw_output = execution.output if isinstance(execution.output, dict) else {}
     # observation 是给下一轮 planner 的裁剪后工具反馈，不等同于完整 step output。
@@ -122,6 +167,32 @@ def execute_readonly_tool(state: AgentGraphState) -> AgentGraphState:
     if not execution.success:
         next_state["error_message"] = execution.error_message or f"{decision.tool_name} failed"
 
+    emit_runtime_event(
+        next_state,
+        "TOOL_CALL_COMPLETED" if execution.success else "TOOL_CALL_FAILED",
+        tool_name=decision.tool_name,
+        status="SUCCEEDED" if execution.success else "FAILED",
+        message=execution.error_message or f"{decision.tool_name} 调用完成",
+        payload={
+            "success": execution.success,
+            "durationMs": execution.duration_ms,
+            "summary": observation.summary,
+            "errorMessage": execution.error_message,
+        },
+    )
+    emit_runtime_event(
+        next_state,
+        "OBSERVATION_CREATED",
+        tool_name=decision.tool_name,
+        status="SUCCEEDED" if execution.success else "FAILED",
+        message=f"{decision.tool_name} observation 已生成",
+        payload={
+            "success": observation.success,
+            "summary": observation.summary,
+            "durationMs": observation.duration_ms,
+            "errorMessage": observation.error_message,
+        },
+    )
     return append_step(
         next_state,
         "execute_readonly_tool",
@@ -163,6 +234,14 @@ def create_recommended_action(state: AgentGraphState) -> AgentGraphState:
     next_state = dict(state)
     next_state["recommended_actions"] = [*state.get("recommended_actions", []), action]
     next_state["summary"] = f"Agent 已生成待确认动作：{decision.tool_name}"
+    emit_runtime_event(
+        next_state,
+        "ACTION_RECOMMENDED",
+        tool_name=decision.tool_name,
+        status="PENDING_CONFIRMATION",
+        message=action.title,
+        payload=action.model_dump(by_alias=True),
+    )
     return append_step(
         next_state,
         "create_recommended_action",

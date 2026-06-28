@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 
 import httpx
 from fastapi.testclient import TestClient
@@ -129,6 +131,182 @@ def test_agent_run_diagnose_only_skips_recommended_write_actions():
     body = response.json()
     assert body["status"] == "SUCCEEDED"
     assert body["recommendedActions"] == []
+
+
+def test_agent_stream_returns_correlated_step_events_and_one_terminal():
+    runtime = AgentRuntime(tool_client=TestToolClient())
+    request = AgentRuntimeRequest(
+        runCode="AR-stream-fixed",
+        kbCode="day20-cn-kb",
+        goal="诊断这个知识库为什么不能问答",
+        runMode="DIAGNOSE_AND_RECOMMEND",
+    )
+
+    events = _runtime_events(runtime.stream_sse(request))
+
+    assert events[0]["type"] == "RUN_STARTED"
+    terminal_events = [event for event in events if event["terminal"]]
+    assert [event["type"] for event in terminal_events] == ["RUN_COMPLETED"]
+    for node_name in [
+        "parse_goal",
+        "system_health_check",
+        "kb_readiness_check",
+        "documents_status_scan",
+        "indexing_tasks_scan",
+        "qa_retrieve_probe",
+        "diagnose",
+        "recommend_actions",
+        "generate_report",
+    ]:
+        step_events = [
+            event
+            for event in events
+            if event["nodeName"] == node_name
+            and event["type"] in {"STEP_STARTED", "STEP_COMPLETED", "STEP_FAILED"}
+        ]
+        assert [event["type"] for event in step_events] == ["STEP_STARTED", "STEP_COMPLETED"]
+        assert len({event["nodeInvocationId"] for event in step_events}) == 1
+
+
+def test_intelligent_stream_uses_new_invocation_id_for_looped_nodes():
+    runtime = AgentRuntime(
+        tool_client=TestToolClient(),
+        decision_client=_llm_decision_client([
+            {
+                "action": "CALL_TOOL",
+                "toolName": "kb.readiness.check",
+                "arguments": {"kbCode": "day20-cn-kb"},
+                "reason": "check readiness",
+                "finalAnswer": None,
+                "riskLevel": "LOW",
+            },
+            {
+                "action": "FINAL_ANSWER",
+                "toolName": None,
+                "arguments": {},
+                "reason": "enough information",
+                "finalAnswer": "检查完成。",
+                "riskLevel": None,
+            },
+        ]),
+    )
+    request = AgentRuntimeRequest(
+        runCode="AR-stream-loop",
+        kbCode="day20-cn-kb",
+        goal="检查 readiness 后给出结论",
+        runMode="INTELLIGENT_TOOL_AGENT",
+    )
+
+    events = _runtime_events(runtime.stream_sse(request))
+
+    llm_started = [
+        event
+        for event in events
+        if event["type"] == "STEP_STARTED" and event["nodeName"] == "llm_plan"
+    ]
+    assert len(llm_started) == 2
+    assert len({event["nodeInvocationId"] for event in llm_started}) == 2
+    planner_events = [event for event in events if event["type"] == "PLANNER_DECISION"]
+    assert {event["nodeInvocationId"] for event in planner_events} == {
+        event["nodeInvocationId"] for event in llm_started
+    }
+    assert all(event["payload"]["durationMs"] >= 0 for event in planner_events)
+    assert [event["payload"]["attemptCount"] for event in planner_events] == [1, 1]
+    tool_events = [
+        event
+        for event in events
+        if event["type"] in {"TOOL_CALL_STARTED", "TOOL_CALL_COMPLETED", "OBSERVATION_CREATED"}
+        and event["toolName"] == "kb.readiness.check"
+    ]
+    assert len({event["nodeInvocationId"] for event in tool_events}) == 1
+
+
+def test_agent_stream_failure_has_exactly_one_failed_terminal():
+    runtime = AgentRuntime(tool_client=FailingToolClient())
+    request = AgentRuntimeRequest(
+        runCode="AR-stream-failed",
+        kbCode="day20-cn-kb",
+        goal="诊断",
+        runMode="DIAGNOSE_ONLY",
+    )
+
+    events = _runtime_events(runtime.stream_sse(request))
+
+    terminal_events = [event for event in events if event["terminal"]]
+    assert [event["type"] for event in terminal_events] == ["RUN_FAILED"]
+    assert any(event["type"] == "TOOL_CALL_FAILED" for event in events)
+
+
+def test_agent_stream_route_keeps_old_json_route_compatible():
+    client = build_client()
+    payload = {
+        "runCode": "AR-stream-route",
+        "kbCode": "day20-cn-kb",
+        "goal": "诊断",
+        "runMode": "DIAGNOSE_ONLY",
+    }
+
+    old_response = client.post("/v1/agent/runs", json=payload)
+    with client.stream("POST", "/v1/agent/runs/stream", json=payload) as stream_response:
+        stream_body = "".join(stream_response.iter_text())
+
+    assert old_response.status_code == 200
+    assert old_response.json()["status"] == "SUCCEEDED"
+    assert stream_response.status_code == 200
+    assert stream_response.headers["content-type"].startswith("text/event-stream")
+    assert "event: RUN_STARTED" in stream_body
+    assert "event: RUN_COMPLETED" in stream_body
+
+
+def test_agent_stream_close_cancels_future_node_execution():
+    decision_client = BlockingDecisionClient()
+    tool_client = CountingToolClient()
+    runtime = AgentRuntime(tool_client=tool_client, decision_client=decision_client)
+    request = AgentRuntimeRequest(
+        runCode="AR-stream-cancel",
+        kbCode="day20-cn-kb",
+        goal="检查 readiness",
+        runMode="INTELLIGENT_TOOL_AGENT",
+    )
+    stream = runtime.stream_sse(request)
+
+    assert "event: RUN_STARTED" in next(stream)
+    while True:
+        frame = next(stream)
+        if "event: STEP_STARTED" in frame and '"nodeName":"llm_plan"' in frame:
+            break
+    stream.close()
+    decision_client.release.set()
+    time.sleep(0.05)
+
+    assert tool_client.execute_count == 0
+
+
+def test_agent_stream_emits_heartbeat_while_waiting(monkeypatch):
+    import app.agent.runtime as runtime_module
+
+    monkeypatch.setattr(runtime_module, "HEARTBEAT_INTERVAL_SECONDS", 0.01)
+    decision_client = BlockingDecisionClient()
+    runtime = AgentRuntime(tool_client=TestToolClient(), decision_client=decision_client)
+    request = AgentRuntimeRequest(
+        runCode="AR-stream-heartbeat",
+        kbCode="day20-cn-kb",
+        goal="检查 readiness",
+        runMode="INTELLIGENT_TOOL_AGENT",
+    )
+    stream = runtime.stream_sse(request)
+
+    assert "event: RUN_STARTED" in next(stream)
+    while True:
+        frame = next(stream)
+        if "event: STEP_STARTED" in frame and '"nodeName":"llm_plan"' in frame:
+            break
+
+    try:
+        assert next(stream).startswith(": heartbeat")
+    finally:
+        stream.close()
+        decision_client.release.set()
 
 
 def test_agent_runtime_returns_failed_when_tool_call_fails():
@@ -338,7 +516,33 @@ def test_intelligent_agent_fails_after_invalid_json_retry():
 
     assert response.status == "FAILED"
     assert "Invalid AgentDecision JSON" in response.error_message
-    assert any(step.step_type == "LLM_DECISION" and step.status == "FAILED" for step in response.steps)
+    llm_step = next(step for step in response.steps if step.step_type == "LLM_DECISION" and step.status == "FAILED")
+    output = json.loads(llm_step.output_json)
+    assert llm_step.duration_ms >= 0
+    assert output["durationMs"] == llm_step.duration_ms
+    assert output["attemptCount"] == 2
+
+
+def test_invalid_planner_stream_failure_uses_step_failed_without_planner_decision():
+    runtime = AgentRuntime(
+        tool_client=TestToolClient(),
+        decision_client=_llm_decision_client_raw(["not-json", "{bad-json"]),
+    )
+    request = AgentRuntimeRequest(
+        runCode="AR-stream-invalid-planner",
+        kbCode="day20-cn-kb",
+        goal="检查当前项目状态",
+        runMode="INTELLIGENT_TOOL_AGENT",
+    )
+
+    events = _runtime_events(runtime.stream_sse(request))
+
+    assert not any(event["type"] == "PLANNER_DECISION" for event in events)
+    failed_step = next(
+        event for event in events if event["type"] == "STEP_FAILED" and event["nodeName"] == "llm_plan"
+    )
+    assert failed_step["payload"]["durationMs"] >= 0
+    assert failed_step["payload"]["attemptCount"] == 2
 
 
 def test_intelligent_agent_rejects_unknown_tool_name():
@@ -463,6 +667,10 @@ def test_llm_provider_failure_makes_agent_run_failed_without_fallback():
     assert "missing chat provider api key" in response.error_message
     assert response.recommended_actions == []
     assert not any(step.step_type == "TOOL_CALL" for step in response.steps)
+    llm_step = next(step for step in response.steps if step.step_type == "LLM_DECISION" and step.status == "FAILED")
+    output = json.loads(llm_step.output_json)
+    assert llm_step.duration_ms >= 0
+    assert output["attemptCount"] == 1
 
 
 def test_intelligent_agent_rejects_arguments_that_do_not_match_schema():
@@ -921,6 +1129,38 @@ class TestToolClient:
         return AgentToolExecution(tool_name=tool_name, success=True, output=output, duration_ms=1)
 
 
+class CountingToolClient(TestToolClient):
+    def __init__(self) -> None:
+        self.execute_count = 0
+
+    def execute(
+        self,
+        tool_name: str,
+        request: AgentRuntimeRequest,
+        arguments: dict | None = None,
+    ) -> AgentToolExecution:
+        self.execute_count += 1
+        return super().execute(tool_name, request, arguments)
+
+
+class BlockingDecisionClient:
+    def __init__(self) -> None:
+        self.release = threading.Event()
+
+    def decide(self, state: dict) -> str:
+        self.release.wait(timeout=2)
+        return json.dumps(
+            {
+                "action": "CALL_TOOL",
+                "toolName": "kb.readiness.check",
+                "arguments": {"kbCode": "day20-cn-kb"},
+                "reason": "check readiness",
+                "finalAnswer": None,
+                "riskLevel": "LOW",
+            }
+        )
+
+
 class SchemaToolClient:
     def definitions(self) -> list[AgentToolDefinition]:
         return [
@@ -1066,3 +1306,13 @@ def _test_tool_definitions() -> list[AgentToolDefinition]:
         ),
         AgentToolDefinition(toolName="retrieval.config.inspect"),
     ]
+
+
+def _runtime_events(frames) -> list[dict]:
+    """从 Runtime SSE frame 中解析 data JSON，忽略 heartbeat comment。"""
+    events: list[dict] = []
+    for frame in frames:
+        for line in frame.splitlines():
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
+    return events

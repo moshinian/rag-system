@@ -1,15 +1,8 @@
 package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
-import com.example.rag.common.id.SnowflakeIdGenerator;
-import com.example.rag.integration.agent.AgentRuntimeClient;
-import com.example.rag.model.dto.AgentRuntimeActionDraft;
-import com.example.rag.model.dto.AgentRuntimeRequest;
-import com.example.rag.model.dto.AgentRuntimeResponse;
-import com.example.rag.model.dto.AgentRuntimeStepResult;
 import com.example.rag.model.enums.AgentActionRiskLevel;
 import com.example.rag.model.enums.AgentActionStatus;
-import com.example.rag.model.enums.AgentRunMode;
 import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.request.AgentActionConfirmRequest;
 import com.example.rag.model.request.AgentActionRejectRequest;
@@ -42,15 +35,14 @@ import java.util.List;
  */
 @Service
 public class AgentRunService {
-    private static final String RUN_CODE_PREFIX = "AR-";
-    private static final String STEP_CODE_PREFIX = "AST-";
-    private static final String ACTION_CODE_PREFIX = "ACT-";
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final AgentRunRepository agentRunRepository;
     private final AgentStepRepository agentStepRepository;
     private final AgentActionRepository agentActionRepository;
-    private final SnowflakeIdGenerator snowflakeIdGenerator;
-    private final AgentRuntimeClient agentRuntimeClient;
+    private final AgentRunRecordService runRecordService;
+    private final AgentRunExecutor runExecutor;
+    private final AgentRunResultService runResultService;
+    private final AgentRunCompatibilityEventConverter eventConverter;
     private final DocumentIndexingService documentIndexingService;
     private final EmbeddingRebuildService embeddingRebuildService;
     private final RecommendedActionCatalog recommendedActionCatalog;
@@ -61,8 +53,10 @@ public class AgentRunService {
                            AgentRunRepository agentRunRepository,
                            AgentStepRepository agentStepRepository,
                            AgentActionRepository agentActionRepository,
-                           SnowflakeIdGenerator snowflakeIdGenerator,
-                           AgentRuntimeClient agentRuntimeClient,
+                           AgentRunRecordService runRecordService,
+                           AgentRunExecutor runExecutor,
+                           AgentRunResultService runResultService,
+                           AgentRunCompatibilityEventConverter eventConverter,
                            DocumentIndexingService documentIndexingService,
                            EmbeddingRebuildService embeddingRebuildService,
                            RecommendedActionCatalog recommendedActionCatalog,
@@ -71,8 +65,10 @@ public class AgentRunService {
         this.agentRunRepository = agentRunRepository;
         this.agentStepRepository = agentStepRepository;
         this.agentActionRepository = agentActionRepository;
-        this.snowflakeIdGenerator = snowflakeIdGenerator;
-        this.agentRuntimeClient = agentRuntimeClient;
+        this.runRecordService = runRecordService;
+        this.runExecutor = runExecutor;
+        this.runResultService = runResultService;
+        this.eventConverter = eventConverter;
         this.documentIndexingService = documentIndexingService;
         this.embeddingRebuildService = embeddingRebuildService;
         this.recommendedActionCatalog = recommendedActionCatalog;
@@ -81,22 +77,17 @@ public class AgentRunService {
 
     /** 创建一条 Agent 诊断运行记录。 */
     public AgentRunResponse createRun(String kbCode, AgentRunCreateRequest request) {
-        KnowledgeBaseEntity knowledgeBase = requireKnowledgeBase(kbCode);
-        AgentRunEntity entity = new AgentRunEntity();
-        entity.setId(snowflakeIdGenerator.nextId());
-        entity.setRunCode(snowflakeIdGenerator.nextId(RUN_CODE_PREFIX));
-        entity.setKnowledgeBaseId(knowledgeBase.getId());
-        entity.setGoal(request.goal().trim());
-        entity.setQuestion(trimToNull(request.question()));
-        entity.setRunMode(request.runMode() == null ? AgentRunMode.DIAGNOSE_AND_RECOMMEND : request.runMode());
-        entity.setStatus(AgentRunStatus.RUNNING);
-        entity.setCreatedBy(defaultCreatedBy(request.createdBy()));
-        AgentRunEntity saved = agentRunRepository.insert(entity);
+        AgentRunEntity saved = runRecordService.create(kbCode, request);
         try {
-            AgentRuntimeResponse runtimeResponse = agentRuntimeClient.run(buildRuntimeRequest(kbCode, saved));
-            return completeRun(knowledgeBase, saved, runtimeResponse);
-        } catch (BusinessException ex) {
-            return failRun(knowledgeBase, saved, ex.getMessage());
+            runExecutor.submit(kbCode, saved);
+            return toResponse(kbCode, saved, List.of(), List.of());
+        } catch (RuntimeException ex) {
+            AgentRunEntity failed = runResultService.fail(
+                    saved.getRunCode(),
+                    "Agent executor rejected run: " + ex.getMessage()
+            );
+            eventConverter.publishPersistedResult(saved.getRunCode());
+            return toResponse(kbCode, failed, List.of(), List.of());
         }
     }
 
@@ -345,94 +336,27 @@ public class AgentRunService {
         );
     }
 
-    /** 构造 Python Agent Runtime 请求。 */
-    private AgentRuntimeRequest buildRuntimeRequest(String kbCode, AgentRunEntity run) {
-        return new AgentRuntimeRequest(
+    /** 使用已知 kbCode 组装刚创建的异步 run 响应。 */
+    private AgentRunResponse toResponse(String kbCode,
+                                        AgentRunEntity run,
+                                        List<AgentStepEntity> steps,
+                                        List<AgentActionEntity> actions) {
+        return new AgentRunResponse(
                 run.getRunCode(),
                 kbCode,
                 run.getGoal(),
                 run.getQuestion(),
-                run.getRunMode()
+                run.getRunMode(),
+                run.getStatus(),
+                run.getSummary(),
+                run.getErrorMessage(),
+                steps.stream().map(this::toStepResponse).toList(),
+                actions.stream().map(this::toActionResponse).toList(),
+                run.getCreatedBy(),
+                run.getCreatedAt(),
+                run.getUpdatedAt(),
+                run.getFinishedAt()
         );
-    }
-
-    /** 使用 Python Runtime 结果完成 run。 */
-    private AgentRunResponse completeRun(KnowledgeBaseEntity knowledgeBase,
-                                         AgentRunEntity run,
-                                         AgentRuntimeResponse runtimeResponse) {
-        List<AgentRuntimeStepResult> runtimeSteps = runtimeResponse.steps() == null
-                ? List.of()
-                : runtimeResponse.steps();
-        List<AgentRuntimeActionDraft> runtimeActions = runtimeResponse.recommendedActions() == null
-                ? List.of()
-                : runtimeResponse.recommendedActions();
-
-        List<AgentStepEntity> steps = runtimeSteps.stream()
-                .map(step -> persistRuntimeStep(run.getRunCode(), step))
-                .toList();
-        List<AgentActionEntity> actions = runtimeActions.stream()
-                .map(action -> persistRuntimeAction(run.getRunCode(), action))
-                .toList();
-
-        run.setSummary(runtimeResponse.summary());
-        run.setErrorMessage(runtimeResponse.errorMessage());
-        if ("FAILED".equals(runtimeResponse.status())) {
-            run.setStatus(AgentRunStatus.FAILED);
-            run.setFinishedAt(OffsetDateTime.now());
-        } else if (actions.stream().anyMatch(action -> Boolean.TRUE.equals(action.getRequiresConfirmation()))) {
-            run.setStatus(AgentRunStatus.WAITING_CONFIRMATION);
-            run.setFinishedAt(null);
-        } else {
-            run.setStatus(AgentRunStatus.SUCCEEDED);
-            run.setFinishedAt(OffsetDateTime.now());
-        }
-        AgentRunEntity updated = agentRunRepository.updateById(run);
-        return toResponse(knowledgeBase, updated, steps, actions);
-    }
-
-    /** Runtime 调用失败时把 run 收口到 FAILED。 */
-    private AgentRunResponse failRun(KnowledgeBaseEntity knowledgeBase, AgentRunEntity run, String errorMessage) {
-        run.setStatus(AgentRunStatus.FAILED);
-        run.setErrorMessage(errorMessage);
-        run.setFinishedAt(OffsetDateTime.now());
-        AgentRunEntity updated = agentRunRepository.updateById(run);
-        return toResponse(knowledgeBase, updated, List.of(), List.of());
-    }
-
-    /** 持久化 Python Runtime 返回的 step。 */
-    private AgentStepEntity persistRuntimeStep(String runCode, AgentRuntimeStepResult runtimeStep) {
-        OffsetDateTime now = OffsetDateTime.now();
-        AgentStepEntity entity = new AgentStepEntity();
-        entity.setId(snowflakeIdGenerator.nextId());
-        entity.setRunCode(runCode);
-        entity.setStepCode(snowflakeIdGenerator.nextId(STEP_CODE_PREFIX));
-        entity.setNodeName(runtimeStep.nodeName());
-        entity.setToolName(runtimeStep.toolName());
-        entity.setStepType(runtimeStep.stepType());
-        entity.setStatus(runtimeStep.status());
-        entity.setInputJson(runtimeStep.inputJson());
-        entity.setOutputJson(runtimeStep.outputJson());
-        entity.setDurationMs(runtimeStep.durationMs());
-        entity.setErrorMessage(runtimeStep.errorMessage());
-        entity.setStartedAt(now);
-        entity.setFinishedAt(now);
-        return agentStepRepository.insert(entity);
-    }
-
-    /** 持久化 Python Runtime 返回的 action 草案。 */
-    private AgentActionEntity persistRuntimeAction(String runCode, AgentRuntimeActionDraft draft) {
-        AgentActionEntity entity = new AgentActionEntity();
-        entity.setId(snowflakeIdGenerator.nextId());
-        entity.setRunCode(runCode);
-        entity.setActionCode(snowflakeIdGenerator.nextId(ACTION_CODE_PREFIX));
-        entity.setToolName(draft.toolName());
-        entity.setTitle(draft.title());
-        entity.setReason(draft.reason());
-        entity.setRiskLevel(draft.riskLevel());
-        entity.setRequiresConfirmation(draft.requiresConfirmation());
-        entity.setStatus(AgentActionStatus.PENDING_CONFIRMATION);
-        entity.setActionPayload(draft.actionPayload());
-        return agentActionRepository.insert(entity);
     }
 
     /** 组装 Agent 执行步骤响应。 */

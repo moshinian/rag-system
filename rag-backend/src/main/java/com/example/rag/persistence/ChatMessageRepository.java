@@ -17,6 +17,7 @@ import org.springframework.stereotype.Repository;
  * 问答消息持久化访问层。
  */
 @Repository
+@SuppressWarnings("null") // MyBatis-Plus lambda 字段引用会被 JDT 误判为 NonNull 泛型转换告警。
 public class ChatMessageRepository {
     private final ChatMessageMapper chatMessageMapper;
 

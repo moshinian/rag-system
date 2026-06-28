@@ -74,13 +74,27 @@ rag:
       embeddings-path: /v1/embeddings
       chat-completions-path: /v1/chat/completions
       agent-runs-path: /v1/agent/runs
+      agent-runs-stream-path: /v1/agent/runs/stream
       connect-timeout-millis: 5000
       read-timeout-millis: 120000
+      agent-stream-read-timeout-millis: 120000
   agent:
     internal-tool-token: ${RAG_AGENT_TOOL_TOKEN:dev-agent-tool-token}
     mcp-allowed-origins:
       - ${RAG_MCP_ALLOWED_ORIGIN:http://127.0.0.1:8001}
       - http://localhost:8001
+    executor:
+      core-pool-size: 2
+      max-pool-size: 4
+      queue-capacity: 100
+      await-termination-seconds: 30
+      thread-name-prefix: rag-agent-
+    recovery:
+      enabled: true
+      scan-interval-seconds: 60
+      running-timeout-minutes: 10
+      idle-timeout-minutes: 3
+      heartbeat-update-interval-seconds: 30
   llm:
     chat:
       model: deepseek-v4-pro

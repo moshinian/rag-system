@@ -292,6 +292,7 @@ POST   /api/admin/embeddings/rebuild
 ```text
 POST   /api/knowledge-bases/{kbCode}/agent/runs
 GET    /api/knowledge-bases/{kbCode}/agent/runs/{runCode}
+GET    /api/knowledge-bases/{kbCode}/agent/runs/{runCode}/events
 POST   /api/knowledge-bases/{kbCode}/agent/runs/{runCode}/actions/{actionCode}/confirm
 POST   /api/knowledge-bases/{kbCode}/agent/runs/{runCode}/actions/{actionCode}/reject
 ```
@@ -303,9 +304,12 @@ GET    /health
 POST   /v1/embeddings
 POST   /v1/chat/completions
 POST   /v1/agent/runs
+POST   /v1/agent/runs/stream
 ```
 
 `/api/internal/mcp` 是 Java 与 Python 之间的内部工具协议入口，不是浏览器或外部业务调用接口。
+
+Agent run 已改为异步事件驱动：React 创建 run 后立即拿到 `runCode`，只订阅 Java `/events`；Java 后台消费 Python `/v1/agent/runs/stream`，把规范化事件写入 `agent_run_event`，再通过 Spring MVC `SseEmitter` 推送给前端。SSE 只负责实时通知，刷新或断线恢复时仍以数据库中的 `agent_run / agent_step / agent_action / agent_run_event` 为准。
 
 ## Agent 安全模型
 
@@ -318,6 +322,7 @@ Agent 的设计重点不是让模型拥有更大权限，而是把模型决策�
 5. Java 只执行明确列入白名单的工具，并拒绝未知或高风险动作。
 6. Run、Step、Action、确认人、执行结果和错误信息全部持久化。
 7. Python 不生成 `runCode / stepCode / actionCode`，也不绕过 Java 执行业务写操作。
+8. Python Runtime event 进入 Java 后会先被规范化为前端事件；如果 Python `RUN_COMPLETED` 但 Java 已存在待确认 action，前端只会看到 `RUN_WAITING_CONFIRMATION`，不会先看到 `RUN_COMPLETED`。
 
 ## 关键配置
 
@@ -335,7 +340,7 @@ Java 配置集中在 `rag.*`：
 | `rag.qa` | 问答与会话默认值 |
 | `rag.indexing` | 重试和卡死任务恢复 |
 | `rag.cache` | Redis 缓存 TTL |
-| `rag.agent` | MCP 内部 token 与允许来源 |
+| `rag.agent` | MCP 内部 token、允许来源与 Agent 后台线程池 |
 
 Python 配置由环境变量或 `rag-ai-service/.env` 提供，定义见 [`config.py`](rag-ai-service/app/core/config.py)。
 
@@ -352,7 +357,7 @@ mvn -q -pl rag-backend test
 ### Python
 
 ```bash
-./venv/bin/python -m pytest rag-ai-service/tests
+./.venv/bin/python -m pytest rag-ai-service/tests
 ```
 
 ### Frontend
@@ -375,6 +380,10 @@ npm run build
 - 尚未实现多实例任务协调、任务取消和批量索引编排。
 - Agent 当前聚焦 RAG 运维诊断，不是通用自动化平台。
 - MCP endpoint 目前只实现单 JSON-RPC 对象和 tools capability，不支持 batch 与 SSE。
+- Agent SSE 目前是单实例内存订阅；多实例部署需要 Redis Pub/Sub 或 MQ 广播。
+- Agent run 暂不自动重试；后续可增加 recovery scheduler，扫描长时间 `RUNNING` 的孤儿 run 并标记 `FAILED`。
+- Python cancellation 是协作式取消；不会强行中断正在阻塞的 LLM 或工具调用。
+- 当前只做 step 级流式事件，不做最终回答 token streaming。
 - 可观测性以结构化日志和健康探针为主，尚未接入完整 metrics/tracing 平台。
 - 当前配置适合本地开发和功能验证；生产部署还需要补齐密钥管理、网络隔离、认证授权和容量治理。
 

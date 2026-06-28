@@ -2,6 +2,7 @@ package com.example.rag.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.rag.mapper.AgentActionMapper;
+import com.example.rag.model.enums.AgentActionStatus;
 import com.example.rag.persistence.entity.AgentActionEntity;
 import org.springframework.stereotype.Repository;
 
@@ -12,6 +13,7 @@ import java.util.Optional;
  * Agent 推荐动作访问层。
  */
 @Repository
+@SuppressWarnings("null") // MyBatis-Plus lambda 字段引用会被 JDT 误判为 NonNull 泛型转换告警。
 public class AgentActionRepository {
     private final AgentActionMapper mapper;
 
@@ -50,5 +52,13 @@ public class AgentActionRepository {
                 .eq(AgentActionEntity::getRunCode, runCode)
                 .orderByAsc(AgentActionEntity::getCreatedAt);
         return mapper.selectList(query);
+    }
+
+    /** 判断 run 是否存在待人工确认动作。 */
+    public boolean existsPendingConfirmation(String runCode) {
+        LambdaQueryWrapper<AgentActionEntity> query = new LambdaQueryWrapper<AgentActionEntity>()
+                .eq(AgentActionEntity::getRunCode, runCode)
+                .eq(AgentActionEntity::getStatus, AgentActionStatus.PENDING_CONFIRMATION);
+        return mapper.selectCount(query) > 0;
     }
 }

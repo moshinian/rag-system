@@ -30,7 +30,7 @@ public class RecommendedActionCatalog {
     public boolean isExecutable(String toolName, AgentActionRiskLevel riskLevel) {
         return find(toolName)
                 .filter(action -> action.riskLevel() == riskLevel)
-                .filter(RecommendedActionDefinition::requiresConfirmation)
+                .filter(definition -> definition.requiresConfirmation())
                 .isPresent();
     }
 
