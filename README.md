@@ -146,8 +146,8 @@ Flyway 会在 Java 后端启动时自动执行数据库迁移。
 创建虚拟环境并安装依赖：
 
 ```bash
-python3 -m venv venv
-./venv/bin/pip install -e "./rag-ai-service[dev]"
+python3 -m venv .venv
+./.venv/bin/pip install -e "./rag-ai-service[dev]"
 ```
 
 配置模型凭证。以下只展示变量名，请勿把真实密钥提交到仓库：
@@ -174,7 +174,7 @@ export CHAT_DEFAULT_MODEL="<your-chat-model>"
 启动服务：
 
 ```bash
-./venv/bin/python -m uvicorn app.main:app \
+./.venv/bin/python -m uvicorn app.main:app \
   --app-dir rag-ai-service \
   --host 127.0.0.1 \
   --port 8001

@@ -6,7 +6,7 @@
     }
   ],
   "settings": {
-    "python.defaultInterpreterPath": "${workspaceFolder:rag-system}/venv/bin/python",
+    "python.defaultInterpreterPath": "${workspaceFolder:rag-system}/.venv/bin/python",
     "python.analysis.diagnosticMode": "workspace",
     "python.analysis.useLibraryCodeForTypes": false,
     "java.compile.nullAnalysis.mode": "automatic",

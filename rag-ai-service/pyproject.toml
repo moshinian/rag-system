@@ -29,7 +29,7 @@ filterwarnings = [
 
 [tool.pyright]
 venvPath = ".."
-venv = "venv"
+venv = ".venv"
 stubPath = "typings"
 include = ["app", "tests"]
 exclude = [
@@ -37,6 +37,5 @@ exclude = [
     "**/__pycache__",
     "**/node_modules",
     "**/.pytest_cache",
-    "**/venv",
     "**/rag_ai_service.egg-info",
 ]
