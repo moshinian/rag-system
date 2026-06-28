@@ -297,7 +297,7 @@ public class KnowledgeBaseService {
     /** 删除知识库本地落盘物料。 */
     private void deleteKnowledgeBaseMaterials(String kbCode, List<DocumentEntity> documents) {
         boolean hasStoredFiles = documents.stream()
-                .map(DocumentEntity::getStoragePath)
+                .map(document -> document.getStoragePath())
                 .anyMatch(path -> path != null && !path.isBlank());
         if (!hasStoredFiles) {
             return;

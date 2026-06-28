@@ -58,7 +58,7 @@ public class AiGatewayClient {
             // 按上游 index 恢复输入顺序，避免 provider 返回顺序变化导致向量与文本错配。
             return response.data().stream()
                     .sorted((left, right) -> Integer.compare(left.index(), right.index()))
-                    .map(EmbeddingData::embedding)
+                    .map(data -> data.embedding())
                     .toList();
         } catch (IOException ex) {
             log.warn(StructuredLogMessage.of("ai.gateway.embedding.failed")

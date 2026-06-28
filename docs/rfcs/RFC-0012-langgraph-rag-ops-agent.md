@@ -1,13 +1,13 @@
 # RFC-0012 LangGraph RAG Ops Agent
 
-- Status: Planned
+- Status: Implemented
 - Created: 2026-06-16
-- Last Updated: 2026-06-16
+- Last Updated: 2026-06-24
 - Owners: RAG Team
 
 ## Summary
 
-本 RFC 记录系统从“企业知识库 RAG 工作台”继续演进到“基于 LangGraph 的 RAG 运维诊断 Agent”的正式路线图。
+本 RFC 记录系统从“企业知识库 RAG 工作台”继续演进到“基于 LangGraph 的 RAG 运维诊断 Agent”的设计边界。2026-06-24 后，Agent run 已进一步从同步阻塞调用改造成异步 SSE 流式执行模型。
 
 核心结论是：
 
@@ -16,6 +16,7 @@
 3. Python `rag-ai-service` 新增 LangGraph Agent Runtime，只负责状态图、工具编排、诊断推理和报告生成。
 4. 前端新增 Agent 工作台，展示执行轨迹、推荐动作和 human-in-the-loop 确认。
 5. 写操作必须通过 Java 后端白名单和用户确认执行，LangGraph 与 LLM 都不能绕过该边界。
+6. Java 是 Agent run 的状态权威；Python 只产出 Runtime event，Java 规范化后落库并推送前端。
 
 ## Context
 
@@ -118,6 +119,28 @@ Java 根据 Python 返回结果决定最终 run 状态：
 2. 无待确认动作且执行成功：`SUCCEEDED`
 3. Agent Runtime 或工具调用失败：`FAILED`
 
+当前 SSE 流式模型为：
+
+```text
+React POST /api/knowledge-bases/{kbCode}/agent/runs
+  -> Java 创建 RUNNING run 并提交后台任务，立即返回 runCode
+  -> React GET /api/knowledge-bases/{kbCode}/agent/runs/{runCode}/events
+  -> Java 补发 agent_run_event 历史事件并保持 SseEmitter
+
+Java 后台线程
+  -> POST Python /v1/agent/runs/stream
+  -> Python 执行 LangGraph 并发送 Runtime event
+  -> Java 事务化写 agent_run_event / agent_step / agent_action / agent_run
+  -> AFTER_COMMIT 后推送前端 SSE
+```
+
+事件分两层：
+
+1. `AgentRuntimeEvent`：Python 到 Java 的内部运行事件。
+2. `AgentRunEvent`：Java 规范化后落库并推送 React 的前端事件。
+
+如果 Python 发送 `RUN_COMPLETED`，Java 会先检查是否存在 `PENDING_CONFIRMATION` action；有待确认动作时，前端只接收 `RUN_WAITING_CONFIRMATION`，不会先接收 `RUN_COMPLETED`。
+
 ## Implementation
 
 执行计划维护在 [rag-agent plan](../work/rag-agent/plan.md)。
@@ -143,6 +166,7 @@ Java 对前端提供：
 ```text
 POST /api/knowledge-bases/{kbCode}/agent/runs
 GET  /api/knowledge-bases/{kbCode}/agent/runs/{runCode}
+GET  /api/knowledge-bases/{kbCode}/agent/runs/{runCode}/events
 POST /api/knowledge-bases/{kbCode}/agent/runs/{runCode}/actions/{actionCode}/confirm
 POST /api/knowledge-bases/{kbCode}/agent/runs/{runCode}/actions/{actionCode}/reject
 ```
@@ -151,9 +175,12 @@ Python Agent Runtime 提供：
 
 ```text
 POST /v1/agent/runs
+POST /v1/agent/runs/stream
 ```
 
 该接口由 Java 调用。Python 返回步骤和推荐动作草案，不返回最终业务主键。
+
+`/v1/agent/runs` 继续保留为普通 JSON 兼容接口；`/v1/agent/runs/stream` 返回 `text/event-stream`，只供 Java 内部消费，浏览器不直接连接 Python。
 
 ### 3. Tool Boundary
 
@@ -220,6 +247,16 @@ Agent v1 不做：
 6. 确认后回到 LangGraph 继续执行。
 7. 跨知识库长期记忆。
 8. 完整多轮会话产品。
+9. WebFlux 全链路响应式迁移。
+10. 让 React 直连 Python。
+11. LLM final answer token streaming。
+
+## Follow-ups
+
+1. 增加 recovery scheduler：扫描长时间 `RUNNING` 且无新事件的孤儿 run，标记为 `FAILED`。
+2. 多实例部署时引入 Redis Pub/Sub 或 MQ，把 afterCommit 事件广播到持有不同 SSE 连接的 Java 实例。
+3. 强化 Python cancellation：当前只在 node 边界协作式停止，不强杀正在阻塞的 LLM/tool 调用。
+4. 如果未来需要更强交互体验，可在 step 级 streaming 稳定后评估 optional final answer token streaming。
 
 ## Open Questions
 

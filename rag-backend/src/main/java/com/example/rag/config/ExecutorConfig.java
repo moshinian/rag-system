@@ -14,10 +14,13 @@ import java.util.concurrent.Executor;
 @Configuration
 public class ExecutorConfig {
     private final RagExecutorProperties ragExecutorProperties;
+    private final RagAgentProperties ragAgentProperties;
 
     /** 构造ExecutorConfig。 */
-    public ExecutorConfig(RagExecutorProperties ragExecutorProperties) {
+    public ExecutorConfig(RagExecutorProperties ragExecutorProperties,
+                          RagAgentProperties ragAgentProperties) {
         this.ragExecutorProperties = ragExecutorProperties;
+        this.ragAgentProperties = ragAgentProperties;
     }
 
     /** 定义索引处理线程池。 */
@@ -28,28 +31,28 @@ public class ExecutorConfig {
         executor.setMaxPoolSize(normalizeMaxPoolSize());
         executor.setQueueCapacity(normalizeQueueCapacity());
         executor.setThreadNamePrefix(normalizeThreadNamePrefix());
-        executor.setTaskDecorator(runnable -> {
-            Map<String, String> contextMap = MDC.getCopyOfContextMap();
-            return () -> {
-                Map<String, String> previous = MDC.getCopyOfContextMap();
-                try {
-                    if (contextMap != null) {
-                        MDC.setContextMap(contextMap);
-                    } else {
-                        MDC.clear();
-                    }
-                    runnable.run();
-                } finally {
-                    if (previous != null) {
-                        MDC.setContextMap(previous);
-                    } else {
-                        MDC.clear();
-                    }
-                }
-            };
-        });
+        executor.setTaskDecorator(this::decorateWithMdc);
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(normalizeAwaitTerminationSeconds());
+        executor.initialize();
+        return executor;
+    }
+
+    /** 定义 Agent run 后台执行线程池。 */
+    @Bean("agentExecutor")
+    public Executor agentExecutor() {
+        RagAgentProperties.Executor properties = ragAgentProperties.getExecutor();
+        int corePoolSize = normalizePositive(properties.getCorePoolSize(), 2);
+        int maxPoolSize = Math.max(corePoolSize, normalizePositive(properties.getMaxPoolSize(), 4));
+
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(corePoolSize);
+        executor.setMaxPoolSize(maxPoolSize);
+        executor.setQueueCapacity(normalizePositive(properties.getQueueCapacity(), 100));
+        executor.setThreadNamePrefix(normalizeText(properties.getThreadNamePrefix(), "rag-agent-"));
+        executor.setTaskDecorator(this::decorateWithMdc);
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(normalizePositive(properties.getAwaitTerminationSeconds(), 30));
         executor.initialize();
         return executor;
     }
@@ -86,5 +89,37 @@ public class ExecutorConfig {
     private String normalizeThreadNamePrefix() {
         String configured = ragExecutorProperties.getThreadNamePrefix();
         return configured == null || configured.isBlank() ? "rag-indexing-" : configured.trim();
+    }
+
+    /** 给异步任务复制并恢复 MDC，保证跨线程日志仍可关联 requestId。 */
+    private Runnable decorateWithMdc(Runnable runnable) {
+        Map<String, String> contextMap = MDC.getCopyOfContextMap();
+        return () -> {
+            Map<String, String> previous = MDC.getCopyOfContextMap();
+            try {
+                if (contextMap != null) {
+                    MDC.setContextMap(contextMap);
+                } else {
+                    MDC.clear();
+                }
+                runnable.run();
+            } finally {
+                if (previous != null) {
+                    MDC.setContextMap(previous);
+                } else {
+                    MDC.clear();
+                }
+            }
+        };
+    }
+
+    /** 把非正整数配置回退到默认值。 */
+    private int normalizePositive(Integer configured, int fallback) {
+        return configured == null || configured < 1 ? fallback : configured;
+    }
+
+    /** 把空白文本配置回退到默认值。 */
+    private String normalizeText(String configured, String fallback) {
+        return configured == null || configured.isBlank() ? fallback : configured.trim();
     }
 }

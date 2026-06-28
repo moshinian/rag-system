@@ -481,46 +481,46 @@
 ## 已验证
 
 1. `mvn -q -pl rag-backend -DskipTests compile` 已通过。
-2. `./venv/bin/python -m py_compile rag-ai-service/app/agent/__init__.py rag-ai-service/app/agent/state.py` 已通过。
+2. `./.venv/bin/python -m py_compile rag-ai-service/app/agent/__init__.py rag-ai-service/app/agent/state.py` 已通过。
 3. `mvn -q -pl rag-backend -Dtest=AgentRunServiceTest,AgentControllerTest test` 已通过。
 4. `mvn -q -pl rag-backend -Dtest=AgentToolRegistryTest,SystemHealthAgentToolTest,QaReadinessAgentToolTest test` 已通过。
-5. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过。
-6. `./venv/bin/python -m pytest rag-ai-service/tests/test_app.py` 已通过。
-7. `./venv/bin/python -m py_compile rag-ai-service/app/agent/state.py rag-ai-service/app/agent/tools.py rag-ai-service/app/agent/graph.py rag-ai-service/app/agent/runtime.py rag-ai-service/app/api/routes.py` 已通过。
+5. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过。
+6. `./.venv/bin/python -m pytest rag-ai-service/tests/test_app.py` 已通过。
+7. `./.venv/bin/python -m py_compile rag-ai-service/app/agent/state.py rag-ai-service/app/agent/tools.py rag-ai-service/app/agent/graph.py rag-ai-service/app/agent/runtime.py rag-ai-service/app/api/routes.py` 已通过。
 8. `mvn -q -pl rag-backend -Dtest=AgentRunServiceTest,AgentControllerTest,AgentRuntimeClientTest test` 已通过。
 9. `mvn -q -pl rag-backend -DskipTests compile` 已通过。
 10. `mvn -q -pl rag-backend -Dtest=AgentToolRegistryTest,DocumentsStatusAgentToolTest,IndexingTasksScanAgentToolTest,AgentRunServiceTest,AgentControllerTest,AgentRuntimeClientTest test` 已通过。
-11. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py rag-ai-service/tests/test_app.py` 已通过。
+11. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py rag-ai-service/tests/test_app.py` 已通过。
 12. `mvn -q -pl rag-backend -Dtest=AgentRunScenarioTest,AgentRunServiceTest,AgentControllerTest,AgentRuntimeClientTest,AgentToolRegistryTest,DocumentsStatusAgentToolTest,IndexingTasksScanAgentToolTest test` 已通过。
 13. `mvn -q -pl rag-backend -DskipTests compile` 已通过。
 14. `mvn -q -pl rag-backend -Dtest=AgentActionExecutionTest,AgentRunServiceTest,AgentControllerTest,AgentRunScenarioTest test` 已通过。
 15. `mvn -q -pl rag-backend -Dtest=AgentToolRegistryTest,DocumentsStatusAgentToolTest,IndexingTasksScanAgentToolTest test` 已通过。
 16. `mvn -q -pl rag-backend -DskipTests compile` 已通过。
-17. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py rag-ai-service/tests/test_app.py` 已通过。
+17. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py rag-ai-service/tests/test_app.py` 已通过。
 18. `mvn -q -pl rag-backend -Dtest=AgentActionExecutionTest,AgentRunServiceTest,AgentControllerTest,AgentRunScenarioTest test` 已通过。
 19. `mvn -q -pl rag-backend -Dtest=EmbeddingRebuildServiceTest,AgentToolRegistryTest,DocumentsStatusAgentToolTest,IndexingTasksScanAgentToolTest test` 已通过。
-20. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py rag-ai-service/tests/test_app.py` 已通过。
+20. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py rag-ai-service/tests/test_app.py` 已通过。
 21. `mvn -q -pl rag-backend -DskipTests compile` 已通过。
 22. `cd rag-frontend && npm run build` 已通过。
 23. `cd rag-frontend && npm run build` 已通过。
 24. `cd rag-frontend && npm run build` 已通过。
 25. `mvn -q -pl rag-backend -Dtest=QaRetrieveProbeAgentToolTest,AgentToolRegistryTest test` 已通过。
-26. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过。
+26. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过。
 27. `mvn -q -pl rag-backend -Dtest=AgentToolRegistryTest,SystemHealthAgentToolTest,QaReadinessAgentToolTest,DocumentsStatusAgentToolTest,IndexingTasksScanAgentToolTest,QaRetrieveProbeAgentToolTest test` 已通过。
 28. `mvn -q -pl rag-backend -Dtest=AgentRunScenarioTest,AgentRunServiceTest,AgentControllerTest test` 已通过。
-29. `./venv/bin/python -m pytest rag-ai-service/tests/test_app.py rag-ai-service/tests/test_agent_runtime.py` 已通过。
+29. `./.venv/bin/python -m pytest rag-ai-service/tests/test_app.py rag-ai-service/tests/test_agent_runtime.py` 已通过。
 30. `mvn -q -pl rag-backend -Dtest=AgentInternalToolControllerTest,QaRetrieveProbeAgentToolTest,AgentToolRegistryTest test` 已通过。
-31. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过。
-32. `./venv/bin/python -m py_compile rag-ai-service/app/agent/tools.py` 已通过。
+31. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过。
+32. `./.venv/bin/python -m py_compile rag-ai-service/app/agent/tools.py` 已通过。
 33. `GET http://127.0.0.1:8080/api/health` 已返回整体 `UP`。
 34. `POST http://127.0.0.1:8080/api/knowledge-bases/finance-kb/agent/runs` 已通过真实链路返回 `WAITING_CONFIRMATION`。
 35. `GET http://127.0.0.1:8080/api/knowledge-bases/finance-kb/agent/runs/AR-325284142981976065` 已确认 run/steps/actions 可从 Java 持久化状态读取。
-36. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 legacy 诊断图和智能 Tool-use Agent 骨架。
+36. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 legacy 诊断图和智能 Tool-use Agent 骨架。
 37. `mvn -q -pl rag-backend -Dtest=AgentInternalToolControllerTest,AgentToolRegistryTest,SystemHealthAgentToolTest,QaReadinessAgentToolTest test` 已通过，覆盖 Tool Definition v2 查询接口。
-38. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 Day 18 决策校验和失败恢复。
+38. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 Day 18 决策校验和失败恢复。
 39. `mvn -q -pl rag-backend -Dtest=AgentRunServiceTest,AgentRunScenarioTest test` 已通过，覆盖 Day 19 智能模式 recommended action 落库边界。
-40. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 Day 20 fake MCP / 只读 CLI 配置化 MVP。
-41. `./venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py rag-ai-service/tests/test_app.py` 已通过，覆盖 Python legacy 和 intelligent runtime。
+40. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 Day 20 fake MCP / 只读 CLI 配置化 MVP。
+41. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py rag-ai-service/tests/test_app.py` 已通过，覆盖 Python legacy 和 intelligent runtime。
 42. `mvn -q -pl rag-backend -Dtest=AgentRunServiceTest,AgentRunScenarioTest,AgentInternalToolControllerTest test` 已通过，覆盖后端 run/action/internal tools。
 43. `cd rag-frontend && npm run build` 已通过，覆盖前端智能模式类型和构建。
 44. `GET http://127.0.0.1:8001/health` 已返回 `UP`。

@@ -117,7 +117,7 @@ public class McpInternalController {
     /** 返回注册表中已经通过 contract 校验的工具定义。 */
     private ResponseEntity<?> handleToolsList(Object id) {
         List<Map<String, Object>> tools = mcpToolRegistry.definitions().stream()
-                .map(McpToolDefinition::toProtocol)
+                .map(definition -> definition.toProtocol())
                 .toList();
         return jsonRpcResult(id, Map.of("tools", tools), Map.of());
     }

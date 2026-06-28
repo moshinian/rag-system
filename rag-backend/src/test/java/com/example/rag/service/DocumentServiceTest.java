@@ -242,7 +242,8 @@ class DocumentServiceTest {
 
         assertThat(response.total()).isEqualTo(1);
         assertThat(response.records()).singleElement()
-                .extracting(DocumentSummaryResponse::documentCode, DocumentSummaryResponse::knowledgeBaseCode)
+                // 避免 JDT null analysis 对 record method reference 的 unchecked conversion 告警。
+                .extracting(record -> record.documentCode(), record -> record.knowledgeBaseCode())
                 .containsExactly("DOC-1", "settlement-kb");
     }
 
@@ -403,7 +404,8 @@ class DocumentServiceTest {
         List<DocumentChunkResponse> response = documentService.listDocumentChunks("settlement-kb", "DOC-1");
 
         assertThat(response).singleElement()
-                .extracting(DocumentChunkResponse::chunkIndex, DocumentChunkResponse::title, DocumentChunkResponse::status)
+                // 避免 JDT null analysis 对 record method reference 的 unchecked conversion 告警。
+                .extracting(chunkResponse -> chunkResponse.chunkIndex(), chunkResponse -> chunkResponse.title(), chunkResponse -> chunkResponse.status())
                 .containsExactly(0, "Intro", "ACTIVE");
     }
 }

@@ -16,6 +16,7 @@ import java.util.Optional;
  * 文档切块持久化访问层。
  */
 @Repository
+@SuppressWarnings("null") // MyBatis-Plus lambda 字段引用会被 JDT 误判为 NonNull 泛型转换告警。
 public class DocumentChunkRepository {
     private final DocumentChunkMapper documentChunkMapper;
 

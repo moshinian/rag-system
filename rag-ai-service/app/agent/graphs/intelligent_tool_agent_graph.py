@@ -13,6 +13,7 @@ warnings.filterwarnings(
 
 from langgraph.graph import END, StateGraph
 
+from app.agent.events import traced_node
 from app.agent.graphs.state import AgentGraphState
 from app.agent.nodes.tool_agent_nodes import (
     create_recommended_action,
@@ -30,13 +31,19 @@ def build_intelligent_tool_agent_graph():
     """构建单 Agent Tool-use 循环图。"""
     workflow = StateGraph(AgentGraphState)
     # 图只负责编排节点，具体 planner / 工具 / 风险策略放在独立模块。
-    workflow.add_node("load_tools", load_tools)
-    workflow.add_node("llm_plan", llm_plan)
-    workflow.add_node("route_decision", route_decision)
-    workflow.add_node("execute_readonly_tool", execute_readonly_tool)
-    workflow.add_node("create_recommended_action", create_recommended_action)
-    workflow.add_node("final_report", final_report)
-    workflow.add_node("fail_report", fail_report)
+    workflow.add_node("load_tools", traced_node("load_tools", load_tools))
+    workflow.add_node("llm_plan", traced_node("llm_plan", llm_plan))
+    workflow.add_node("route_decision", traced_node("route_decision", route_decision))
+    workflow.add_node(
+        "execute_readonly_tool",
+        traced_node("execute_readonly_tool", execute_readonly_tool),
+    )
+    workflow.add_node(
+        "create_recommended_action",
+        traced_node("create_recommended_action", create_recommended_action),
+    )
+    workflow.add_node("final_report", traced_node("final_report", final_report))
+    workflow.add_node("fail_report", traced_node("fail_report", fail_report))
 
     workflow.set_entry_point("load_tools")
     # planner 决策后由 route_after_decision 分流到工具执行、待确认动作或最终报告。

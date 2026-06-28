@@ -47,7 +47,7 @@ class AgentControllerTest {
 
     @Test
     void createRunShouldReturnAcceptedRunResponse() throws Exception {
-        when(agentRunService.createRun(eq("day20-cn-kb"), any())).thenReturn(runResponse());
+        when(agentRunService.createRun(eq("day20-cn-kb"), any())).thenReturn(runningRunResponse());
         when(snowflakeIdGenerator.nextId("REQ-")).thenReturn("REQ-test");
 
         mockMvc.perform(post("/api/knowledge-bases/day20-cn-kb/agent/runs")
@@ -65,12 +65,11 @@ class AgentControllerTest {
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.runCode").value("AR-100"))
                 .andExpect(jsonPath("$.data.knowledgeBaseCode").value("day20-cn-kb"))
-                .andExpect(jsonPath("$.data.status").value("WAITING_CONFIRMATION"))
+                .andExpect(jsonPath("$.data.status").value("RUNNING"))
                 .andExpect(jsonPath("$.data.steps").isArray())
-                .andExpect(jsonPath("$.data.steps[0].stepCode").value("AST-100"))
+                .andExpect(jsonPath("$.data.steps").isEmpty())
                 .andExpect(jsonPath("$.data.actions").isArray())
-                .andExpect(jsonPath("$.data.actions[0].actionCode").value("ACT-100"))
-                .andExpect(jsonPath("$.data.actions[0].status").value("PENDING_CONFIRMATION"));
+                .andExpect(jsonPath("$.data.actions").isEmpty());
     }
 
     @Test
@@ -131,6 +130,25 @@ class AgentControllerTest {
 
     private AgentRunResponse runResponse() {
         return runResponse(AgentRunStatus.WAITING_CONFIRMATION, AgentActionStatus.PENDING_CONFIRMATION);
+    }
+
+    private AgentRunResponse runningRunResponse() {
+        return new AgentRunResponse(
+                "AR-100",
+                "day20-cn-kb",
+                "诊断这个知识库为什么不能问答",
+                "第二百三十八条是什么",
+                AgentRunMode.DIAGNOSE_AND_RECOMMEND,
+                AgentRunStatus.RUNNING,
+                null,
+                null,
+                List.of(),
+                List.of(),
+                "tester",
+                OffsetDateTime.parse("2026-06-16T10:00:00Z"),
+                OffsetDateTime.parse("2026-06-16T10:00:00Z"),
+                null
+        );
     }
 
     private AgentRunResponse runResponse(AgentRunStatus runStatus, AgentActionStatus actionStatus) {

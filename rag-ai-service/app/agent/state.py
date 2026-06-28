@@ -12,6 +12,20 @@ AgentStepStatus = Literal["PENDING", "RUNNING", "SUCCEEDED", "FAILED", "SKIPPED"
 AgentActionRiskLevel = Literal["LOW", "MEDIUM", "HIGH"]
 AgentDecisionAction = Literal["CALL_TOOL", "REQUEST_CONFIRMATION", "FINAL_ANSWER"]
 AgentToolExecutionMode = Literal["READ_ONLY", "REQUIRES_CONFIRMATION", "WRITE"]
+AgentRuntimeEventType = Literal[
+    "RUN_STARTED",
+    "STEP_STARTED",
+    "STEP_COMPLETED",
+    "STEP_FAILED",
+    "PLANNER_DECISION",
+    "TOOL_CALL_STARTED",
+    "TOOL_CALL_COMPLETED",
+    "TOOL_CALL_FAILED",
+    "OBSERVATION_CREATED",
+    "ACTION_RECOMMENDED",
+    "RUN_COMPLETED",
+    "RUN_FAILED",
+]
 
 
 class AgentRuntimeRequest(BaseModel):
@@ -139,6 +153,24 @@ class AgentRuntimeResponse(BaseModel):
         alias="recommendedActions",
     )
     error_message: str | None = Field(default=None, alias="errorMessage")
+
+
+class AgentRuntimeEvent(BaseModel):
+    """Python Runtime 通过 SSE 发给 Java 的内部事件。"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    event_id: str = Field(alias="eventId")
+    run_code: str = Field(alias="runCode")
+    type: AgentRuntimeEventType
+    node_invocation_id: str | None = Field(default=None, alias="nodeInvocationId")
+    node_name: str | None = Field(default=None, alias="nodeName")
+    tool_name: str | None = Field(default=None, alias="toolName")
+    status: str | None = None
+    message: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    terminal: bool = False
+    created_at: str = Field(alias="createdAt")
 
 
 class AgentState(BaseModel):

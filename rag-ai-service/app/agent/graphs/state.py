@@ -36,3 +36,8 @@ class AgentGraphState(TypedDict, total=False):
     summary: str | None
     error_message: str | None
     planner_error_message: str | None
+    # streaming 专用对象不参与 JSON 协议，仅在线程内传递事件和取消状态。
+    event_sink: Any
+    event_sequence: Any
+    current_node_invocation_id: str | None
+    current_node_name: str | None

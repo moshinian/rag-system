@@ -149,7 +149,7 @@ public class DocumentEmbeddingService {
             try {
                 List<List<Double>> embeddings = aiGatewayClient.createEmbeddings(
                         ragEmbeddingProperties.getModel(),
-                        chunks.stream().map(DocumentChunkEntity::getContent).toList()
+                        chunks.stream().map(chunk -> chunk.getContent()).toList()
                 );
                 if (embeddings.size() != chunks.size()) {
                     // 远端返回条数和输入条数不一致时，宁可整批失败，也不冒险错位写向量。

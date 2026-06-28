@@ -63,6 +63,14 @@ def recommended_action_definitions() -> list[AgentToolDefinition]:
             risk_level="MEDIUM",
             source_type="ACTION_CATALOG",
             requires_confirmation=True,
+            input_schema=object_schema(
+                {
+                    "kbCode": {"type": "string"},
+                    "taskId": {"type": "integer"},
+                    "documentCode": {"type": "string"},
+                },
+                [],
+            ),
         ),
         tool_definition(
             "embedding.rebuild.submit",
@@ -71,6 +79,10 @@ def recommended_action_definitions() -> list[AgentToolDefinition]:
             risk_level="MEDIUM",
             source_type="ACTION_CATALOG",
             requires_confirmation=True,
+            input_schema=object_schema(
+                {"kbCode": {"type": "string"}},
+                [],
+            ),
         ),
     ]
 

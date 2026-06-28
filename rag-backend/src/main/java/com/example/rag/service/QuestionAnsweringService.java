@@ -470,9 +470,11 @@ public class QuestionAnsweringService {
         return fused.values().stream()
                 .peek(candidate -> candidate.setFusedScore(computeRrfScore(candidate.getDenseRank(), candidate.getKeywordRank(), fusionK)))
                 .sorted(Comparator
-                        .comparingDouble(FusedChunkCandidate::getFusedScore).reversed()
-                        .thenComparing(FusedChunkCandidate::getDenseRank, Comparator.nullsLast(Integer::compareTo))
-                        .thenComparing(FusedChunkCandidate::getKeywordRank, Comparator.nullsLast(Integer::compareTo))
+                        .comparingDouble((FusedChunkCandidate candidate) -> candidate.getFusedScore()).reversed()
+                        .thenComparing(candidate -> candidate.getDenseRank(),
+                                Comparator.nullsLast((left, right) -> Integer.compare(left, right)))
+                        .thenComparing(candidate -> candidate.getKeywordRank(),
+                                Comparator.nullsLast((left, right) -> Integer.compare(left, right)))
                         .thenComparing(candidate -> candidate.getCandidate().getId()))
                 .limit(topK)
                 .map(candidate -> toRetrievedChunkResponse(candidate.getCandidate(), candidate.getFusedScore()))

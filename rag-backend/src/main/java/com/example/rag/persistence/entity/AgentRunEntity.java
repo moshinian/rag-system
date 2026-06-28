@@ -47,6 +47,9 @@ public class AgentRunEntity {
     @TableField("finished_at")
     private OffsetDateTime finishedAt;
 
+    @TableField("runtime_heartbeat_at")
+    private OffsetDateTime runtimeHeartbeatAt;
+
     @TableField(value = "created_at", fill = FieldFill.INSERT)
     private OffsetDateTime createdAt;
 
