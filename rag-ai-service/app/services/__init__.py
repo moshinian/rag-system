@@ -1,1 +1,1 @@
-# Service package.
+# 应用服务包。

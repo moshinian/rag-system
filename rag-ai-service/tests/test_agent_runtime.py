@@ -1,7 +1,8 @@
+import asyncio
 import json
 
+import httpx
 import pytest
-from fastapi.testclient import TestClient
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, ToolMessage
 
@@ -9,14 +10,24 @@ from app.agent.graph import AgentFinalAnswer
 from app.agent.runtime import AgentRuntime, _default_tool_client, get_agent_runtime
 from app.agent.state import AgentRuntimeRequest, AgentToolDefinition
 from app.agent.tools import AgentToolExecution, McpAgentToolClient
+from app.agent.tools.mcp_client import _extract_structured_content
 from app.core.config import Settings
 from app.main import create_app
 
 
-def build_client(runtime: AgentRuntime) -> TestClient:
+def build_app(runtime: AgentRuntime):
     app = create_app()
     app.dependency_overrides[get_agent_runtime] = lambda: runtime
-    return TestClient(app)
+    return app
+
+
+async def request(app, method: str, url: str, **kwargs):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        sender = getattr(client, method.lower())
+        response = await sender(url, **kwargs)
+        await response.aread()
+        return response
 
 
 def test_agent_run_uses_langgraph_main_path_structured_final_answer():
@@ -26,16 +37,20 @@ def test_agent_run_uses_langgraph_main_path_structured_final_answer():
                 _final_answer_message("默认智能图执行完成。"),
             ]),
     )
-    client = build_client(runtime)
+    app = build_app(runtime)
 
-    response = client.post(
-        "/v1/agent/runs",
-        headers={"X-Request-Id": "REQ-AGENT-1"},
-        json={
-            "runCode": "AR-test",
-            "kbCode": "day20-cn-kb",
-            "goal": "检查这个知识库状态",
-        },
+    response = asyncio.run(
+        request(
+            app,
+            "POST",
+            "/v1/agent/runs",
+            headers={"X-Request-Id": "REQ-AGENT-1"},
+            json={
+                "runCode": "AR-test",
+                "kbCode": "day20-cn-kb",
+                "goal": "检查这个知识库状态",
+            },
+        )
     )
 
     assert response.status_code == 200
@@ -186,6 +201,45 @@ def test_langgraph_main_path_can_use_multiple_mcp_tools_before_final_answer():
     assert "未执行任何写操作" in response.summary
 
 
+def test_langgraph_main_path_handles_multiple_tool_calls_in_one_ai_message():
+    chat_model = StrictToolProtocolFakeModel([
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "kb_readiness_check",
+                    "args": {"kbCode": "day20-cn-kb"},
+                    "id": "call-readiness",
+                },
+                {
+                    "name": "retrieval_config_inspect",
+                    "args": {},
+                    "id": "call-config",
+                },
+            ],
+        ),
+        _final_answer_message("同一轮多个工具调用已完成，未执行任何写操作。"),
+    ])
+    runtime = AgentRuntime(
+        tool_client=TestToolClient(),
+        chat_model=chat_model,
+    )
+    request = AgentRuntimeRequest(
+        runCode="AR-test",
+        kbCode="day20-cn-kb",
+        goal="同时检查 readiness 和检索配置",
+    )
+
+    response = runtime.run(request)
+
+    assert response.status == "SUCCEEDED"
+    tool_steps = [step.tool_name for step in response.steps if step.step_type == "TOOL_CALL"]
+    assert tool_steps == ["kb.readiness.check", "retrieval.config.inspect"]
+    second_invocation_messages = chat_model.invocations[1]
+    tool_messages = [message for message in second_invocation_messages if isinstance(message, ToolMessage)]
+    assert [message.tool_call_id for message in tool_messages] == ["call-readiness", "call-config"]
+
+
 def test_langgraph_main_path_turns_write_intent_into_recommended_action():
     runtime = AgentRuntime(
         tool_client=TestToolClient(),
@@ -216,6 +270,41 @@ def test_langgraph_main_path_turns_write_intent_into_recommended_action():
     assert response.recommended_actions[0].risk_level == "MEDIUM"
     assert response.recommended_actions[0].requires_confirmation is True
     assert any(step.node_name == "create_recommended_action" for step in response.steps)
+
+
+def test_langgraph_main_path_rejects_mixed_readonly_and_action_calls():
+    runtime = AgentRuntime(
+        tool_client=TestToolClient(),
+        chat_model=ToolCallingFakeChatModel(responses=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "kb_readiness_check",
+                        "args": {"kbCode": "day20-cn-kb"},
+                        "id": "call-readiness",
+                    },
+                    {
+                        "name": "request_embedding_rebuild_submit",
+                        "args": {"kbCode": "day20-cn-kb"},
+                        "id": "action-1",
+                    },
+                ],
+            )
+        ]),
+    )
+    request = AgentRuntimeRequest(
+        runCode="AR-test",
+        kbCode="day20-cn-kb",
+        goal="检查后必要时提交重嵌入",
+    )
+
+    response = runtime.run(request)
+
+    assert response.status == "FAILED"
+    assert "must be separated" in response.error_message
+    assert response.recommended_actions == []
+    assert not any(step.step_type == "TOOL_CALL" for step in response.steps)
 
 
 def test_langgraph_main_path_fails_when_tool_call_fails():
@@ -264,6 +353,33 @@ def test_langchain_structured_output_shape_can_return_final_answer_without_repla
     assert response.summary == "结构化输出完成。"
     assert [step.node_name for step in response.steps] == ["agent_model"]
     assert response.steps[0].step_type == "LLM_DECISION"
+
+
+def test_agent_model_prompt_uses_chinese_runtime_instructions():
+    chat_model = StructuredOutputFakeModel({"structured_response": {"summary": "中文 prompt 检查完成。"}})
+    runtime = AgentRuntime(
+        tool_client=TestToolClient(),
+        chat_model=chat_model,
+    )
+    request = AgentRuntimeRequest(
+        runCode="AR-prompt-cn",
+        kbCode="day20-cn-kb",
+        goal="检查这个知识库状态",
+        question="为什么不能问答？",
+    )
+
+    response = runtime.run(request)
+
+    assert response.status == "SUCCEEDED"
+    system_prompt = chat_model.messages[0].content
+    user_prompt = chat_model.messages[1].content
+    assert "单 Agent RAG 运维工具调用助手" in system_prompt
+    assert "不得暴露思维链" in system_prompt
+    assert "通过 request_* 工具发起" in system_prompt
+    assert "You are a single RAG operations" not in system_prompt
+    assert "目标: 检查这个知识库状态" in user_prompt
+    assert "知识库编码: day20-cn-kb" in user_prompt
+    assert "问题: 为什么不能问答？" in user_prompt
 
 
 def test_execute_readonly_tool_passes_model_arguments_to_tool_client():
@@ -511,6 +627,24 @@ def test_mcp_agent_tool_client_execute_uses_langchain_tool_and_parses_structured
     }
 
 
+def test_mcp_structured_content_fallback_parses_dict_artifact_and_json_content():
+    assert _extract_structured_content(
+        ToolMessage(
+            content="",
+            artifact={"structuredContent": {"questionAnsweringReady": True}},
+            tool_call_id="call-1",
+            name="kb.readiness.check",
+        )
+    ) == {"questionAnsweringReady": True}
+    assert _extract_structured_content(
+        ToolMessage(
+            content='{"questionAnsweringReady":true}',
+            tool_call_id="call-2",
+            name="kb.readiness.check",
+        )
+    ) == {"questionAnsweringReady": True}
+
+
 def test_default_tool_client_uses_mcp_client(monkeypatch):
     monkeypatch.setattr("app.agent.runtime.get_settings", lambda: Settings(agent_tool_client="mcp"))
 
@@ -533,6 +667,39 @@ class StructuredOutputFakeModel:
     def invoke(self, messages):
         self.messages = messages
         return self.output
+
+
+class StrictToolProtocolFakeModel:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.invocations = []
+
+    def bind_tools(self, tools, **kwargs):
+        self.bound_tools = tools
+        return self
+
+    def invoke(self, messages):
+        self.invocations.append(list(messages))
+        _assert_tool_messages_follow_tool_calls(messages)
+        return self.responses.pop(0)
+
+
+def _assert_tool_messages_follow_tool_calls(messages):
+    for index, message in enumerate(messages):
+        if not isinstance(message, AIMessage):
+            continue
+        tool_calls = [
+            call
+            for call in getattr(message, "tool_calls", None) or []
+            if call.get("name") != AgentFinalAnswer.__name__
+        ]
+        if not tool_calls:
+            continue
+        following = messages[index + 1:index + 1 + len(tool_calls)]
+        assert len(following) == len(tool_calls)
+        for tool_call, tool_message in zip(tool_calls, following):
+            assert isinstance(tool_message, ToolMessage)
+            assert tool_message.tool_call_id == tool_call["id"]
 
 
 def _final_answer_message(summary: str) -> AIMessage:

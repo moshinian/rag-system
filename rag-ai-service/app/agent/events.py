@@ -12,7 +12,7 @@ from app.agent.state import AgentRuntimeEvent, AgentRuntimeEventType
 
 
 class AgentRunCancelled(RuntimeError):
-    """SSE 客户端断开后用于协作终止后续 LangGraph node 的内部异常。"""
+    """SSE 客户端断开后用于协作终止后续 LangGraph 节点的内部异常。"""
 
 
 class AgentEventSink(Protocol):
@@ -77,7 +77,7 @@ class LangGraphStreamEventSink:
         self._cancellation = cancellation
 
     def emit(self, event: AgentRuntimeEvent) -> bool:
-        """在 LangGraph node 内把事件投递给 native custom stream。"""
+        """在 LangGraph node 内把事件投递给原生 custom stream。"""
         if self._cancellation.is_set():
             return False
         writer = get_stream_writer()
@@ -95,7 +95,7 @@ class LangGraphStreamEventSink:
 
 
 class RuntimeEventEmitter:
-    """Generate and emit Java-facing runtime events without exposing graph state."""
+    """生成并输出面向 Java 的 runtime 事件，不暴露 graph 内部状态。"""
 
     def __init__(self, request: Any, sink: AgentEventSink, sequence: RuntimeEventSequence) -> None:
         self._request = request
@@ -103,7 +103,7 @@ class RuntimeEventEmitter:
         self._sequence = sequence
 
     def next_node_invocation_id(self) -> str:
-        """Return a stable correlation id for one logical step."""
+        """为一个逻辑 step 返回稳定的 correlation id。"""
         return self._sequence.next_node_invocation_id()
 
     def emit(
@@ -118,9 +118,10 @@ class RuntimeEventEmitter:
         payload: dict[str, Any] | None = None,
         terminal: bool = False,
     ) -> bool:
-        """Emit one runtime event if the stream is still active."""
+        """在 stream 仍然活跃时输出一条 runtime 事件。"""
         if self._sink.is_cancelled():
             return False
+        # eventId 和 createdAt 由 Python Runtime 生成，Java 负责落库和状态归并。
         event = AgentRuntimeEvent(
             eventId=self._sequence.next_event_id(),
             runCode=self._request.run_code,
@@ -137,11 +138,11 @@ class RuntimeEventEmitter:
         return self._sink.emit(event)
 
     def is_cancelled(self) -> bool:
-        """Return whether the SSE consumer has disconnected."""
+        """返回 SSE 消费端是否已经断开。"""
         return self._sink.is_cancelled()
 
     def raise_if_cancelled(self) -> None:
-        """Raise the internal cancellation sentinel when the stream is closed."""
+        """流关闭后抛出内部取消哨兵异常。"""
         if self.is_cancelled():
             raise AgentRunCancelled("Agent SSE stream was cancelled")
 

@@ -14,7 +14,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
-    """chat completion 请求体。"""
+    """聊天补全请求体。"""
 
     model: str | None = None
     messages: list[ChatMessage] = Field(min_length=1)
@@ -38,7 +38,7 @@ class ChatChoice(BaseModel):
 
 
 class Usage(BaseModel):
-    """chat 接口的最小 token 使用量信息。"""
+    """聊天接口的最小 token 使用量信息。"""
 
     prompt_tokens: int = 0
     completion_tokens: int = 0
@@ -46,7 +46,7 @@ class Usage(BaseModel):
 
 
 class ChatCompletionResponse(BaseModel):
-    """chat completion 响应体。"""
+    """聊天补全响应体。"""
 
     id: str = "chatcmpl-rag-ai-service"
     object: str = "chat.completion"

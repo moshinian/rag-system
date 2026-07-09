@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.lang.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -64,6 +65,21 @@ public class McpInternalController {
     @GetMapping
     public ResponseEntity<Void> get() {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build();
+    }
+
+    /** 接受 MCP client 的 session cleanup，避免 adapter 关闭时产生 500 噪声。 */
+    @DeleteMapping
+    public ResponseEntity<Void> delete(@RequestHeader HttpHeaders headers,
+                                       HttpServletRequest request) {
+        ResponseEntity<Void> transportError = validateDeleteTransport(headers, request);
+        if (transportError != null) {
+            return transportError;
+        }
+        String sessionId = headers.getFirst(SESSION_ID_HEADER);
+        if (sessionId != null && !sessionId.isBlank()) {
+            sessions.remove(sessionId);
+        }
+        return ResponseEntity.noContent().build();
     }
 
     /** 处理单个 JSON-RPC request/notification。 */
@@ -250,6 +266,24 @@ public class McpInternalController {
             if (!PROTOCOL_VERSION.equals(protocolVersion)) {
                 return ResponseEntity.badRequest().body("MCP-Protocol-Version must be " + PROTOCOL_VERSION);
             }
+        }
+        return null;
+    }
+
+    /** DELETE 只做 session cleanup，不要求 JSON body 或 Accept。 */
+    private ResponseEntity<Void> validateDeleteTransport(HttpHeaders headers, HttpServletRequest request) {
+        String expectedToken = ragAgentProperties.getInternalToolToken();
+        String actualToken = headers.getFirst(INTERNAL_TOOL_TOKEN_HEADER);
+        if (expectedToken == null || expectedToken.isBlank() || !expectedToken.equals(actualToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String origin = headers.getFirst(HttpHeaders.ORIGIN);
+        if (origin == null || !ragAgentProperties.getMcpAllowedOrigins().contains(origin)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        String protocolVersion = headers.getFirst(PROTOCOL_VERSION_HEADER);
+        if (!PROTOCOL_VERSION.equals(protocolVersion)) {
+            return ResponseEntity.badRequest().build();
         }
         return null;
     }

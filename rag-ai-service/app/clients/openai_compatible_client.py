@@ -25,7 +25,7 @@ class ProviderTarget:
 
 
 class OpenAiCompatibleProviderClient:
-    """最小 OpenAI-compatible HTTP 客户端，负责超时、重试和错误映射。"""
+    """最小 OpenAI 兼容 HTTP 客户端，负责超时、重试和错误映射。"""
 
     def __init__(self, settings: Settings, *, read_timeout_ms: int | None = None) -> None:
         """根据配置初始化复用型 HTTP 客户端。"""
@@ -119,7 +119,7 @@ def _safe_json(response: httpx.Response) -> dict[str, Any]:
 
 
 def _extract_error_message(payload: dict[str, Any]) -> str | None:
-    """从 OpenAI-compatible 错误结构中提取可展示的 message。"""
+    """从 OpenAI 兼容错误结构中提取可展示的 message。"""
     error = payload.get("error")
     if isinstance(error, dict):
         message = error.get("message")

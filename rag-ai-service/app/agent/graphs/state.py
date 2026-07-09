@@ -11,13 +11,13 @@ from app.agent.tools.catalog import LangChainToolCatalog
 
 
 class AgentGraphState(TypedDict, total=False):
-    """Runtime state owned by the LangGraph graph."""
+    """由 LangGraph graph 持有的 Runtime 状态。"""
 
     request: AgentRuntimeRequest
     tool_client: AgentToolClient
     recorder: AgentRunRecorder
     catalog: LangChainToolCatalog
     messages: list[BaseMessage]
-    pending_tool_call: dict[str, Any] | None
+    pending_tool_calls: list[dict[str, Any]]
     pending_action_call: dict[str, Any] | None
     tool_call_count: int

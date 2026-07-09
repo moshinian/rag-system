@@ -27,6 +27,7 @@ import static com.example.rag.controller.McpInternalController.PROTOCOL_VERSION;
 import static com.example.rag.controller.McpInternalController.PROTOCOL_VERSION_HEADER;
 import static com.example.rag.controller.McpInternalController.SESSION_ID_HEADER;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -58,6 +59,23 @@ class McpInternalControllerTest {
     void getShouldReturnMethodNotAllowedWhenSseUnsupported() throws Exception {
         mockMvc.perform(get("/api/internal/mcp"))
                 .andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    void deleteShouldCleanupSessionWithoutServerError() throws Exception {
+        String sessionId = initializedSession();
+
+        mockMvc.perform(delete("/api/internal/mcp")
+                        .headers(mcpHeaders(sessionId)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/internal/mcp")
+                        .headers(mcpHeaders(sessionId))
+                        .contentType(jsonMediaType())
+                        .content("""
+                                {"jsonrpc":"2.0","id":"list-1","method":"tools/list","params":{}}
+                                """))
+                .andExpect(status().isNotFound());
     }
 
     @Test

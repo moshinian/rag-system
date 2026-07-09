@@ -4,11 +4,12 @@ from typing import Any
 
 
 def validate_arguments(arguments: dict[str, Any], schema: dict[str, Any]) -> None:
-    """Validate the subset of JSON Schema used by current MCP tool arguments."""
+    """校验当前 MCP 工具参数使用到的 JSON Schema 子集。"""
     _validate_object(arguments, schema, "arguments")
 
 
 def _validate_object(arguments: dict[str, Any], schema: dict[str, Any], field_path: str) -> None:
+    """校验 object 类型参数，异常文案保持英文便于调用方稳定解析。"""
     required = schema.get("required", [])
     if isinstance(required, list):
         for name in required:
@@ -28,6 +29,7 @@ def _validate_object(arguments: dict[str, Any], schema: dict[str, Any], field_pa
 
 
 def _validate_value(value: Any, spec: dict[str, Any], field_path: str) -> None:
+    """按 schema type 和数值边界校验单个字段值。"""
     expected_type = spec.get("type")
     if expected_type == "string" and not isinstance(value, str):
         raise ValueError(f"Argument {field_path} must be string")

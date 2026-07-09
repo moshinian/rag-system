@@ -43,7 +43,7 @@ async def create_embeddings(
     response: Response,
     gateway_service: GatewayService = Depends(resolve_gateway_service),
 ) -> EmbeddingResponse:
-    """创建 embedding，并把 requestId 回传给调用方。"""
+    """创建向量化结果，并把 requestId 回传给调用方。"""
     request_id = request.state.request_id
     response.headers["X-Request-Id"] = request_id
     return await gateway_service.create_embeddings(payload, request_id)
@@ -56,7 +56,7 @@ async def create_chat_completion(
     response: Response,
     gateway_service: GatewayService = Depends(resolve_gateway_service),
 ) -> ChatCompletionResponse:
-    """创建 chat completion，并把 requestId 回传给调用方。"""
+    """创建聊天补全，并把 requestId 回传给调用方。"""
     request_id = request.state.request_id
     response.headers["X-Request-Id"] = request_id
     return await gateway_service.create_chat_completion(payload, request_id)

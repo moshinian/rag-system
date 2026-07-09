@@ -1,1 +1,1 @@
-# Model package.
+# API 请求和响应模型包。

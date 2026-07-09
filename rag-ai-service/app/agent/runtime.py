@@ -31,7 +31,7 @@ STREAMING_MODE_LANGGRAPH = "langgraph"
 
 
 class AgentRuntime:
-    """Agent Runtime 入口；主执行路径由 LangGraph graph 承载。"""
+    """Agent Runtime 入口；主执行路径由 LangGraph 图承载。"""
 
     def __init__(
         self,
@@ -40,21 +40,21 @@ class AgentRuntime:
         chat_model: Any | None = None,
         streaming_mode: str | None = None,
     ) -> None:
-        """创建 Runtime，并注入 LangGraph graph。"""
-        # tool_client / graph / chat_model 可注入，便于测试用 fake/mock 隔离外部依赖。
+        """创建 Runtime，并注入 LangGraph 图。"""
+        # 工具客户端、图和聊天模型可注入，便于测试用 fake/mock 隔离外部依赖。
         self._tool_client = tool_client or _default_tool_client()
         self._graph = graph or build_agent_graph(chat_model=chat_model)
         self._streaming_mode = _resolve_streaming_mode(streaming_mode or get_settings().agent_streaming_mode)
 
     def run(self, request: AgentRuntimeRequest) -> AgentRuntimeResponse:
-        """执行一次 Agent run，并把 LangGraph state 收口为 Java 侧协议响应。"""
+        """执行一次 Agent run，并把 LangGraph 状态收口为 Java 侧协议响应。"""
         recorder = AgentRunRecorder(request=request)
         try:
             result = self._graph.invoke(self._initial_state(request, recorder))
             graph_recorder = result.get("recorder", recorder)
             return graph_recorder.to_response()
         except Exception as exc:  # pragma: no cover - defensive guard
-            # Runtime 作为 Java 调用边界，兜底把未预期异常转换成协议内 FAILED。
+            # Runtime 作为 Java 调用边界，兜底把未预期异常转换成协议内失败响应。
             return AgentRuntimeResponse(
                 status="FAILED",
                 summary="Agent Runtime 执行失败。",
@@ -64,14 +64,14 @@ class AgentRuntime:
             )
 
     def stream_sse(self, request: AgentRuntimeRequest) -> Iterator[str]:
-        """执行 LangGraph graph，并按 step 粒度向 Java 输出 SSE。"""
+        """执行 LangGraph 图，并按 step 粒度向 Java 输出 SSE。"""
         if self._streaming_mode == STREAMING_MODE_LANGGRAPH:
             yield from self._stream_sse_with_langgraph_stream(request)
             return
         yield from self._stream_sse_with_recorder_sink(request)
 
     def _stream_sse_with_recorder_sink(self, request: AgentRuntimeRequest) -> Iterator[str]:
-        """使用现有 recorder sink 输出 SSE，作为默认稳定路径。"""
+        """使用现有 recorder 事件接收器输出 SSE，作为默认稳定路径。"""
         event_queue: Queue[AgentRuntimeEvent | None] = Queue()
         cancellation = Event()
         sink = QueueAgentEventSink(event_queue, cancellation)
@@ -79,7 +79,7 @@ class AgentRuntime:
         emitter = RuntimeEventEmitter(request, sink, sequence)
 
         def run_graph() -> None:
-            # terminal 标记只在当前 worker 线程内修改，保证恰好发送一次。
+            # 终态标记只在当前工作线程内修改，保证恰好发送一次。
             terminal_emitted = False
 
             def emit_terminal_once(
@@ -153,7 +153,7 @@ class AgentRuntime:
                         message="Agent Runtime ended without terminal event",
                         payload={"errorMessage": "Agent Runtime ended without terminal event"},
                     )
-                # None 由 worker 直接入队，不经过已取消后拒绝 emit 的 sink。
+                # None 由工作线程直接入队，不经过已取消后拒绝输出的事件接收器。
                 event_queue.put(None)
 
         worker = Thread(
@@ -176,11 +176,11 @@ class AgentRuntime:
                     break
                 yield format_sse(event)
         finally:
-            # StreamingResponse/generator 被关闭时通知 sink 和后续 node 尽快停止。
+            # StreamingResponse/generator 被关闭时通知事件接收器和后续节点尽快停止。
             cancellation.set()
 
     def _stream_sse_with_langgraph_stream(self, request: AgentRuntimeRequest) -> Iterator[str]:
-        """通过 LangGraph native stream 消费 custom/updates，再输出既有 SSE 协议。"""
+        """通过 LangGraph 原生流消费 custom/updates，再输出既有 SSE 协议。"""
         event_queue: Queue[AgentRuntimeEvent | None] = Queue()
         cancellation = Event()
         sequence = RuntimeEventSequence(request.run_code)
@@ -304,14 +304,14 @@ class AgentRuntime:
         request: AgentRuntimeRequest,
         recorder: AgentRunRecorder,
     ) -> dict[str, Any]:
-        """Build the LangGraph input state for one run."""
+        """构造一次 run 的 LangGraph 输入状态。"""
         return {
             "request": request,
             "tool_client": self._tool_client,
             "recorder": recorder,
             "catalog": LangChainToolCatalog(tool_client=self._tool_client, request=request),
             "messages": [],
-            "pending_tool_call": None,
+            "pending_tool_calls": [],
             "pending_action_call": None,
             "tool_call_count": 0,
         }
@@ -337,7 +337,7 @@ def _resolve_streaming_mode(value: str | None) -> str:
 
 
 def _runtime_event_from_stream_chunk(chunk: Any) -> AgentRuntimeEvent | None:
-    """Extract an AgentRuntimeEvent from a LangGraph custom stream chunk."""
+    """从 LangGraph custom stream chunk 中提取 AgentRuntimeEvent。"""
     mode, data = _split_stream_chunk(chunk)
     if mode != "custom" or not isinstance(data, dict):
         return None
@@ -350,7 +350,7 @@ def _runtime_event_from_stream_chunk(chunk: Any) -> AgentRuntimeEvent | None:
 
 
 def _recorder_from_update_chunk(chunk: Any) -> AgentRunRecorder | None:
-    """Track the latest recorder from LangGraph updates without exposing state to Java."""
+    """从 LangGraph updates 中跟踪最新 recorder，不把 graph state 暴露给 Java。"""
     mode, data = _split_stream_chunk(chunk)
     if mode != "updates" or not isinstance(data, dict):
         return None
@@ -361,7 +361,7 @@ def _recorder_from_update_chunk(chunk: Any) -> AgentRunRecorder | None:
 
 
 def _split_stream_chunk(chunk: Any) -> tuple[str | None, Any]:
-    """Normalize LangGraph stream chunks for single or multiple stream modes."""
+    """归一化单 stream mode 或多 stream mode 的 LangGraph chunk。"""
     if isinstance(chunk, tuple) and len(chunk) == 2 and isinstance(chunk[0], str):
         return chunk[0], chunk[1]
     if isinstance(chunk, dict) and isinstance(chunk.get("type"), str):

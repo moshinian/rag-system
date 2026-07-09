@@ -24,7 +24,7 @@ def agent_model_node(
     settings: Settings,
     chat_model: Any | None,
 ):
-    """Create the LangGraph node that performs one LangChain model call."""
+    """创建执行单次 LangChain 模型调用的 LangGraph 节点。"""
 
     def node(state: AgentGraphState) -> AgentGraphState:
         recorder = _recorder(state)
@@ -33,9 +33,11 @@ def agent_model_node(
             catalog = _catalog(state)
             messages = _messages(state)
             model = chat_model or _build_chat_model(settings)
+            # 将 Java 暴露的只读工具、待确认动作工具和最终回答结构统一绑定给模型。
             bound_model = model.bind_tools([*catalog.tools(), AgentFinalAnswer])
             ai_output = bound_model.invoke(messages)
             structured = _structured_final_answer(ai_output)
+            # 兼容支持 structured output 的模型实现：它可能直接返回结构化对象而不是 AIMessage。
             if structured is not None and not isinstance(ai_output, AIMessage):
                 recorder.record_model_update(
                     [],
@@ -44,7 +46,7 @@ def agent_model_node(
                 )
                 return {
                     **state,
-                    "pending_tool_call": None,
+                    "pending_tool_calls": [],
                     "pending_action_call": None,
                 }
 
@@ -59,43 +61,46 @@ def agent_model_node(
                 structured_response=structured,
             )
 
-            pending_call = _first_non_final_tool_call(ai_message)
+            # 最终回答和工具调用互斥；如果已经拿到最终回答，就结束本轮 graph。
+            tool_calls = _non_final_tool_calls(ai_message)
             if structured is not None:
                 return {
                     **state,
                     "messages": messages,
-                    "pending_tool_call": None,
+                    "pending_tool_calls": [],
                     "pending_action_call": None,
                 }
-            if pending_call is None:
+            if not tool_calls:
                 if recorder.summary:
                     return {
                         **state,
                         "messages": messages,
-                        "pending_tool_call": None,
+                        "pending_tool_calls": [],
                         "pending_action_call": None,
                     }
                 raise ValueError("LangChain model did not return a tool call or final answer")
 
-            alias = str(pending_call.get("name") or "")
-            if catalog.is_action_alias(alias):
+            action_calls = [call for call in tool_calls if catalog.is_action_alias(str(call.get("name") or ""))]
+            if action_calls:
+                if len(tool_calls) > 1:
+                    raise ValueError("Read-only tool calls and action request tool calls must be separated")
                 return {
                     **state,
                     "messages": messages,
-                    "pending_tool_call": None,
-                    "pending_action_call": pending_call,
+                    "pending_tool_calls": [],
+                    "pending_action_call": action_calls[0],
                 }
             return {
                 **state,
                 "messages": messages,
-                "pending_tool_call": pending_call,
+                "pending_tool_calls": tool_calls,
                 "pending_action_call": None,
             }
         except Exception as exc:
             recorder.record_node_failure(node_name="agent_model", error_message=str(exc))
             return {
                 **state,
-                "pending_tool_call": None,
+                "pending_tool_calls": [],
                 "pending_action_call": None,
             }
 
@@ -103,83 +108,90 @@ def agent_model_node(
 
 
 def execute_readonly_tool_node(state: AgentGraphState) -> AgentGraphState:
-    """Execute one read-only tool selected by the model."""
+    """执行模型在同一条消息里选择的全部只读工具。"""
     recorder = _recorder(state)
     recorder.ensure_not_cancelled()
-    call = state.get("pending_tool_call")
-    if not call:
+    calls = list(state.get("pending_tool_calls") or [])
+    if not calls:
         return state
 
-    started_at = perf_counter()
     catalog = _catalog(state)
-    alias = str(call.get("name") or "")
-    args = dict(call.get("args") or {})
-    definition = catalog.definition_for_alias(alias)
-    canonical_name = catalog.canonical_name(alias)
     try:
-        if definition is None:
-            raise ValueError(f"Unknown tool: {alias}")
-        if requires_confirmation(definition):
-            raise ValueError(f"Tool requires confirmation and cannot be executed directly: {canonical_name}")
-        count = int(state.get("tool_call_count") or 0) + 1
-        if count > MAX_TOOL_CALLS:
+        previous_count = int(state.get("tool_call_count") or 0)
+        new_count = previous_count + len(calls)
+        if new_count > MAX_TOOL_CALLS:
             raise ValueError(f"Maximum tool call count exceeded: {MAX_TOOL_CALLS}")
 
-        normalized = normalize_tool_arguments(_request(state), args)
-        validate_arguments(normalized.arguments, definition.input_schema)
-        recorder.emit(
-            "TOOL_CALL_STARTED",
-            node_name="execute_readonly_tool",
-            tool_name=canonical_name,
-            status="RUNNING",
-            message=f"{canonical_name} 开始调用",
-            payload={"arguments": normalized.arguments},
-        )
-        execution = _tool_client(state).execute(canonical_name, _request(state), normalized.arguments)
-        output = execution.output if isinstance(execution.output, dict) else {}
-        duration_ms = execution.duration_ms if execution.duration_ms is not None else _elapsed_ms(started_at)
-        recorder.record_tool_execution(
-            tool_name=canonical_name,
-            normalized_input=tool_call_input_payload(normalized),
-            output=output,
-            success=execution.success,
-            duration_ms=duration_ms,
-            error_message=execution.error_message,
-        )
-        if not execution.success:
-            return {
-                **state,
-                "pending_tool_call": None,
-                "pending_action_call": None,
-                "tool_call_count": count,
-            }
+        tool_messages: list[ToolMessage] = []
+        for index, call in enumerate(calls, start=1):
+            started_at = perf_counter()
+            alias = str(call.get("name") or "")
+            args = dict(call.get("args") or {})
+            definition = catalog.definition_for_alias(alias)
+            canonical_name = catalog.canonical_name(alias)
+            if definition is None:
+                raise ValueError(f"Unknown tool: {alias}")
+            if requires_confirmation(definition):
+                raise ValueError(f"Tool requires confirmation and cannot be executed directly: {canonical_name}")
 
-        messages = [
-            *_messages(state),
-            ToolMessage(
-                content=to_json(output),
-                tool_call_id=str(call.get("id") or f"{alias}-{count}"),
-                name=alias,
-            ),
-        ]
+            # 先做 Python 侧轻量校验，Java MCP server 仍然是最终参数校验边界。
+            normalized = normalize_tool_arguments(_request(state), args)
+            validate_arguments(normalized.arguments, definition.input_schema)
+            recorder.emit(
+                "TOOL_CALL_STARTED",
+                node_name="execute_readonly_tool",
+                tool_name=canonical_name,
+                status="RUNNING",
+                message=f"{canonical_name} 开始调用",
+                payload={"arguments": normalized.arguments},
+            )
+            # 工具调用始终通过 AgentToolClient 进入 Java/MCP 边界，不在 Python 内直接操作业务状态。
+            execution = _tool_client(state).execute(canonical_name, _request(state), normalized.arguments)
+            output = execution.output if isinstance(execution.output, dict) else {}
+            duration_ms = execution.duration_ms if execution.duration_ms is not None else _elapsed_ms(started_at)
+            recorder.record_tool_execution(
+                tool_name=canonical_name,
+                normalized_input=tool_call_input_payload(normalized),
+                output=output,
+                success=execution.success,
+                duration_ms=duration_ms,
+                error_message=execution.error_message,
+            )
+            if not execution.success:
+                return {
+                    **state,
+                    "pending_tool_calls": [],
+                    "pending_action_call": None,
+                    "tool_call_count": previous_count + index,
+                }
+
+            # 每一个 assistant tool_call 都必须紧跟一条同 id 的 ToolMessage，符合 LangChain/LangGraph 标准消息协议。
+            tool_messages.append(
+                ToolMessage(
+                    content=to_json(output),
+                    tool_call_id=str(call.get("id") or f"{alias}-{previous_count + index}"),
+                    name=alias,
+                )
+            )
+
         return {
             **state,
-            "messages": messages,
-            "pending_tool_call": None,
+            "messages": [*_messages(state), *tool_messages],
+            "pending_tool_calls": [],
             "pending_action_call": None,
-            "tool_call_count": count,
+            "tool_call_count": new_count,
         }
     except Exception as exc:
         recorder.record_node_failure(node_name="execute_readonly_tool", error_message=str(exc))
         return {
             **state,
-            "pending_tool_call": None,
+            "pending_tool_calls": [],
             "pending_action_call": None,
         }
 
 
 def create_recommended_action_node(state: AgentGraphState) -> AgentGraphState:
-    """Convert a model write intent into a Java-confirmed action draft."""
+    """把模型的写操作意图转换成 Java 侧待确认动作草案。"""
     recorder = _recorder(state)
     recorder.ensure_not_cancelled()
     call = state.get("pending_action_call")
@@ -193,6 +205,7 @@ def create_recommended_action_node(state: AgentGraphState) -> AgentGraphState:
     try:
         if definition is None:
             raise ValueError(f"Unknown action request tool: {alias}")
+        # 待确认动作也要先按工具 schema 校验，避免把畸形 payload 传给 Java。
         validate_arguments(args, definition.input_schema)
         action = AgentActionDraft(
             tool_name=definition.name,
@@ -208,18 +221,18 @@ def create_recommended_action_node(state: AgentGraphState) -> AgentGraphState:
         recorder.record_node_failure(node_name="create_recommended_action", error_message=str(exc))
     return {
         **state,
-        "pending_tool_call": None,
+        "pending_tool_calls": [],
         "pending_action_call": None,
     }
 
 
 def final_response_node(state: AgentGraphState) -> AgentGraphState:
-    """Explicit LangGraph endpoint for successful model completion."""
+    """成功生成最终回答后的显式 LangGraph 终点。"""
     return state
 
 
 def _build_chat_model(settings: Settings) -> ChatOpenAI:
-    """Build the OpenAI-compatible LangChain chat model used inside graph nodes."""
+    """构造图节点内使用的 OpenAI 兼容 LangChain chat 模型。"""
     return ChatOpenAI(
         model=settings.agent_planner_model or settings.chat_default_model,
         api_key=settings.chat_api_key or "not-set",
@@ -233,21 +246,21 @@ def _build_chat_model(settings: Settings) -> ChatOpenAI:
 def _system_prompt(state: AgentGraphState) -> str:
     request = _request(state)
     return (
-        "You are a single RAG operations Tool-use Agent running inside a LangGraph node. "
-        "Use the provided tools to inspect the Java RAG system. "
-        "Read-only inspection tools may be called directly. "
-        "Any retry, rebuild, write, or medium/high risk operation must be requested through a request_* tool, "
-        "which creates a Java human-confirmed action draft instead of executing the operation. "
-        "Never execute shell, HTTP, database writes, retries, or rebuilds yourself. "
-        "Do not reveal chain-of-thought. "
-        f"The authoritative runCode is {request.run_code}; the authoritative kbCode is {request.kb_code}."
+        "你是一个运行在 LangGraph 节点中的单 Agent RAG 运维工具调用助手。"
+        "你只能使用已提供的工具诊断 Java RAG 系统。"
+        "只读检查工具可以直接调用。"
+        "任何重试、重建、写操作，或中高风险操作，都必须通过 request_* 工具发起，"
+        "由它生成 Java 人工确认动作草案，不能在 Python Runtime 内直接执行。"
+        "不得自行执行 shell、HTTP、数据库写入、重试或重建。"
+        "不得暴露思维链，只输出面向用户的结论、证据和建议。"
+        f"权威 runCode 是 {request.run_code}；权威 kbCode 是 {request.kb_code}。"
     )
 
 
 def _user_prompt(state: AgentGraphState) -> str:
     request = _request(state)
-    question = f"\nquestion: {request.question}" if request.question else ""
-    return f"goal: {request.goal}\nkbCode: {request.kb_code}{question}"
+    question = f"\n问题: {request.question}" if request.question else ""
+    return f"目标: {request.goal}\n知识库编码: {request.kb_code}{question}"
 
 
 def _messages(state: AgentGraphState) -> list:
@@ -261,7 +274,7 @@ def _messages(state: AgentGraphState) -> list:
 
 
 def _structured_final_answer(output: Any) -> AgentFinalAnswer | None:
-    """Extract final answer from tool-calling or structured-output compatible shapes."""
+    """从工具调用或结构化输出兼容结构中提取最终回答。"""
     if isinstance(output, AgentFinalAnswer):
         return output
     if isinstance(output, dict):
@@ -290,14 +303,17 @@ def _structured_final_answer(output: Any) -> AgentFinalAnswer | None:
     return None
 
 
-def _first_non_final_tool_call(message: AIMessage) -> dict[str, Any] | None:
+def _non_final_tool_calls(message: AIMessage) -> list[dict[str, Any]]:
+    """返回所有非最终回答工具调用。"""
+    result: list[dict[str, Any]] = []
     for call in getattr(message, "tool_calls", None) or []:
         if call.get("name") != AgentFinalAnswer.__name__:
-            return dict(call)
-    return None
+            result.append(dict(call))
+    return result
 
 
 def _catalog(state: AgentGraphState) -> LangChainToolCatalog:
+    """读取当前图状态中的工具目录。"""
     catalog = state.get("catalog")
     if catalog is None:
         raise RuntimeError("Agent graph catalog is missing")
@@ -305,16 +321,20 @@ def _catalog(state: AgentGraphState) -> LangChainToolCatalog:
 
 
 def _request(state: AgentGraphState):
+    """读取 Java 传入的 Runtime 请求。"""
     return state["request"]
 
 
 def _recorder(state: AgentGraphState) -> AgentRunRecorder:
+    """读取当前 run 的事件和 step 记录器。"""
     return state["recorder"]
 
 
 def _tool_client(state: AgentGraphState):
+    """读取当前 graph 使用的工具客户端。"""
     return state["tool_client"]
 
 
 def _elapsed_ms(started_at: float) -> int:
+    """计算从指定起点到现在的毫秒耗时。"""
     return max(0, int((perf_counter() - started_at) * 1000))

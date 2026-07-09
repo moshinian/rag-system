@@ -19,7 +19,7 @@ def build_agent_graph(
     settings: Settings | None = None,
     chat_model: Any | None = None,
 ):
-    """Build the single intelligent Agent graph; LangGraph owns the main path."""
+    """构建单智能 Agent graph；主执行路径由 LangGraph 承载。"""
     resolved_settings = settings or get_settings()
     graph = StateGraph(AgentGraphState)
     graph.add_node("agent_model", agent_model_node(settings=resolved_settings, chat_model=chat_model))
@@ -52,17 +52,19 @@ def build_agent_graph(
 
 
 def _route_after_model(state: AgentGraphState) -> str:
+    """根据模型输出决定进入工具执行、动作草案或最终回答节点。"""
     recorder = state["recorder"]
     if recorder.error_message:
         return "__end__"
     if state.get("pending_action_call"):
         return "create_recommended_action"
-    if state.get("pending_tool_call"):
+    if state.get("pending_tool_calls"):
         return "execute_readonly_tool"
     return "final_response"
 
 
 def _route_after_tool(state: AgentGraphState) -> str:
+    """工具执行成功后回到模型继续决策，失败则直接结束。"""
     if state["recorder"].error_message:
         return "__end__"
     return "agent_model"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from queue import Queue
 from time import perf_counter
 from typing import Any
@@ -174,11 +175,53 @@ def _default_httpx_client_factory(
 def _extract_structured_content(output: Any) -> dict[str, Any] | None:
     """从 LangChain MCP tool 输出中提取 MCP structuredContent。"""
     artifact = getattr(output, "artifact", None)
-    structured = getattr(artifact, "structured_content", None)
+    structured = _structured_content_from_object(artifact)
     if isinstance(structured, dict):
         return structured
+    structured = _structured_content_from_object(output)
+    if isinstance(structured, dict):
+        return structured
+    if isinstance(output, ToolMessage):
+        parsed = _json_object_from_content(output.content)
+        if parsed is not None:
+            return parsed
     if isinstance(output, dict):
         return output
+    return None
+
+
+def _structured_content_from_object(value: Any) -> dict[str, Any] | None:
+    """兼容不同 adapter 版本的 structuredContent 字段命名。"""
+    if value is None:
+        return None
+    for attr in ("structured_content", "structuredContent"):
+        structured = getattr(value, attr, None)
+        if isinstance(structured, dict):
+            return structured
+    if isinstance(value, dict):
+        for key in ("structured_content", "structuredContent"):
+            structured = value.get(key)
+            if isinstance(structured, dict):
+                return structured
+        return value
+    return None
+
+
+def _json_object_from_content(content: Any) -> dict[str, Any] | None:
+    """从 ToolMessage content 中兜底解析 JSON object。"""
+    if isinstance(content, str) and content.strip():
+        try:
+            parsed = json.loads(content)
+        except ValueError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    if isinstance(content, list):
+        for item in content:
+            if isinstance(item, dict):
+                text = item.get("text")
+                parsed = _json_object_from_content(text)
+                if parsed is not None:
+                    return parsed
     return None
 
 

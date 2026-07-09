@@ -66,7 +66,7 @@ class AgentActionDraft(BaseModel):
 
 
 class AgentToolDefinition(BaseModel):
-    """Tool Registry 暴露给 planner 的工具契约。"""
+    """工具注册表暴露给 planner 的工具契约。"""
 
     model_config = ConfigDict(populate_by_name=True)
 

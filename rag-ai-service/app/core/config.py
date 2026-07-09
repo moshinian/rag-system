@@ -13,21 +13,21 @@ class Settings(BaseSettings):
     service_name: str = "rag-ai-service"
     service_version: str = "0.1.0"
 
-    # embedding 能力的上游接入配置。
+    # 向量化能力的上游接入配置。
     embedding_provider: str = "aliyun-bailian-openai-compatible"
     embedding_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     embedding_api_key: str = Field(default="", validation_alias="EMBEDDING_API_KEY")
     embedding_default_model: str = "text-embedding-v4"
     embedding_path: str = "/embeddings"
 
-    # chat 能力的上游接入配置。
+    # 聊天补全能力的上游接入配置。
     chat_provider: str = "deepseek-openai-compatible"
     chat_base_url: str = "https://api.deepseek.com"
     chat_api_key: str = Field(default="", validation_alias="CHAT_API_KEY")
     chat_default_model: str = "deepseek-v4-pro"
     chat_path: str = "/chat/completions"
 
-    # provider-specific 兼容变量，避免本地沿用旧 .env 时出现“有 key 但没接上”的问题。
+    # provider 专属兼容变量，避免本地沿用旧 .env 时出现“有 key 但没接上”的问题。
     dashscope_api_key: str = Field(default="", validation_alias="DASHSCOPE_API_KEY", exclude=True)
     deepseek_api_key: str = Field(default="", validation_alias="DEEPSEEK_API_KEY", exclude=True)
     openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY", exclude=True)
@@ -36,13 +36,13 @@ class Settings(BaseSettings):
     http_connect_timeout_ms: int = 5000
     http_read_timeout_ms: int = 30000
 
-    # Agent Runtime 调 Java MCP tools capability 的配置。
+    # Agent Runtime 调用 Java MCP 工具能力的配置。
     agent_tool_client: str = "mcp"
-    # Agent planner 唯一使用真实 LLM；失败时 run 明确 FAILED，不做规则型 fallback。
+    # Agent 规划器唯一使用真实大模型；失败时 run 明确 FAILED，不做规则型 fallback。
     agent_planner_model: str = ""
     agent_planner_temperature: float = 0
     agent_planner_timeout_ms: int = 30000
-    # recorder 为默认稳定路径；langgraph 启用 native custom/updates stream adapter。
+    # recorder 为默认稳定路径；langgraph 启用原生 custom/updates 流适配器。
     agent_streaming_mode: str = "recorder"
     mcp_tool_base_url: str = "http://127.0.0.1:8080"
     mcp_tool_endpoint: str = "/api/internal/mcp"
