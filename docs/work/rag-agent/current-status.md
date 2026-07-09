@@ -447,9 +447,9 @@
    - 智能主循环执行 `mcp.repo.status.inspect -> cli.git.status -> FINAL_ANSWER`。
    - run `AR-327300621860474881` 返回 `SUCCEEDED`，无 recommended actions。
 
-## 当前未实现
+## 当前未默认启用 / 未实现
 
-1. LangGraph streaming 尚未替换当前 `QueueAgentEventSink` / Java SSE 映射层。
+1. LangGraph native streaming adapter 已在 Python Runtime 内实现，可通过 `agent_streaming_mode=langgraph` 启用；默认仍使用当前 `QueueAgentEventSink` 稳定路径，Java SSE 映射层不变。
 2. LangGraph interrupt/checkpointer 尚未接入；recommended action 仍由 Java action 表和确认 API 作为权威状态。
 3. 前端对 `qa.retrieve.probe` 仍复用 step `outputJson` 展示，尚未做专门 Dense / Hybrid 对比组件。
 4. `reembedRequired` 场景已有测试闭环，但真实演示仍需要准备确定性数据，确保 readiness 返回 `reembedRequired=true`。
@@ -468,11 +468,19 @@
 
 1. 按第 3 周 Day 21 整理固定演示问题、期望 timeline 和面试材料。
 2. 准备 `reembedRequired=true` 和 `FAILED indexing task` 的确定性演示数据。
-3. 后续设计 LangGraph streaming、interrupt 和 checkpointer 与 Java AgentRun/Action 权威状态的映射。
+3. 后续在真实三端联调中灰度验证 `agent_streaming_mode=langgraph`，确认事件顺序和 Java 落库补发完全兼容后再考虑切默认。
+4. 后续仅在需要“确认后回到同一 graph 继续执行”时，设计 LangGraph interrupt/checkpointer 与 Java AgentRun/Action 权威状态的映射。
 
 ## 已验证
 
 本轮将 Python Agent 主循环纠偏为 LangGraph graph 后已验证：
+
+1. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过：16 passed。
+2. `./.venv/bin/python -m pytest rag-ai-service/tests` 已通过：24 passed, 1 skipped。
+3. 已补充 LangGraph native `custom/updates` stream adapter 单测，确认仍输出既有 `AgentRuntimeEvent` SSE 协议。
+4. 已补充 LangChain structured-output 兼容形状单测，确认不通过 LangChain `create_agent` 接管主循环。
+
+历史验证记录：
 
 1. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过：14 passed。
 2. `./.venv/bin/python -m pytest rag-ai-service/tests` 已通过：22 passed, 1 skipped。
@@ -480,8 +488,6 @@
 4. `mvn -q -pl rag-backend test` 已通过。
 5. `cd rag-frontend && npm run build` 已通过。
 6. `git diff --check` 已通过。
-
-历史验证记录：
 
 1. `mvn -q -pl rag-backend -DskipTests compile` 已通过。
 2. `./.venv/bin/python -m py_compile rag-ai-service/app/agent/__init__.py rag-ai-service/app/agent/state.py` 已通过。

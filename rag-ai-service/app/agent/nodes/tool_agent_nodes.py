@@ -34,12 +34,25 @@ def agent_model_node(
             messages = _messages(state)
             model = chat_model or _build_chat_model(settings)
             bound_model = model.bind_tools([*catalog.tools(), AgentFinalAnswer])
-            ai_message = bound_model.invoke(messages)
+            ai_output = bound_model.invoke(messages)
+            structured = _structured_final_answer(ai_output)
+            if structured is not None and not isinstance(ai_output, AIMessage):
+                recorder.record_model_update(
+                    [],
+                    alias_to_canonical=catalog.alias_to_canonical,
+                    structured_response=structured,
+                )
+                return {
+                    **state,
+                    "pending_tool_call": None,
+                    "pending_action_call": None,
+                }
+
+            ai_message = ai_output
             if not isinstance(ai_message, AIMessage):
                 raise ValueError("LangChain model did not return an AIMessage")
 
             messages = [*messages, ai_message]
-            structured = _structured_final_answer(ai_message)
             recorder.record_model_update(
                 [ai_message],
                 alias_to_canonical=catalog.alias_to_canonical,
@@ -247,8 +260,31 @@ def _messages(state: AgentGraphState) -> list:
     ]
 
 
-def _structured_final_answer(message: AIMessage) -> AgentFinalAnswer | None:
-    for call in getattr(message, "tool_calls", None) or []:
+def _structured_final_answer(output: Any) -> AgentFinalAnswer | None:
+    """Extract final answer from tool-calling or structured-output compatible shapes."""
+    if isinstance(output, AgentFinalAnswer):
+        return output
+    if isinstance(output, dict):
+        candidate = output.get("structured_response") or output.get("structuredResponse") or output
+        if isinstance(candidate, AgentFinalAnswer):
+            return candidate
+        if isinstance(candidate, dict) and "summary" in candidate:
+            return AgentFinalAnswer.model_validate(candidate)
+    for attr in ("structured_response", "structuredResponse"):
+        candidate = getattr(output, attr, None)
+        if isinstance(candidate, AgentFinalAnswer):
+            return candidate
+        if isinstance(candidate, dict) and "summary" in candidate:
+            return AgentFinalAnswer.model_validate(candidate)
+    for container in (getattr(output, "additional_kwargs", None), getattr(output, "response_metadata", None)):
+        if not isinstance(container, dict):
+            continue
+        candidate = container.get("structured_response") or container.get("structuredResponse")
+        if isinstance(candidate, AgentFinalAnswer):
+            return candidate
+        if isinstance(candidate, dict) and "summary" in candidate:
+            return AgentFinalAnswer.model_validate(candidate)
+    for call in getattr(output, "tool_calls", None) or []:
         if call.get("name") == AgentFinalAnswer.__name__:
             return AgentFinalAnswer.model_validate(call.get("args") or {})
     return None

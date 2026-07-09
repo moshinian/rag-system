@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     agent_planner_model: str = ""
     agent_planner_temperature: float = 0
     agent_planner_timeout_ms: int = 30000
+    # recorder 为默认稳定路径；langgraph 启用 native custom/updates stream adapter。
+    agent_streaming_mode: str = "recorder"
     mcp_tool_base_url: str = "http://127.0.0.1:8080"
     mcp_tool_endpoint: str = "/api/internal/mcp"
     mcp_tool_token: str = "dev-agent-tool-token"

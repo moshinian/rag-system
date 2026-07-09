@@ -6,6 +6,8 @@ from queue import Queue
 from threading import Event, Lock
 from typing import Any, Protocol
 
+from langgraph.config import get_stream_writer
+
 from app.agent.state import AgentRuntimeEvent, AgentRuntimeEventType
 
 
@@ -65,6 +67,30 @@ class QueueAgentEventSink:
 
     def is_cancelled(self) -> bool:
         """返回 generator 是否已通知取消。"""
+        return self._cancellation.is_set()
+
+
+class LangGraphStreamEventSink:
+    """把 Runtime 事件写入 LangGraph custom stream。"""
+
+    def __init__(self, cancellation: Event) -> None:
+        self._cancellation = cancellation
+
+    def emit(self, event: AgentRuntimeEvent) -> bool:
+        """在 LangGraph node 内把事件投递给 native custom stream。"""
+        if self._cancellation.is_set():
+            return False
+        writer = get_stream_writer()
+        writer(
+            {
+                "type": "agent_runtime_event",
+                "event": event.model_dump(by_alias=True),
+            }
+        )
+        return True
+
+    def is_cancelled(self) -> bool:
+        """返回 graph stream 是否已取消。"""
         return self._cancellation.is_set()
 
 

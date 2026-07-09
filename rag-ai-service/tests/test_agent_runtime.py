@@ -99,6 +99,50 @@ def test_agent_stream_maps_langgraph_model_and_tool_nodes_to_runtime_events():
     assert len({event["nodeInvocationId"] for event in step_events}) == 1
 
 
+def test_agent_stream_can_use_langgraph_native_stream_adapter():
+    runtime = AgentRuntime(
+        tool_client=TestToolClient(),
+        chat_model=ToolCallingFakeChatModel(responses=[
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "kb_readiness_check",
+                            "args": {"kbCode": "day20-cn-kb"},
+                            "id": "call-1",
+                        }
+                    ],
+                ),
+                _final_answer_message("native stream 检查完成。"),
+            ]),
+        streaming_mode="langgraph",
+    )
+    request = AgentRuntimeRequest(
+        runCode="AR-native-stream",
+        kbCode="day20-cn-kb",
+        goal="诊断这个知识库为什么不能问答",
+    )
+
+    events = _runtime_events(runtime.stream_sse(request))
+
+    assert events[0]["type"] == "RUN_STARTED"
+    assert events[0]["payload"]["streamingMode"] == "langgraph"
+    assert [event["type"] for event in events if event["terminal"]] == ["RUN_COMPLETED"]
+    assert any(
+        event["type"] == "PLANNER_DECISION"
+        and event["payload"]["toolCalls"][0]["toolName"] == "kb.readiness.check"
+        for event in events
+    )
+    assert any(
+        event["type"] == "TOOL_CALL_COMPLETED" and event["toolName"] == "kb.readiness.check"
+        for event in events
+    )
+    assert any(
+        event["type"] == "STEP_COMPLETED" and event["nodeName"] == "execute_readonly_tool"
+        for event in events
+    )
+
+
 def test_langgraph_main_path_can_use_multiple_mcp_tools_before_final_answer():
     runtime = AgentRuntime(
         tool_client=TestToolClient(),
@@ -201,6 +245,25 @@ def test_langgraph_main_path_fails_when_tool_call_fails():
     assert response.status == "FAILED"
     assert "backend unavailable" in response.error_message
     assert any(step.status == "FAILED" and step.step_type == "TOOL_CALL" for step in response.steps)
+
+
+def test_langchain_structured_output_shape_can_return_final_answer_without_replacing_graph():
+    runtime = AgentRuntime(
+        tool_client=TestToolClient(),
+        chat_model=StructuredOutputFakeModel({"structured_response": {"summary": "结构化输出完成。"}}),
+    )
+    request = AgentRuntimeRequest(
+        runCode="AR-structured-output",
+        kbCode="day20-cn-kb",
+        goal="检查这个知识库状态",
+    )
+
+    response = runtime.run(request)
+
+    assert response.status == "SUCCEEDED"
+    assert response.summary == "结构化输出完成。"
+    assert [step.node_name for step in response.steps] == ["agent_model"]
+    assert response.steps[0].step_type == "LLM_DECISION"
 
 
 def test_execute_readonly_tool_passes_model_arguments_to_tool_client():
@@ -457,6 +520,19 @@ def test_default_tool_client_uses_mcp_client(monkeypatch):
 class ToolCallingFakeChatModel(FakeMessagesListChatModel):
     def bind_tools(self, tools, **kwargs):
         return self
+
+
+class StructuredOutputFakeModel:
+    def __init__(self, output):
+        self.output = output
+
+    def bind_tools(self, tools, **kwargs):
+        self.bound_tools = tools
+        return self
+
+    def invoke(self, messages):
+        self.messages = messages
+        return self.output
 
 
 def _final_answer_message(summary: str) -> AIMessage:
