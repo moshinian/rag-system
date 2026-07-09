@@ -2,6 +2,7 @@ package com.example.rag.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.rag.mapper.AgentRunMapper;
+import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.persistence.entity.AgentRunEntity;
 import org.springframework.stereotype.Repository;
 
@@ -44,6 +45,31 @@ public class AgentRunRepository {
         LambdaQueryWrapper<AgentRunEntity> query = new LambdaQueryWrapper<AgentRunEntity>()
                 .eq(AgentRunEntity::getRunCode, runCode);
         return Optional.ofNullable(mapper.selectOne(query));
+    }
+
+    /** 判断知识库下是否存在指定状态的运行记录。 */
+    public boolean existsByKnowledgeBaseIdAndStatus(Long knowledgeBaseId, AgentRunStatus status) {
+        LambdaQueryWrapper<AgentRunEntity> query = new LambdaQueryWrapper<AgentRunEntity>()
+                .eq(AgentRunEntity::getKnowledgeBaseId, knowledgeBaseId)
+                .eq(AgentRunEntity::getStatus, status);
+        return mapper.selectCount(query) > 0;
+    }
+
+    /** 查询知识库下的运行记录编码。 */
+    public List<String> findRunCodesByKnowledgeBaseId(Long knowledgeBaseId) {
+        LambdaQueryWrapper<AgentRunEntity> query = new LambdaQueryWrapper<AgentRunEntity>()
+                .select(AgentRunEntity::getRunCode)
+                .eq(AgentRunEntity::getKnowledgeBaseId, knowledgeBaseId);
+        return mapper.selectList(query).stream()
+                .map(AgentRunEntity::getRunCode)
+                .toList();
+    }
+
+    /** 删除知识库下的运行记录。 */
+    public void deleteByKnowledgeBaseId(Long knowledgeBaseId) {
+        LambdaQueryWrapper<AgentRunEntity> query = new LambdaQueryWrapper<AgentRunEntity>()
+                .eq(AgentRunEntity::getKnowledgeBaseId, knowledgeBaseId);
+        mapper.delete(query);
     }
 
     /** 使用数据库时间更新 Runtime heartbeat，仅 RUNNING run 会被更新。 */

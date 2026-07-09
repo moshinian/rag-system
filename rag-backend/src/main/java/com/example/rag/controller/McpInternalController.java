@@ -42,6 +42,8 @@ public class McpInternalController {
     public static final String INTERNAL_TOOL_TOKEN_HEADER = "X-Agent-Tool-Token";
     public static final String PROTOCOL_VERSION_HEADER = "MCP-Protocol-Version";
     public static final String SESSION_ID_HEADER = "Mcp-Session-Id";
+    public static final String RUNTIME_RUN_CODE_HEADER = "X-Rag-Run-Code";
+    public static final String RUNTIME_OPERATOR_HEADER = "X-Rag-Operator";
     public static final String PROTOCOL_VERSION = "2025-06-18";
 
     private final McpToolRegistry mcpToolRegistry;
@@ -98,7 +100,7 @@ public class McpInternalController {
         }
         return switch (method) {
             case "tools/list" -> handleToolsList(id);
-            case "tools/call" -> handleToolsCall(id, rpc.get("params"));
+            case "tools/call" -> handleToolsCall(id, rpc.get("params"), headers);
             default -> jsonRpcError(id, -32601, "Method not found: " + method);
         };
     }
@@ -123,7 +125,7 @@ public class McpInternalController {
     }
 
     /** 校验并执行一次 tools/call，把业务结果转换成 MCP 协议结果。 */
-    private ResponseEntity<?> handleToolsCall(Object id, Object params) {
+    private ResponseEntity<?> handleToolsCall(Object id, Object params, HttpHeaders headers) {
         if (!(params instanceof Map<?, ?> paramsMap)) {
             return jsonRpcError(id, -32602, "tools/call params must be an object");
         }
@@ -150,7 +152,7 @@ public class McpInternalController {
         }
         Map<String, Object> meta;
         try {
-            meta = optionalObject(paramsMap.get("_meta"), "tools/call params._meta");
+            meta = runtimeMeta(headers, optionalObject(paramsMap.get("_meta"), "tools/call params._meta"));
         } catch (BusinessException ex) {
             return jsonRpcError(id, -32602, ex.getMessage());
         }
@@ -176,6 +178,20 @@ public class McpInternalController {
             throw new BusinessException("arguments.attributes must be an object");
         }
         return new McpToolContext(arguments, meta);
+    }
+
+    /** 合并 MCP _meta 与 LangChain adapter header 透传的 runtime 元数据。 */
+    private Map<String, Object> runtimeMeta(HttpHeaders headers, Map<String, Object> protocolMeta) {
+        Map<String, Object> merged = new LinkedHashMap<>(protocolMeta);
+        String runCode = headers.getFirst(RUNTIME_RUN_CODE_HEADER);
+        if (runCode != null && !runCode.isBlank()) {
+            merged.putIfAbsent("x-rag.runCode", runCode);
+        }
+        String operator = headers.getFirst(RUNTIME_OPERATOR_HEADER);
+        if (operator != null && !operator.isBlank()) {
+            merged.putIfAbsent("x-rag.operator", operator);
+        }
+        return Map.copyOf(merged);
     }
 
     /** 把可选 JSON object 字段归一化为字符串键 Map，缺省值返回空对象。 */

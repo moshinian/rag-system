@@ -152,6 +152,38 @@ class McpInternalControllerTest {
     }
 
     @Test
+    void toolsCallShouldMergeRuntimeHeadersIntoToolContextMeta() throws Exception {
+        String sessionId = initializedSession();
+
+        HttpHeaders headers = mcpHeaders(sessionId);
+        headers.add(McpInternalController.RUNTIME_RUN_CODE_HEADER, "AR-header");
+        headers.add(McpInternalController.RUNTIME_OPERATOR_HEADER, "agent-runtime");
+
+        mockMvc.perform(post("/api/internal/mcp")
+                        .headers(headers)
+                        .contentType(jsonMediaType())
+                        .content("""
+                                {
+                                  "jsonrpc": "2.0",
+                                  "id": "call-headers",
+                                  "method": "tools/call",
+                                  "params": {
+                                    "name": "kb.readiness.check",
+                                    "arguments": {
+                                      "kbCode": "day20-cn-kb"
+                                    }
+                                  }
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.isError").value(false));
+
+        McpToolContext context = executedContext.get();
+        assertThat(context.meta()).containsEntry("x-rag.runCode", "AR-header");
+        assertThat(context.meta()).containsEntry("x-rag.operator", "agent-runtime");
+    }
+
+    @Test
     void unknownToolShouldReturnJsonRpcError() throws Exception {
         String sessionId = initializedSession();
 

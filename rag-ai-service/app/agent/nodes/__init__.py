@@ -1,2 +1,1 @@
-"""LangGraph node functions for Agent workflows."""
-
+"""LangGraph nodes for the Agent Runtime."""

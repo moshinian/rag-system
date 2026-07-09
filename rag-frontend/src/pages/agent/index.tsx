@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { Alert, App, Button, Card, Col, Descriptions, Form, Input, Row, Select, Space, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Col, Descriptions, Form, Input, Row, Space, Tag, Typography } from "antd";
 import { useCallback, useMemo, useState } from "react";
 import { confirmAgentAction, createAgentRun, getAgentRun, rejectAgentAction } from "../../api/agent";
 import { AgentActionCards } from "../../components/agent/agent-action-cards";
@@ -14,13 +14,12 @@ import type { AgentRunViewModel } from "../../components/agent/agent-run-view-mo
 import { ApiErrorAlert } from "../../components/feedback/api-error-alert";
 import { useAgentRunEvents } from "../../hooks/use-agent-run-events";
 import { useCurrentKb } from "../../hooks/use-current-kb";
-import type { AgentAction, AgentRun, AgentRunCreatePayload, AgentRunMode } from "../../types/agent";
+import type { AgentAction, AgentRun, AgentRunCreatePayload } from "../../types/agent";
 import { formatDateTime } from "../../utils/format";
 
 type FormValues = {
   goal: string;
   question?: string;
-  runMode: AgentRunMode;
   createdBy?: string;
 };
 
@@ -120,7 +119,6 @@ export function AgentPage() {
     createMutation.mutate({
       goal: values.goal,
       question: values.question?.trim() || undefined,
-      runMode: values.runMode,
       createdBy: values.createdBy?.trim() || undefined
     });
   }
@@ -140,7 +138,6 @@ export function AgentPage() {
           initialValues={{
             goal: financeRetrievalGoal,
             question: financeRetrievalQuestion,
-            runMode: "INTELLIGENT_TOOL_AGENT",
             createdBy: "frontend"
           }}
           onFinish={submit}
@@ -164,17 +161,6 @@ export function AgentPage() {
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item name="runMode" label="运行模式">
-                <Select
-                  options={[
-                    { label: "智能 Tool-use Agent", value: "INTELLIGENT_TOOL_AGENT" },
-                    { label: "诊断并推荐", value: "DIAGNOSE_AND_RECOMMEND" },
-                    { label: "仅诊断", value: "DIAGNOSE_ONLY" }
-                  ]}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
               <Form.Item name="createdBy" label="创建人">
                 <Input placeholder="frontend" />
               </Form.Item>
@@ -190,8 +176,7 @@ export function AgentPage() {
                     onClick={() =>
                       form.setFieldsValue({
                         goal: financeRetrievalGoal,
-                        question: financeRetrievalQuestion,
-                        runMode: "INTELLIGENT_TOOL_AGENT"
+                        question: financeRetrievalQuestion
                       })
                     }
                   >
@@ -232,7 +217,6 @@ export function AgentPage() {
               <Descriptions.Item label="runCode">{currentRun.runCode}</Descriptions.Item>
               <Descriptions.Item label="知识库">{currentRun.knowledgeBaseCode}</Descriptions.Item>
               <Descriptions.Item label="状态">{renderRunStatus(currentRun.status)}</Descriptions.Item>
-              <Descriptions.Item label="模式">{currentRun.runMode}</Descriptions.Item>
               <Descriptions.Item label="创建人">{currentRun.createdBy}</Descriptions.Item>
               <Descriptions.Item label="创建时间">{formatDateTime(currentRun.createdAt)}</Descriptions.Item>
               <Descriptions.Item label="完成时间">{formatDateTime(currentRun.finishedAt)}</Descriptions.Item>

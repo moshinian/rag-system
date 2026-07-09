@@ -2,16 +2,16 @@
 
 ## 当前结论
 
-`rag-agent` 目前已经完成 Python Runtime 调 Java 真实工具 HTTP API，并通过 `FAILED indexing task` 场景完成端到端联调。
+`rag-agent` 目前已经完成 Python Runtime 通过 LangChain MCP 工具调 Java 真实工具 API，并通过 Agent run 主链路完成 Java / Python / 前端闭环验证。
 
 当前已经明确的方向是：
 
-**基于 LangGraph 的 RAG 运维诊断 Agent。**
+**基于 LangGraph Tool-use graph，并在 node 内使用 LangChain 能力的 RAG 运维诊断 Agent。**
 
 它不是替代现有 RAG 主链路，也不是新增一个泛聊天机器人，而是在已有 RAG 系统上方增加 Agent 编排层：
 
 1. Java 后端继续作为业务权威和 Agent Run 状态中心。
-2. Python `rag-ai-service` 新增 LangGraph Agent Runtime。
+2. Python `rag-ai-service` 使用 LangGraph graph 承载 model/tool loop。
 3. 前端新增 Agent 工作台，展示诊断轨迹、推荐动作和确认执行。
 4. v1 聚焦两个可演示业务场景：`reembedRequired` 和 `FAILED indexing task`。
 
@@ -21,7 +21,7 @@
 
 1. 已确认 Agent 主场景是“RAG 运维诊断 Agent”。
 2. 已确认 Java / Python / 前端三层分工。
-3. 已确认 LangGraph 只负责诊断和推荐，不直接写业务库。
+3. 已确认 Python Agent Runtime 只负责诊断和推荐，不直接写业务库。
 4. 已确认 Java 统一生成 `runCode / stepCode / actionCode`。
 5. 已确认 `WAITING_CONFIRMATION` 是 Java run 状态，不要求 LangGraph 在确认后继续执行。
 6. 已确认 `agent_run / agent_step / agent_action` 三张表作为轨迹和审计模型。
@@ -31,7 +31,6 @@
 
 1. 已新增 Flyway 迁移 `V18__create_agent_tables.sql`，创建 `agent_run / agent_step / agent_action` 三张表。
 2. 已新增 Agent 相关枚举：
-   - `AgentRunMode`
    - `AgentRunStatus`
    - `AgentStepType`
    - `AgentStepStatus`
@@ -90,20 +89,17 @@
 
 1. 已在 `rag-ai-service` 引入 `langgraph` 依赖。
 2. 已新增 Python Agent Runtime：
-   - `app/agent/graph.py`
+   - 早期 `app/agent/graph.py` 已重建为当前统一 LangGraph 智能图 facade
    - `app/agent/runtime.py`
    - `app/agent/tools.py`
-3. 已实现最小 LangGraph 状态图：
-   - `parse_goal`
-   - `system_health_check`
-   - `kb_readiness_check`
-   - `diagnose`
-   - `recommend_actions`
-   - `generate_report`
+3. 早期最小 readiness 固定图已下线，当前 Python Runtime 统一使用 LangGraph Tool-use graph：
+   - LangGraph `agent_model` node 内的 LangChain model update 映射为 `LLM_DECISION`
+   - Java MCP tool 调用映射为 `TOOL_CALL`
+   - request_* action tool 映射为 `ACTION_RECOMMENDED`
 4. 已新增 `POST /v1/agent/runs`。
-5. 已实现 Day 4 可替换工具客户端 `StaticAgentToolClient`，用于在 Java 内部工具 HTTP API 接入前验证 Runtime 形状。
+5. 当时已实现 Day 4 可替换工具客户端 `StaticAgentToolClient`，用于在 Java 内部工具 HTTP API 接入前验证 Runtime 形状；当前已由 MCP tool client / LangChain tool catalog 替代。
 6. 已支持 `reembedRequired=true` 时生成 `embedding.rebuild.submit` action 草案。
-7. 已支持 `DIAGNOSE_ONLY` 跳过写操作推荐。
+7. 旧诊断模式已从当前协议中移除；当前协议不再暴露 run mode。
 8. Python Runtime 继续保持：
    - 不生成 `stepCode / actionCode`
    - 不写业务库
@@ -253,7 +249,6 @@
 4. 页面已支持：
    - 输入诊断目标
    - 输入可选问题
-   - 选择 runMode
    - 填写 createdBy
    - 创建 Agent run
    - 输入 runCode 查询 Agent run
@@ -353,10 +348,10 @@
 4. 工具输出会裁剪 chunk 内容：
    - 保留 `documentCode / documentName / chunkId / chunkIndex / score`
    - 不把完整 chunk content 写入 Agent step
-5. 已扩展 Python `StaticAgentToolClient`：
+5. 当时已扩展 Python `StaticAgentToolClient`，当前已由 MCP tool client / LangChain tool catalog 替代：
    - 支持 `qa.retrieve.probe`
    - 继续只返回工具观察结果，不实现真实检索算法
-6. 已扩展 Python LangGraph：
+6. 当时已扩展 Python LangGraph，当前已由统一 LangGraph 智能图替代：
    - 新增 `qa_retrieve_probe` 节点
    - 位于 `indexing_tasks_scan -> qa_retrieve_probe -> diagnose`
    - 有 question 时执行 probe
@@ -381,11 +376,7 @@
    - 只执行 `AgentToolRegistry` 中注册的工具
    - 只允许 `executionMode = READ_ONLY`
    - 写动作不暴露给 Python Runtime 直接执行
-3. 已新增 Python `JavaAgentToolClient`：
-   - 由 `AGENT_TOOL_CLIENT=java` 启用
-   - 调用 Java 内部工具 HTTP API
-   - 解析 Java `ApiResponse.data.outputJson`
-   - 继续只把工具观察结果交给 LangGraph
+3. 当时已新增 Python `JavaAgentToolClient`；当前 Java 工具统一通过 LangChain MCP adapter 访问。
 4. 已修复本地端到端联调时的代理问题：
    - `httpx` 默认 `trust_env=True` 会让 `127.0.0.1:8080` 走环境代理并返回空 503
    - Java 内部工具 client 已改为 `trust_env=False`
@@ -431,34 +422,35 @@
 ## 第 3 周智能 Tool-use 进度
 
 1. 第 3 周智能 Tool-use Agent 已完成 Day 15-20 的基础骨架：
-   - 新增 `INTELLIGENT_TOOL_AGENT` runMode。
-   - 保留 legacy 固定图入口 `build_readiness_diagnosis_graph()`。
-   - 新增智能图入口 `build_intelligent_tool_agent_graph()`。
-   - AgentState 已显式补入 `tools / messages / decision / observations / tool_call_count`。
+   - 当前已取消 run mode 字段，统一使用智能 Tool-use Agent。
+   - 已移除 legacy 固定图入口 `build_readiness_diagnosis_graph()`。
+   - 当前 Python 主路径已由 LangGraph graph 接管。
+   - `rag-ai-service` 已引入 LangChain 1.x / LangGraph 1.2.x 作为 Agent Runtime 依赖。
+   - 生产 Runtime 默认使用 LangGraph graph；node 内使用 LangChain `ChatOpenAI`、tool binding 和 structured response。
+   - MCP tools discovery 和 execution 已统一使用 LangChain MCP 工具路径。
+   - Python 侧自研 MCP JSON-RPC client 已移除；Agent runtime 元数据通过 LangChain tool interceptor headers 传给 Java。
+   - AgentState 已收口为协议文档模型；运行时状态由 LangGraph `AgentGraphState` 管理。
    - Agent step type 已补入 `LLM_DECISION`，避免把结构化决策误表述为 chain-of-thought。
    - Tool Definition 已升级为 v2，补入 `schemaVersion / description / inputSchema / outputSchema / sourceType / requiresConfirmation / timeoutMs`。
    - Java 已暴露 `GET /api/internal/agent/tools`，供 Python Runtime 发现 Java tools。
-   - Python Runtime 已支持智能模式下的严格 JSON 决策、只读工具循环、recommended action 强制拦截、fake MCP tool 和只读 CLI tool。
+   - Python Runtime 已支持 LangGraph 主循环、只读工具调用、recommended action 强制拦截、fake MCP tool 和只读 CLI tool。
    - Day 18 已补充 unknown tool、arguments schema mismatch、最大工具调用次数等 fake/mock LLM 失败恢复测试。
    - Day 19 已补充 Java 智能模式 recommended action -> `WAITING_CONFIRMATION` 的专项测试。
    - Day 20 已将 fake MCP tool 和只读 CLI tool 推进到 settings 配置化最小 MVP。
 2. 已补齐 Day 20/21 联调前发现的两个缺口：
-   - 前端 `AgentRunMode` 已支持 `INTELLIGENT_TOOL_AGENT`，step type 已支持 `LLM_DECISION`。
-   - `JavaAgentToolClient` 在 `AGENT_TOOL_CLIENT=java` 时可本地执行配置化 fake MCP / CLI 工具，Java 工具仍走后端内部工具 API。
+   - 前端 step type 已支持 `LLM_DECISION`。
+   - 当前 Python 侧通过 LangChain MCP adapter 发现和执行 Java tools。
 3. 已完成一次 frontend -> backend -> ai-service 的真实联调：
    - 前端 dev server 通过 Vite proxy 调 Java。
-   - Java 创建 `INTELLIGENT_TOOL_AGENT` run。
+   - Java 创建 Agent run。
    - Python 拉取 Java Tool Registry definitions，并合并 fake MCP / CLI tools。
    - 智能主循环执行 `mcp.repo.status.inspect -> cli.git.status -> FINAL_ANSWER`。
    - run `AR-327300621860474881` 返回 `SUCCEEDED`，无 recommended actions。
 
 ## 当前未实现
 
-1. 第 3 周还没有接真实 LLM planner，目前智能模式默认使用 deterministic `HeuristicAgentDecisionClient`，测试使用 fake/mock decision client。
-2. MCP/CLI 仍是 MVP 骨架：
-   - MCP 只做可配置 fake tool：默认 `mcp.repo.status.inspect`。
-   - CLI 只做可配置只读模板化 tool：默认 `cli.git.status`，固定执行 `git status --short`。
-   - 尚未接真实 MCP server。
+1. LangGraph streaming 尚未替换当前 `QueueAgentEventSink` / Java SSE 映射层。
+2. LangGraph interrupt/checkpointer 尚未接入；recommended action 仍由 Java action 表和确认 API 作为权威状态。
 3. 前端对 `qa.retrieve.probe` 仍复用 step `outputJson` 展示，尚未做专门 Dense / Hybrid 对比组件。
 4. `reembedRequired` 场景已有测试闭环，但真实演示仍需要准备确定性数据，确保 readiness 返回 `reembedRequired=true`。
 5. `FAILED indexing task` 场景已有测试闭环，但真实演示仍需要准备至少一条 `FAILED` indexing task。
@@ -476,9 +468,20 @@
 
 1. 按第 3 周 Day 21 整理固定演示问题、期望 timeline 和面试材料。
 2. 准备 `reembedRequired=true` 和 `FAILED indexing task` 的确定性演示数据。
-3. 后续接真实 LLM planner，并保留 fake/mock planner 作为确定性测试入口。
+3. 后续设计 LangGraph streaming、interrupt 和 checkpointer 与 Java AgentRun/Action 权威状态的映射。
 
 ## 已验证
+
+本轮将 Python Agent 主循环纠偏为 LangGraph graph 后已验证：
+
+1. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过：14 passed。
+2. `./.venv/bin/python -m pytest rag-ai-service/tests` 已通过：22 passed, 1 skipped。
+3. `mvn -q -pl rag-backend -Dtest=AgentRuntimeStreamingClientTest,AgentRunEventApplierTest,AgentRunServiceTest,AgentControllerTest test` 已通过。
+4. `mvn -q -pl rag-backend test` 已通过。
+5. `cd rag-frontend && npm run build` 已通过。
+6. `git diff --check` 已通过。
+
+历史验证记录：
 
 1. `mvn -q -pl rag-backend -DskipTests compile` 已通过。
 2. `./.venv/bin/python -m py_compile rag-ai-service/app/agent/__init__.py rag-ai-service/app/agent/state.py` 已通过。
@@ -486,7 +489,7 @@
 4. `mvn -q -pl rag-backend -Dtest=AgentToolRegistryTest,SystemHealthAgentToolTest,QaReadinessAgentToolTest test` 已通过。
 5. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过。
 6. `./.venv/bin/python -m pytest rag-ai-service/tests/test_app.py` 已通过。
-7. `./.venv/bin/python -m py_compile rag-ai-service/app/agent/state.py rag-ai-service/app/agent/tools.py rag-ai-service/app/agent/graph.py rag-ai-service/app/agent/runtime.py rag-ai-service/app/api/routes.py` 已通过。
+7. `./.venv/bin/python -m py_compile rag-ai-service/app/agent/state.py rag-ai-service/app/agent/tools.py rag-ai-service/app/agent/runtime.py rag-ai-service/app/api/routes.py` 已通过。
 8. `mvn -q -pl rag-backend -Dtest=AgentRunServiceTest,AgentControllerTest,AgentRuntimeClientTest test` 已通过。
 9. `mvn -q -pl rag-backend -DskipTests compile` 已通过。
 10. `mvn -q -pl rag-backend -Dtest=AgentToolRegistryTest,DocumentsStatusAgentToolTest,IndexingTasksScanAgentToolTest,AgentRunServiceTest,AgentControllerTest,AgentRuntimeClientTest test` 已通过。
@@ -515,19 +518,19 @@
 33. `GET http://127.0.0.1:8080/api/health` 已返回整体 `UP`。
 34. `POST http://127.0.0.1:8080/api/knowledge-bases/finance-kb/agent/runs` 已通过真实链路返回 `WAITING_CONFIRMATION`。
 35. `GET http://127.0.0.1:8080/api/knowledge-bases/finance-kb/agent/runs/AR-325284142981976065` 已确认 run/steps/actions 可从 Java 持久化状态读取。
-36. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 legacy 诊断图和智能 Tool-use Agent 骨架。
+36. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖早期诊断图和智能 Tool-use Agent 骨架。
 37. `mvn -q -pl rag-backend -Dtest=AgentInternalToolControllerTest,AgentToolRegistryTest,SystemHealthAgentToolTest,QaReadinessAgentToolTest test` 已通过，覆盖 Tool Definition v2 查询接口。
 38. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 Day 18 决策校验和失败恢复。
 39. `mvn -q -pl rag-backend -Dtest=AgentRunServiceTest,AgentRunScenarioTest test` 已通过，覆盖 Day 19 智能模式 recommended action 落库边界。
 40. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py` 已通过，覆盖 Day 20 fake MCP / 只读 CLI 配置化 MVP。
-41. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py rag-ai-service/tests/test_app.py` 已通过，覆盖 Python legacy 和 intelligent runtime。
+41. `./.venv/bin/python -m pytest rag-ai-service/tests/test_agent_runtime.py rag-ai-service/tests/test_app.py` 已通过，覆盖 Python Runtime 主路径。
 42. `mvn -q -pl rag-backend -Dtest=AgentRunServiceTest,AgentRunScenarioTest,AgentInternalToolControllerTest test` 已通过，覆盖后端 run/action/internal tools。
 43. `cd rag-frontend && npm run build` 已通过，覆盖前端智能模式类型和构建。
 44. `GET http://127.0.0.1:8001/health` 已返回 `UP`。
 45. `GET http://127.0.0.1:8080/api/health` 已返回 `UP`，其中 PostgreSQL/Redis/AI Gateway/embedding/llm 均为 `UP`。
 46. `GET http://127.0.0.1:5173/` 已返回前端 HTML。
 47. `GET http://127.0.0.1:5173/api/knowledge-bases?pageNo=1&pageSize=1` 已通过 Vite proxy 返回 Java API 数据。
-48. `POST http://127.0.0.1:5173/api/knowledge-bases/day20-cn-kb/agent/runs` 已创建 `INTELLIGENT_TOOL_AGENT` run `AR-327301374603825153`，状态 `SUCCEEDED`，timeline 包含 `mcp.repo.status.inspect` 和 `cli.git.status`。
+48. `POST http://127.0.0.1:5173/api/knowledge-bases/day20-cn-kb/agent/runs` 已创建 Agent run `AR-327301374603825153`，状态 `SUCCEEDED`，timeline 包含 `mcp.repo.status.inspect` 和 `cli.git.status`。
 
 ## 恢复入口
 

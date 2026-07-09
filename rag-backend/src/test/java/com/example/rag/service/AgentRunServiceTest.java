@@ -1,7 +1,6 @@
 package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
-import com.example.rag.model.enums.AgentRunMode;
 import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.request.AgentRunCreateRequest;
 import com.example.rag.model.response.AgentRunResponse;
@@ -84,7 +83,6 @@ class AgentRunServiceTest {
                 new AgentRunCreateRequest(
                         "诊断这个知识库为什么不能问答",
                         "第二百三十八条是什么",
-                        AgentRunMode.INTELLIGENT_TOOL_AGENT,
                         "tester"
                 )
         );
@@ -112,7 +110,7 @@ class AgentRunServiceTest {
 
         AgentRunResponse response = agentRunService.createRun(
                 "day20-cn-kb",
-                new AgentRunCreateRequest("诊断", null, null, null)
+                new AgentRunCreateRequest("诊断", null, null)
         );
 
         assertThat(response.status()).isEqualTo(AgentRunStatus.FAILED);
@@ -127,7 +125,7 @@ class AgentRunServiceTest {
 
         assertThatThrownBy(() -> agentRunService.createRun(
                 "missing-kb",
-                new AgentRunCreateRequest("诊断", null, null, null)
+                new AgentRunCreateRequest("诊断", null, null)
         ))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Knowledge base not found");
@@ -180,7 +178,6 @@ class AgentRunServiceTest {
         entity.setKnowledgeBaseId(knowledgeBaseId);
         entity.setRunCode(runCode);
         entity.setGoal("诊断");
-        entity.setRunMode(AgentRunMode.DIAGNOSE_AND_RECOMMEND);
         entity.setStatus(AgentRunStatus.RUNNING);
         entity.setCreatedBy("system");
         return entity;

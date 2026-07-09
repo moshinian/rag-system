@@ -13,7 +13,7 @@ def _has_chat_api_key(settings: Settings) -> bool:
 
 
 @pytest.mark.skipif(os.getenv("RUN_REAL_LLM_TESTS") != "1", reason="real LLM smoke is opt-in")
-def test_real_llm_planner_can_drive_readiness_probe_and_final_answer():
+def test_real_langgraph_agent_can_drive_readiness_probe_and_final_answer():
     settings = Settings(agent_planner_temperature=0)
     if not _has_chat_api_key(settings):
         pytest.skip("CHAT_API_KEY or compatible provider key is required for real LLM smoke")
@@ -24,12 +24,11 @@ def test_real_llm_planner_can_drive_readiness_probe_and_final_answer():
         runCode="AR-real-llm-smoke",
         kbCode="finance-kb",
         goal=(
-            "请严格按顺序完成：先返回 CALL_TOOL 调用 kb.readiness.check，"
-            "观察成功后返回 CALL_TOOL 调用 qa.retrieve.probe，"
-            "观察成功后返回 FINAL_ANSWER。"
+            "请严格按顺序完成：先调用 kb_readiness_check 工具，"
+            "观察成功后调用 qa_retrieve_probe 工具，"
+            "观察成功后用结构化最终答案总结。"
         ),
         question="结算异常怎么处理？",
-        runMode="INTELLIGENT_TOOL_AGENT",
     )
 
     response = runtime.run(request)

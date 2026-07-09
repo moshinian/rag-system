@@ -1,294 +1,284 @@
 from __future__ import annotations
 
-import time
+from time import perf_counter
+from typing import Any
 
-from pydantic import ValidationError
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_openai import ChatOpenAI
 
-from app.agent.events import emit_runtime_event
 from app.agent.graphs.state import AgentGraphState
-from app.agent.graphs.steps import append_step, summarize_observation, to_json
-from app.agent.planners.validation import tool_by_name, validate_decision
 from app.agent.policies.risk import requires_confirmation
-from app.agent.state import AgentActionDraft, AgentDecision, AgentObservation
+from app.agent.recording import AgentFinalAnswer, AgentRunRecorder
+from app.agent.state import AgentActionDraft
+from app.agent.timeline import to_json
 from app.agent.tools.arguments import normalize_tool_arguments, tool_call_input_payload
-from app.agent.tools.definitions import recommended_action_definitions
+from app.agent.tools.catalog import LangChainToolCatalog
+from app.agent.tools.schema import validate_arguments
+from app.core.config import Settings
+
+MAX_TOOL_CALLS = 8
 
 
-def load_tools(state: AgentGraphState) -> AgentGraphState:
-    """加载当前可见工具，并初始化 planner 消息上下文。"""
-    tools = state["tool_client"].definitions()
-    next_state = dict(state)
-    next_state["tools"] = tools
-    # messages 暂时是最小上下文；接真实 LLM 时可在这里扩展系统约束和历史摘要。
-    next_state["messages"] = [
-        {
-            "role": "system",
-            "content": "You are a single intelligent Tool-use Agent. Return strict AgentDecision JSON only.",
-        },
-        {"role": "user", "content": state["request"].goal},
-    ]
-    return next_state
+def agent_model_node(
+    *,
+    settings: Settings,
+    chat_model: Any | None,
+):
+    """Create the LangGraph node that performs one LangChain model call."""
 
-
-def llm_plan(state: AgentGraphState) -> AgentGraphState:
-    """执行一轮 planner 决策，并强制校验 AgentDecision 协议。"""
-    next_state = dict(state)
-    decision_client = state["decision_client"]
-    last_error: str | None = None
-    attempt_count = 0
-    started_at = time.perf_counter()
-
-    for attempt in range(2):
-        # attemptCount 在进入 attempt 时递增，覆盖模型调用异常、JSON 解析失败和校验失败。
-        attempt_count += 1
+    def node(state: AgentGraphState) -> AgentGraphState:
+        recorder = _recorder(state)
+        recorder.ensure_not_cancelled()
         try:
-            raw_decision = decision_client.decide(next_state)
-            decision = AgentDecision.model_validate_json(raw_decision)
-            # 所有 planner 输出都必须先过工具白名单和参数 schema 校验。
-            validate_decision(decision, state.get("tools", []), state["request"])
-            next_state["decision"] = decision
-            duration_ms = _elapsed_millis(started_at)
-            emit_runtime_event(
-                next_state,
-                "PLANNER_DECISION",
-                status="SUCCEEDED",
-                message="planner 决策完成",
-                payload={
-                    "attempt": attempt_count,
-                    "attemptCount": attempt_count,
-                    "durationMs": duration_ms,
-                    "decision": decision.model_dump(by_alias=True),
-                    "validated": True,
-                },
+            catalog = _catalog(state)
+            messages = _messages(state)
+            model = chat_model or _build_chat_model(settings)
+            bound_model = model.bind_tools([*catalog.tools(), AgentFinalAnswer])
+            ai_message = bound_model.invoke(messages)
+            if not isinstance(ai_message, AIMessage):
+                raise ValueError("LangChain model did not return an AIMessage")
+
+            messages = [*messages, ai_message]
+            structured = _structured_final_answer(ai_message)
+            recorder.record_model_update(
+                [ai_message],
+                alias_to_canonical=catalog.alias_to_canonical,
+                structured_response=structured,
             )
-            return append_step(
-                next_state,
-                "llm_plan",
-                step_type="LLM_DECISION",
-                status="SUCCEEDED",
-                output={
-                    "attempt": attempt + 1,
-                    "attemptCount": attempt_count,
-                    "durationMs": duration_ms,
-                    "decision": decision.model_dump(by_alias=True),
-                    "validated": True,
-                },
-                duration_ms=duration_ms,
-            )
-        except (ValidationError, ValueError) as exc:
-            # 非法 JSON 或非法决策只重试一次，避免 Agent 无限自修复。
-            last_error = str(exc)
-            next_state["planner_error_message"] = last_error
+
+            pending_call = _first_non_final_tool_call(ai_message)
+            if structured is not None:
+                return {
+                    **state,
+                    "messages": messages,
+                    "pending_tool_call": None,
+                    "pending_action_call": None,
+                }
+            if pending_call is None:
+                if recorder.summary:
+                    return {
+                        **state,
+                        "messages": messages,
+                        "pending_tool_call": None,
+                        "pending_action_call": None,
+                    }
+                raise ValueError("LangChain model did not return a tool call or final answer")
+
+            alias = str(pending_call.get("name") or "")
+            if catalog.is_action_alias(alias):
+                return {
+                    **state,
+                    "messages": messages,
+                    "pending_tool_call": None,
+                    "pending_action_call": pending_call,
+                }
+            return {
+                **state,
+                "messages": messages,
+                "pending_tool_call": pending_call,
+                "pending_action_call": None,
+            }
         except Exception as exc:
-            last_error = str(exc)
-            break
+            recorder.record_node_failure(node_name="agent_model", error_message=str(exc))
+            return {
+                **state,
+                "pending_tool_call": None,
+                "pending_action_call": None,
+            }
 
-    next_state["error_message"] = f"Invalid AgentDecision JSON: {last_error}"
-    duration_ms = _elapsed_millis(started_at)
-    # 没有合法 AgentDecision 时不发送 PLANNER_DECISION，避免前端误认为产生了可执行决策。
-    return append_step(
-        next_state,
-        "llm_plan",
-        step_type="LLM_DECISION",
-        status="FAILED",
-        output={
-            "validated": False,
-            "errorSummary": last_error,
-            "attemptCount": attempt_count,
-            "durationMs": duration_ms,
-        },
-        duration_ms=duration_ms,
-        error_message=next_state["error_message"],
-    )
+    return node
 
 
-def _elapsed_millis(started_at: float) -> int:
-    """按单调时钟计算 planner node 总耗时。"""
-    return max(0, int((time.perf_counter() - started_at) * 1000))
-
-
-def route_decision(state: AgentGraphState) -> AgentGraphState:
-    """执行路由前的通用防御校验。"""
-    if state.get("error_message"):
+def execute_readonly_tool_node(state: AgentGraphState) -> AgentGraphState:
+    """Execute one read-only tool selected by the model."""
+    recorder = _recorder(state)
+    recorder.ensure_not_cancelled()
+    call = state.get("pending_tool_call")
+    if not call:
         return state
-    next_state = dict(state)
-    if state.get("decision") is None:
-        next_state["error_message"] = "Missing AgentDecision"
-        return next_state
-    if state["decision"].action == "CALL_TOOL" and int(state.get("tool_call_count") or 0) >= 6:
-        # 工具调用次数上限只拦截继续调用工具；最终回答不能被误判为失败。
-        next_state["error_message"] = "Exceeded max tool call count: 6"
-        return next_state
+
+    started_at = perf_counter()
+    catalog = _catalog(state)
+    alias = str(call.get("name") or "")
+    args = dict(call.get("args") or {})
+    definition = catalog.definition_for_alias(alias)
+    canonical_name = catalog.canonical_name(alias)
+    try:
+        if definition is None:
+            raise ValueError(f"Unknown tool: {alias}")
+        if requires_confirmation(definition):
+            raise ValueError(f"Tool requires confirmation and cannot be executed directly: {canonical_name}")
+        count = int(state.get("tool_call_count") or 0) + 1
+        if count > MAX_TOOL_CALLS:
+            raise ValueError(f"Maximum tool call count exceeded: {MAX_TOOL_CALLS}")
+
+        normalized = normalize_tool_arguments(_request(state), args)
+        validate_arguments(normalized.arguments, definition.input_schema)
+        recorder.emit(
+            "TOOL_CALL_STARTED",
+            node_name="execute_readonly_tool",
+            tool_name=canonical_name,
+            status="RUNNING",
+            message=f"{canonical_name} 开始调用",
+            payload={"arguments": normalized.arguments},
+        )
+        execution = _tool_client(state).execute(canonical_name, _request(state), normalized.arguments)
+        output = execution.output if isinstance(execution.output, dict) else {}
+        duration_ms = execution.duration_ms if execution.duration_ms is not None else _elapsed_ms(started_at)
+        recorder.record_tool_execution(
+            tool_name=canonical_name,
+            normalized_input=tool_call_input_payload(normalized),
+            output=output,
+            success=execution.success,
+            duration_ms=duration_ms,
+            error_message=execution.error_message,
+        )
+        if not execution.success:
+            return {
+                **state,
+                "pending_tool_call": None,
+                "pending_action_call": None,
+                "tool_call_count": count,
+            }
+
+        messages = [
+            *_messages(state),
+            ToolMessage(
+                content=to_json(output),
+                tool_call_id=str(call.get("id") or f"{alias}-{count}"),
+                name=alias,
+            ),
+        ]
+        return {
+            **state,
+            "messages": messages,
+            "pending_tool_call": None,
+            "pending_action_call": None,
+            "tool_call_count": count,
+        }
+    except Exception as exc:
+        recorder.record_node_failure(node_name="execute_readonly_tool", error_message=str(exc))
+        return {
+            **state,
+            "pending_tool_call": None,
+            "pending_action_call": None,
+        }
+
+
+def create_recommended_action_node(state: AgentGraphState) -> AgentGraphState:
+    """Convert a model write intent into a Java-confirmed action draft."""
+    recorder = _recorder(state)
+    recorder.ensure_not_cancelled()
+    call = state.get("pending_action_call")
+    if not call:
+        return state
+
+    catalog = _catalog(state)
+    alias = str(call.get("name") or "")
+    args = dict(call.get("args") or {})
+    definition = catalog.definition_for_alias(alias)
+    try:
+        if definition is None:
+            raise ValueError(f"Unknown action request tool: {alias}")
+        validate_arguments(args, definition.input_schema)
+        action = AgentActionDraft(
+            tool_name=definition.name,
+            title=f"确认执行 {definition.name}",
+            reason=str(args.get("reason") or definition.description),
+            risk_level=definition.risk_level,
+            requires_confirmation=True,
+            action_payload=to_json(args or {"kbCode": _request(state).kb_code}),
+        )
+        output = {"recommendedAction": action.model_dump(by_alias=True)}
+        recorder.record_recommended_action(action=action, output=output)
+    except Exception as exc:
+        recorder.record_node_failure(node_name="create_recommended_action", error_message=str(exc))
+    return {
+        **state,
+        "pending_tool_call": None,
+        "pending_action_call": None,
+    }
+
+
+def final_response_node(state: AgentGraphState) -> AgentGraphState:
+    """Explicit LangGraph endpoint for successful model completion."""
     return state
 
 
-def execute_readonly_tool(state: AgentGraphState) -> AgentGraphState:
-    """执行已通过风险策略的只读工具，并记录 observation。"""
-    decision = state.get("decision")
-    if decision is None or decision.tool_name is None:
-        next_state = dict(state)
-        next_state["error_message"] = "CALL_TOOL decision must include toolName"
-        return next_state
-
-    normalized_arguments = normalize_tool_arguments(state["request"], decision.arguments)
-    emit_runtime_event(
-        state,
-        "TOOL_CALL_STARTED",
-        tool_name=decision.tool_name,
-        status="RUNNING",
-        message=f"{decision.tool_name} 开始调用",
-        payload={"arguments": normalized_arguments.arguments},
-    )
-    execution = state["tool_client"].execute(decision.tool_name, state["request"], normalized_arguments.arguments)
-    raw_output = execution.output if isinstance(execution.output, dict) else {}
-    # observation 是给下一轮 planner 的裁剪后工具反馈，不等同于完整 step output。
-    observation = AgentObservation(
-        toolName=decision.tool_name,
-        success=execution.success,
-        output=raw_output,
-        summary=summarize_observation(raw_output),
-        errorMessage=execution.error_message,
-        durationMs=execution.duration_ms,
-    )
-    tool_results = dict(state.get("tool_results", {}))
-    # tool_results 保留完整输出，便于最终报告或后续节点读取。
-    tool_results[decision.tool_name] = {
-        "success": execution.success,
-        "output": raw_output,
-        "summary": observation.summary,
-        "errorMessage": execution.error_message,
-        "durationMs": execution.duration_ms,
-    }
-
-    next_state = dict(state)
-    next_state["tool_results"] = tool_results
-    next_state["observations"] = [*state.get("observations", []), observation]
-    next_state["tool_call_count"] = int(state.get("tool_call_count") or 0) + 1
-    if not execution.success:
-        next_state["error_message"] = execution.error_message or f"{decision.tool_name} failed"
-
-    emit_runtime_event(
-        next_state,
-        "TOOL_CALL_COMPLETED" if execution.success else "TOOL_CALL_FAILED",
-        tool_name=decision.tool_name,
-        status="SUCCEEDED" if execution.success else "FAILED",
-        message=execution.error_message or f"{decision.tool_name} 调用完成",
-        payload={
-            "success": execution.success,
-            "durationMs": execution.duration_ms,
-            "summary": observation.summary,
-            "errorMessage": execution.error_message,
-        },
-    )
-    emit_runtime_event(
-        next_state,
-        "OBSERVATION_CREATED",
-        tool_name=decision.tool_name,
-        status="SUCCEEDED" if execution.success else "FAILED",
-        message=f"{decision.tool_name} observation 已生成",
-        payload={
-            "success": observation.success,
-            "summary": observation.summary,
-            "durationMs": observation.duration_ms,
-            "errorMessage": observation.error_message,
-        },
-    )
-    return append_step(
-        next_state,
-        "execute_readonly_tool",
-        tool_name=decision.tool_name,
-        step_type="TOOL_CALL",
-        status="SUCCEEDED" if execution.success else "FAILED",
-        input_json=to_json(tool_call_input_payload(normalized_arguments)),
-        output={
-            "raw": raw_output,
-            "summaryForLlm": observation.summary,
-        },
-        duration_ms=execution.duration_ms,
-        error_message=execution.error_message,
+def _build_chat_model(settings: Settings) -> ChatOpenAI:
+    """Build the OpenAI-compatible LangChain chat model used inside graph nodes."""
+    return ChatOpenAI(
+        model=settings.agent_planner_model or settings.chat_default_model,
+        api_key=settings.chat_api_key or "not-set",
+        base_url=settings.chat_base_url.rstrip("/") or None,
+        temperature=settings.agent_planner_temperature,
+        timeout=settings.agent_planner_timeout_ms / 1000,
+        max_retries=2,
     )
 
 
-def create_recommended_action(state: AgentGraphState) -> AgentGraphState:
-    """把高风险/写操作决策转换为待确认 action 草案。"""
-    decision = state.get("decision")
-    if decision is None or decision.tool_name is None:
-        next_state = dict(state)
-        next_state["error_message"] = "REQUEST_CONFIRMATION decision must include toolName"
-        return next_state
-
-    action_definition = tool_by_name(recommended_action_definitions(), decision.tool_name)
-    if action_definition is None:
-        next_state = dict(state)
-        next_state["error_message"] = f"Unknown recommended action: {decision.tool_name}"
-        return next_state
-    risk_level = action_definition.risk_level
-    action = AgentActionDraft(
-        tool_name=decision.tool_name,
-        title=f"确认执行 {decision.tool_name}",
-        reason=decision.reason,
-        risk_level=risk_level,
-        requires_confirmation=True,
-        action_payload=to_json(decision.arguments or {"kbCode": state["request"].kb_code}),
-    )
-    next_state = dict(state)
-    next_state["recommended_actions"] = [*state.get("recommended_actions", []), action]
-    next_state["summary"] = f"Agent 已生成待确认动作：{decision.tool_name}"
-    emit_runtime_event(
-        next_state,
-        "ACTION_RECOMMENDED",
-        tool_name=decision.tool_name,
-        status="PENDING_CONFIRMATION",
-        message=action.title,
-        payload=action.model_dump(by_alias=True),
-    )
-    return append_step(
-        next_state,
-        "create_recommended_action",
-        tool_name=decision.tool_name,
-        step_type="NODE",
-        status="SUCCEEDED",
-        output={"recommendedAction": action.model_dump(by_alias=True)},
+def _system_prompt(state: AgentGraphState) -> str:
+    request = _request(state)
+    return (
+        "You are a single RAG operations Tool-use Agent running inside a LangGraph node. "
+        "Use the provided tools to inspect the Java RAG system. "
+        "Read-only inspection tools may be called directly. "
+        "Any retry, rebuild, write, or medium/high risk operation must be requested through a request_* tool, "
+        "which creates a Java human-confirmed action draft instead of executing the operation. "
+        "Never execute shell, HTTP, database writes, retries, or rebuilds yourself. "
+        "Do not reveal chain-of-thought. "
+        f"The authoritative runCode is {request.run_code}; the authoritative kbCode is {request.kb_code}."
     )
 
 
-def final_report(state: AgentGraphState) -> AgentGraphState:
-    """根据 FINAL_ANSWER 决策生成最终报告。"""
-    decision = state.get("decision")
-    summary = decision.final_answer if decision and decision.final_answer else "智能 Agent 已完成。"
-    next_state = dict(state)
-    next_state["summary"] = summary
-    return append_step(next_state, "final_report", output={"summary": summary})
+def _user_prompt(state: AgentGraphState) -> str:
+    request = _request(state)
+    question = f"\nquestion: {request.question}" if request.question else ""
+    return f"goal: {request.goal}\nkbCode: {request.kb_code}{question}"
 
 
-def fail_report(state: AgentGraphState) -> AgentGraphState:
-    """把智能图中的错误状态转换为失败 step 和 summary。"""
-    error_message = state.get("error_message") or "智能 Agent 执行失败。"
-    next_state = dict(state)
-    next_state["summary"] = f"智能 Agent 执行失败：{error_message}"
-    next_state["error_message"] = error_message
-    return append_step(next_state, "fail_report", status="FAILED", output={"summary": next_state["summary"]})
+def _messages(state: AgentGraphState) -> list:
+    existing = state.get("messages")
+    if existing:
+        return list(existing)
+    return [
+        SystemMessage(content=_system_prompt(state)),
+        HumanMessage(content=_user_prompt(state)),
+    ]
 
 
-def route_after_decision(state: AgentGraphState) -> str:
-    """根据 planner 决策和风险策略选择下一跳。"""
-    if state.get("error_message"):
-        return "fail_report"
-    decision = state.get("decision")
-    if decision is None:
-        return "fail_report"
-    if decision.action == "FINAL_ANSWER":
-        return "final_report"
-    if decision.action == "REQUEST_CONFIRMATION":
-        return "create_recommended_action"
-    if decision.action == "CALL_TOOL":
-        tool = tool_by_name(state.get("tools", []), decision.tool_name or "")
-        if tool is None:
-            state["error_message"] = f"Unknown toolName: {decision.tool_name}"
-            return "fail_report"
-        if requires_confirmation(tool):
-            # 写操作、中高风险或显式 requiresConfirmation 的工具统一转人工确认。
-            return "create_recommended_action"
-        return "execute_readonly_tool"
-    state["error_message"] = f"Unsupported AgentDecision action: {decision.action}"
-    return "fail_report"
+def _structured_final_answer(message: AIMessage) -> AgentFinalAnswer | None:
+    for call in getattr(message, "tool_calls", None) or []:
+        if call.get("name") == AgentFinalAnswer.__name__:
+            return AgentFinalAnswer.model_validate(call.get("args") or {})
+    return None
+
+
+def _first_non_final_tool_call(message: AIMessage) -> dict[str, Any] | None:
+    for call in getattr(message, "tool_calls", None) or []:
+        if call.get("name") != AgentFinalAnswer.__name__:
+            return dict(call)
+    return None
+
+
+def _catalog(state: AgentGraphState) -> LangChainToolCatalog:
+    catalog = state.get("catalog")
+    if catalog is None:
+        raise RuntimeError("Agent graph catalog is missing")
+    return catalog
+
+
+def _request(state: AgentGraphState):
+    return state["request"]
+
+
+def _recorder(state: AgentGraphState) -> AgentRunRecorder:
+    return state["recorder"]
+
+
+def _tool_client(state: AgentGraphState):
+    return state["tool_client"]
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return max(0, int((perf_counter() - started_at) * 1000))

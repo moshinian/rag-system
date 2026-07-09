@@ -6,6 +6,7 @@ import com.example.rag.model.enums.AgentActionStatus;
 import com.example.rag.persistence.entity.AgentActionEntity;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -60,5 +61,15 @@ public class AgentActionRepository {
                 .eq(AgentActionEntity::getRunCode, runCode)
                 .eq(AgentActionEntity::getStatus, AgentActionStatus.PENDING_CONFIRMATION);
         return mapper.selectCount(query) > 0;
+    }
+
+    /** 按运行编码批量删除推荐动作。 */
+    public void deleteByRunCodes(Collection<String> runCodes) {
+        if (runCodes == null || runCodes.isEmpty()) {
+            return;
+        }
+        LambdaQueryWrapper<AgentActionEntity> query = new LambdaQueryWrapper<AgentActionEntity>()
+                .in(AgentActionEntity::getRunCode, runCodes);
+        mapper.delete(query);
     }
 }

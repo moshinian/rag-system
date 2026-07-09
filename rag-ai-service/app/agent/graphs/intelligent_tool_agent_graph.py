@@ -1,66 +1,68 @@
 from __future__ import annotations
 
-import warnings
+from typing import Any
 
-from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
+from langgraph.graph import END, START, StateGraph
 
-warnings.filterwarnings(
-    "ignore",
-    message="The default value of `allowed_objects` will change in a future version.*",
-    category=LangChainPendingDeprecationWarning,
-    module="langgraph.cache.base",
-)
-
-from langgraph.graph import END, StateGraph
-
-from app.agent.events import traced_node
 from app.agent.graphs.state import AgentGraphState
 from app.agent.nodes.tool_agent_nodes import (
-    create_recommended_action,
-    execute_readonly_tool,
-    fail_report,
-    final_report,
-    llm_plan,
-    load_tools,
-    route_after_decision,
-    route_decision,
+    agent_model_node,
+    create_recommended_action_node,
+    execute_readonly_tool_node,
+    final_response_node,
 )
+from app.core.config import Settings, get_settings
 
 
-def build_intelligent_tool_agent_graph():
-    """构建单 Agent Tool-use 循环图。"""
-    workflow = StateGraph(AgentGraphState)
-    # 图只负责编排节点，具体 planner / 工具 / 风险策略放在独立模块。
-    workflow.add_node("load_tools", traced_node("load_tools", load_tools))
-    workflow.add_node("llm_plan", traced_node("llm_plan", llm_plan))
-    workflow.add_node("route_decision", traced_node("route_decision", route_decision))
-    workflow.add_node(
-        "execute_readonly_tool",
-        traced_node("execute_readonly_tool", execute_readonly_tool),
-    )
-    workflow.add_node(
-        "create_recommended_action",
-        traced_node("create_recommended_action", create_recommended_action),
-    )
-    workflow.add_node("final_report", traced_node("final_report", final_report))
-    workflow.add_node("fail_report", traced_node("fail_report", fail_report))
+def build_agent_graph(
+    *,
+    settings: Settings | None = None,
+    chat_model: Any | None = None,
+):
+    """Build the single intelligent Agent graph; LangGraph owns the main path."""
+    resolved_settings = settings or get_settings()
+    graph = StateGraph(AgentGraphState)
+    graph.add_node("agent_model", agent_model_node(settings=resolved_settings, chat_model=chat_model))
+    graph.add_node("execute_readonly_tool", execute_readonly_tool_node)
+    graph.add_node("create_recommended_action", create_recommended_action_node)
+    graph.add_node("final_response", final_response_node)
 
-    workflow.set_entry_point("load_tools")
-    # planner 决策后由 route_after_decision 分流到工具执行、待确认动作或最终报告。
-    workflow.add_edge("load_tools", "llm_plan")
-    workflow.add_edge("llm_plan", "route_decision")
-    workflow.add_conditional_edges(
-        "route_decision",
-        route_after_decision,
+    graph.add_edge(START, "agent_model")
+    graph.add_conditional_edges(
+        "agent_model",
+        _route_after_model,
         {
             "execute_readonly_tool": "execute_readonly_tool",
             "create_recommended_action": "create_recommended_action",
-            "final_report": "final_report",
-            "fail_report": "fail_report",
+            "final_response": "final_response",
+            "__end__": END,
         },
     )
-    workflow.add_edge("execute_readonly_tool", "llm_plan")
-    workflow.add_edge("create_recommended_action", END)
-    workflow.add_edge("final_report", END)
-    workflow.add_edge("fail_report", END)
-    return workflow.compile()
+    graph.add_conditional_edges(
+        "execute_readonly_tool",
+        _route_after_tool,
+        {
+            "agent_model": "agent_model",
+            "__end__": END,
+        },
+    )
+    graph.add_edge("create_recommended_action", END)
+    graph.add_edge("final_response", END)
+    return graph.compile()
+
+
+def _route_after_model(state: AgentGraphState) -> str:
+    recorder = state["recorder"]
+    if recorder.error_message:
+        return "__end__"
+    if state.get("pending_action_call"):
+        return "create_recommended_action"
+    if state.get("pending_tool_call"):
+        return "execute_readonly_tool"
+    return "final_response"
+
+
+def _route_after_tool(state: AgentGraphState) -> str:
+    if state["recorder"].error_message:
+        return "__end__"
+    return "agent_model"

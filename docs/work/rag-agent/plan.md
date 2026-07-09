@@ -4,15 +4,15 @@
 
 在现有 RAG 系统上方新增一个可审计、可确认、可演示的运维诊断 Agent。
 
-项目同时保留两条 Agent 路线：
+项目当前收口为一条 Agent 路线：
 
-1. **Legacy 固定流程 Agent**：确定性业务工作流，用于 readiness、索引任务、检索探测等固定诊断路径。
-2. **Intelligent Tool-use Agent**：单 Agent、LLM 决策、LangGraph 循环编排，根据工具注册表动态选择 Java / MCP / CLI 工具。
+1. **Intelligent Tool-use Agent**：单 Agent、LLM 决策、LangGraph 主循环，根据工具注册表动态选择 Java / MCP / CLI 工具。
+2. **LangChain node 能力**：在 LangGraph node 内使用模型、messages、tool binding 和 structured output；不使用 LangChain agent 主循环接管编排。
 
 核心边界：
 
 1. Java 是业务权威、run 状态中心和写操作执行方。
-2. Python 是 LangGraph Runtime，只负责工具编排、观察结果整理和推荐动作生成。
+2. Python 是 LangChain / LangGraph Agent Runtime，只负责工具编排、观察结果整理和推荐动作生成。
 3. 前端负责创建 run、展示 timeline、展示 recommended actions、触发 confirm/reject。
 4. Python 不生成 `runCode / stepCode / actionCode`，这些由 Java 统一生成并落库。
 5. 写操作、`MEDIUM/HIGH` 风险工具、`requiresConfirmation=true` 工具必须进入 human-in-the-loop。
@@ -42,12 +42,13 @@ runStatus 规则：
 职责：
 
 1. 承载 LangGraph Runtime。
-2. 保留 legacy graph：`build_readiness_diagnosis_graph()`。
-3. 新增 intelligent graph：`build_intelligent_tool_agent_graph()`。
-4. 从 Tool Registry 读取工具定义。
-5. 执行只读工具，写回 observations。
-6. 强制拦截高风险或写工具，转成 recommended action。
-7. 每次 LLM 决策落 `LLM_DECISION` step，每次工具调用落 `TOOL_CALL` step。
+2. 使用 LangGraph graph/node/edge 接管 model/tool loop。
+3. 不再保留 readiness legacy 固定图。
+4. 通过 LangChain structured response 生成最终答案。
+5. 通过 LangChain MCP adapter 统一读取工具定义和执行 tools/call。
+6. 将 Java MCP 工具包装为 model-safe LangChain tools，并映射回 canonical toolName。
+7. 将写操作意图转成本地 request_* 工具，生成 recommended action，不直接执行。
+8. 将 LangChain model/tool updates 映射为现有 `LLM_DECISION / TOOL_CALL` timeline。
 
 Python 不做：
 
@@ -61,7 +62,7 @@ Python 不做：
 职责：
 
 1. Agent 工作台创建 run。
-2. 支持 `DIAGNOSE_ONLY / DIAGNOSE_AND_RECOMMEND / INTELLIGENT_TOOL_AGENT`。
+2. 统一使用智能 Tool-use Agent，不再选择或传递 run mode。
 3. 展示 summary、runStatus、timeline。
 4. 展示 action 风险、payload、confirm/reject。
 5. 展示工具 observation 的 JSON 输出。
@@ -85,7 +86,6 @@ POST /api/internal/agent/tools/{toolName}/execute
 {
   "goal": "诊断这个知识库为什么不能问答",
   "question": "可选问题",
-  "runMode": "INTELLIGENT_TOOL_AGENT",
   "createdBy": "frontend"
 }
 ```
@@ -103,8 +103,7 @@ POST /v1/agent/runs
   "runCode": "AR-xxx",
   "kbCode": "day20-cn-kb",
   "goal": "诊断这个知识库为什么不能问答",
-  "question": "可选问题",
-  "runMode": "INTELLIGENT_TOOL_AGENT"
+  "question": "可选问题"
 }
 ```
 
@@ -128,7 +127,6 @@ run_code
 knowledge_base_id
 goal
 question
-run_mode
 status: RUNNING / WAITING_CONFIRMATION / SUCCEEDED / FAILED
 summary
 error_message
@@ -200,40 +198,33 @@ parse_goal
 2. 覆盖 readiness、索引失败、检索质量三个业务场景。
 3. 作为 debug / fallback / 面试中“确定性业务工作流 Agent”案例。
 
-## 5. Intelligent Tool-use Agent
+## 5. LangGraph Tool-use Agent
 
-智能图：
+当前主循环：
 
 ```text
-load_tools
-  -> llm_plan
-  -> route_decision
-      -> execute_readonly_tool -> llm_plan
-      -> create_recommended_action -> END
-      -> final_report -> END
-      -> fail_report -> END
+StateGraph
+  -> agent_model
+  -> execute_readonly_tool / create_recommended_action
+  -> agent_model / final_response
 ```
 
 状态结构：
 
 1. `tools`
 2. `messages`
-3. `decision`
-4. `observations`
-5. `tool_call_count`
-6. `steps`
-7. `recommended_actions`
-8. `summary`
-9. `error_message`
+3. `steps`
+4. `recommended_actions`
+5. `summary`
+6. `error_message`
 
 关键行为：
 
-1. `llm_plan` 只接受严格 JSON 决策。
-2. 每轮决策做 JSON parse、枚举校验、toolName 白名单校验、arguments schema 校验。
-3. 非法 JSON 重试一次；仍失败则生成 failed `LLM_DECISION` step。
-4. 工具调用上限默认 6 次；超过后 run failed。
-5. 工具原始输出写 step output JSON。
-6. 回灌 LLM 的 observation 先裁剪/摘要，避免把大 JSON 原样塞回。
+1. LangGraph 负责模型调用、工具调用循环和结构化最终答案的主路径编排。
+2. Java MCP tools 进入模型前转换为 snake_case alias，落事件和落库时恢复 canonical toolName。
+3. 工具 arguments 继续做 kbCode 边界和 JSON schema 校验。
+4. 工具原始输出写 step output JSON。
+5. 回灌和 timeline 展示使用裁剪后的 observation summary，避免大 JSON 膨胀。
 
 ## 6. Tool Registry v2
 
@@ -263,56 +254,40 @@ CLI 边界：
 3. 当前仅开放 `cli.git.status`，固定执行 `git status --short`。
 4. 写 CLI 未来必须走 Java confirm/action 流程。
 
-## 7. AgentDecision 协议
+## 7. LangChain Tool 协议
 
-`CALL_TOOL` 示例：
+只读工具示例：
 
 ```json
 {
-  "action": "CALL_TOOL",
-  "toolName": "kb.readiness.check",
-  "arguments": {
-    "kbCode": "day20-cn-kb"
-  },
-  "reason": "需要先检查知识库是否具备问答条件。",
-  "finalAnswer": null,
-  "riskLevel": "LOW"
+  "toolName": "kb_readiness_check",
+  "canonicalToolName": "kb.readiness.check",
+  "arguments": {"kbCode": "day20-cn-kb"}
 }
 ```
 
-`REQUEST_CONFIRMATION` 示例：
+待确认动作工具示例：
 
 ```json
 {
-  "action": "REQUEST_CONFIRMATION",
-  "toolName": "embedding.rebuild.submit",
-  "arguments": {
-    "kbCode": "day20-cn-kb"
-  },
-  "reason": "readiness 显示 reembedRequired=true，需要人工确认后提交重嵌入任务。",
-  "finalAnswer": null,
-  "riskLevel": "MEDIUM"
+  "toolName": "request_embedding_rebuild_submit",
+  "canonicalToolName": "embedding.rebuild.submit",
+  "arguments": {"kbCode": "day20-cn-kb"}
 }
 ```
-
-`FINAL_ANSWER` 示例：
+结构化最终答案示例：
 
 ```json
 {
-  "action": "FINAL_ANSWER",
-  "toolName": null,
-  "arguments": {},
-  "reason": "已有工具观察结果足够生成结论。",
-  "finalAnswer": "当前未发现阻断问答的 readiness 问题。",
-  "riskLevel": null
+  "summary": "当前未发现阻断问答的 readiness 问题。"
 }
 ```
 
 安全要求：
 
-1. `REQUEST_CONFIRMATION` 不能只依赖 LLM 自觉输出。
-2. Runtime 必须根据 Tool Registry 强制拦截。
-3. 即使 LLM 输出 `CALL_TOOL`，只要目标工具是 `WRITE`、`MEDIUM/HIGH` 或 `requiresConfirmation=true`，也必须转成 `recommendedActions`。
+1. 写操作不能作为 read-only MCP tool 暴露给模型直接执行。
+2. request_* action tool 只生成 recommended action draft。
+3. Java 继续通过 `RecommendedActionCatalog` 做最终白名单校验。
 4. Java 统一落库为 `PENDING_CONFIRMATION`。
 
 ## 8. Week 1-3 任务拆分
@@ -345,7 +320,7 @@ CLI 边界：
 
 | Day | 目标 | 状态 |
 | --- | --- | --- |
-| Day 15 | 文档和状态模型收口，新增智能 runMode / AgentState / AgentDecision / ToolDefinition v2 | Done |
+| Day 15 | 文档和状态模型收口，新增 AgentState / ToolDefinition v2 | Done |
 | Day 16 | Tool Registry v2，Java definitions API，Python 拉取 Java tool definitions | Done |
 | Day 17 | 智能 LangGraph 主循环，`LLM_DECISION -> TOOL_CALL -> observation -> next decision` | Done |
 | Day 18 | JSON 决策校验、失败恢复、fake/mock LLM 测试 | Done |
@@ -410,15 +385,15 @@ LLM_DECISION -> mcp.repo.status.inspect -> observation -> LLM_DECISION -> cli.gi
 
 Python：
 
-1. Legacy graph 节点顺序稳定。
-2. Intelligent graph 可循环调用工具。
+1. 统一智能 Tool-use graph 节点顺序稳定。
+2. 智能 graph 可循环调用工具。
 3. fake/mock LLM 覆盖非法 JSON、未知工具、schema mismatch、最大工具次数。
 4. Runtime 强制拦截写工具和中高风险工具。
 5. fake MCP 和只读 CLI 可通过 Tool Registry 接入。
 
 前端：
 
-1. 可创建三种 runMode。
+1. 可创建 Agent run，不再选择 run mode。
 2. 可展示 `LLM_DECISION / TOOL_CALL / NODE` timeline。
 3. 可展示 action 卡片和 confirm/reject。
 4. API 错误展示 message 和 requestId。
@@ -429,7 +404,7 @@ Python：
 1. Python `/health` 正常。
 2. Java `/api/health` 可达，并记录 PostgreSQL/Redis/AI Gateway/embedding/llm 的实际能力状态。
 3. Frontend dev server 正常。
-4. 通过前后端 API 创建 `INTELLIGENT_TOOL_AGENT` run。
+4. 通过前后端 API 创建 Agent run。
 5. 验证 Java tool、fake MCP tool、只读 CLI tool 可在同一主循环中工作。
 
 ## 11. 面试表达

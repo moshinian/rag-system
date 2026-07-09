@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import asyncio
+from queue import Queue
 from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
 import httpx
+from langchain_core.messages import ToolMessage
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.interceptors import MCPToolCallRequest
 
 from app.agent.state import AgentRuntimeRequest, AgentToolDefinition
 from app.agent.tools.protocol import AgentToolExecution
@@ -12,36 +17,22 @@ from app.core.config import Settings
 
 
 class McpAgentToolClient:
-    """MCP Streamable HTTP tools capability 客户端。"""
+    """基于 LangChain MCP adapter 的 Streamable HTTP tools 客户端。"""
 
     def __init__(
         self,
         settings: Settings,
         *,
-        http_client: httpx.Client | None = None,
+        httpx_client_factory: Any | None = None,
     ) -> None:
-        """创建 MCP client；测试可注入 MockTransport。"""
+        """创建 MCP client；测试可注入 httpx async client factory。"""
         self._settings = settings
-        self._client = http_client or httpx.Client(
-            timeout=httpx.Timeout(
-                connect=settings.http_connect_timeout_ms / 1000,
-                read=settings.http_read_timeout_ms / 1000,
-                write=settings.http_read_timeout_ms / 1000,
-                pool=settings.http_connect_timeout_ms / 1000,
-            ),
-            # MCP endpoint 默认跑在本机 Java 后端，必须绕开环境代理。
-            trust_env=False,
-        )
-        self._session_id: str | None = None
+        self._httpx_client_factory = httpx_client_factory
 
     def definitions(self) -> list[AgentToolDefinition]:
-        """initialize -> initialized notification -> tools/list，并映射到 AgentToolDefinition。"""
-        self._ensure_initialized()
-        response = self._rpc("tools/list", {}, retry_on_missing_session=True)
-        tools = response.get("tools")
-        if not isinstance(tools, list):
-            raise ValueError("MCP tools/list result.tools must be a list")
-        return [self._to_agent_tool_definition(tool) for tool in tools if isinstance(tool, dict)]
+        """通过 LangChain MCP adapter 读取工具定义。"""
+        tools = _run_async(self._langchain_tools())
+        return [self._to_agent_tool_definition(tool) for tool in tools]
 
     def execute(
         self,
@@ -49,119 +40,96 @@ class McpAgentToolClient:
         request: AgentRuntimeRequest,
         arguments: dict[str, Any] | None = None,
     ) -> AgentToolExecution:
-        """调用 MCP tools/call，并映射为 AgentToolExecution。"""
+        """通过 LangChain MCP tool 执行工具，并映射为 AgentToolExecution。"""
         started_at = perf_counter()
         try:
-            self._ensure_initialized()
-            # arguments 完全来自具体节点/planner；runCode 等调用元数据只进入 MCP _meta。
-            result = self._rpc(
-                "tools/call",
-                {
-                    "name": tool_name,
-                    "arguments": dict(arguments or {}),
-                    "_meta": {
-                        "x-rag.runCode": request.run_code,
-                        "x-rag.operator": "agent-runtime",
-                    },
-                },
-                retry_on_missing_session=True,
+            output = _run_async(
+                self._execute_langchain_tool(
+                    tool_name,
+                    dict(arguments or {}),
+                    run_code=request.run_code,
+                )
             )
-            structured = result.get("structuredContent")
-            # MCP content 可用于展示错误文本，业务 observation 只消费 structuredContent。
+            structured_content = _extract_structured_content(output)
             return AgentToolExecution(
                 tool_name=tool_name,
-                success=not bool(result.get("isError")),
-                output=structured if isinstance(structured, dict) else None,
-                error_message=self._tool_error_message(result),
+                success=_tool_output_success(output),
+                output=structured_content,
+                error_message=_tool_output_error_message(output),
                 duration_ms=self._elapsed_ms(started_at),
             )
         except Exception as exc:
             return AgentToolExecution(
                 tool_name=tool_name,
                 success=False,
-                error_message=f"Failed to call MCP tool: {exc}",
+                error_message=f"Failed to call MCP tool through LangChain adapter: {exc}",
                 duration_ms=self._elapsed_ms(started_at),
             )
 
-    def _ensure_initialized(self) -> None:
-        """没有有效 session 时重新执行 MCP lifecycle。"""
-        if self._session_id:
-            return
-        initialize = self._post(
+    async def _execute_langchain_tool(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        *,
+        run_code: str,
+    ) -> Any:
+        """查找并执行一个 LangChain MCP tool。"""
+        tools = await self._langchain_tools(run_code=run_code)
+        tool = next((item for item in tools if getattr(item, "name", None) == tool_name), None)
+        if tool is None:
+            raise ValueError(f"Unknown MCP tool: {tool_name}")
+        return await tool.ainvoke(
             {
-                "jsonrpc": "2.0",
-                "id": self._request_id(),
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": self._settings.mcp_protocol_version,
-                    "capabilities": {},
-                    "clientInfo": {"name": "rag-ai-service", "version": self._settings.service_version},
-                },
+                "type": "tool_call",
+                "id": f"tc-{uuid4()}",
+                "name": tool_name,
+                "args": arguments,
+            }
+        )
+
+    async def _langchain_tools(self, *, run_code: str | None = None):
+        """创建 LangChain MCP client，并读取 Java MCP tools。"""
+        client = MultiServerMCPClient(
+            {
+                "java-rag-tools": {
+                    "transport": "streamable_http",
+                    "url": self._endpoint_url(),
+                    "headers": {
+                        "Origin": self._settings.mcp_tool_origin,
+                        "X-Agent-Tool-Token": self._settings.mcp_tool_token,
+                        "MCP-Protocol-Version": self._settings.mcp_protocol_version,
+                    },
+                    "timeout": self._settings.http_connect_timeout_ms / 1000,
+                    "sse_read_timeout": self._settings.http_read_timeout_ms / 1000,
+                    "httpx_client_factory": self._httpx_client_factory or _default_httpx_client_factory,
+                }
             },
-            initialized=False,
+            tool_interceptors=[_runtime_headers_interceptor(run_code)] if run_code else None,
+            handle_tool_errors=False,
         )
-        self._session_id = initialize.headers.get("Mcp-Session-Id")
-        if not self._session_id:
-            raise ValueError("MCP initialize response missing Mcp-Session-Id")
-        data = initialize.json()
-        result = data.get("result") if isinstance(data, dict) else None
-        if not isinstance(result, dict):
-            raise ValueError("MCP initialize response missing result")
-        if result.get("protocolVersion") != self._settings.mcp_protocol_version:
-            raise ValueError("MCP protocol version mismatch")
-        notification = self._post(
-            {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
-            initialized=True,
-        )
-        if notification.status_code != 202:
-            raise ValueError(f"MCP initialized notification failed: HTTP {notification.status_code}")
+        return await client.get_tools(server_name="java-rag-tools")
 
-    def _rpc(self, method: str, params: dict[str, Any], *, retry_on_missing_session: bool) -> dict[str, Any]:
-        """发送 JSON-RPC request；session 404 时按协议重新 initialize 后重试一次。"""
-        payload = {"jsonrpc": "2.0", "id": self._request_id(), "method": method, "params": params}
-        response = self._post(payload, initialized=True)
-        if response.status_code == 404 and retry_on_missing_session:
-            self._session_id = None
-            self._ensure_initialized()
-            response = self._post(payload, initialized=True)
-        if response.status_code < 200 or response.status_code >= 300:
-            raise ValueError(f"MCP HTTP {response.status_code}: {response.text}")
-        data = response.json()
-        if isinstance(data, dict) and isinstance(data.get("error"), dict):
-            error = data["error"]
-            raise ValueError(f"MCP JSON-RPC error {error.get('code')}: {error.get('message')}")
-        result = data.get("result") if isinstance(data, dict) else None
-        if not isinstance(result, dict):
-            raise ValueError("MCP JSON-RPC response missing result")
-        return result
+    def _to_agent_tool_definition(self, tool: Any) -> AgentToolDefinition:
+        """把 LangChain MCP tool 映射为 planner 现有 ToolDefinition。"""
+        metadata = getattr(tool, "metadata", None)
+        if not isinstance(metadata, dict):
+            raise ValueError(f"LangChain MCP tool missing metadata: {getattr(tool, 'name', '<unknown>')}")
+        if "x-rag.executionMode" not in metadata or "x-rag.maxRiskLevel" not in metadata:
+            raise ValueError(f"LangChain MCP tool missing x-rag annotations: {getattr(tool, 'name', '<unknown>')}")
 
-    def _post(self, payload: dict[str, Any], *, initialized: bool) -> httpx.Response:
-        """向 Java MCP endpoint 发送单个 JSON-RPC 对象。"""
-        headers = {
-            "Accept": "application/json, text/event-stream",
-            "Content-Type": "application/json",
-            "Origin": self._settings.mcp_tool_origin,
-            "X-Agent-Tool-Token": self._settings.mcp_tool_token,
-        }
-        if initialized:
-            headers["MCP-Protocol-Version"] = self._settings.mcp_protocol_version
-            if self._session_id:
-                headers["Mcp-Session-Id"] = self._session_id
-        return self._client.post(self._endpoint_url(), json=payload, headers=headers)
-
-    def _to_agent_tool_definition(self, tool: dict[str, Any]) -> AgentToolDefinition:
-        """把 MCP tool definition 映射为 planner 现有 ToolDefinition。"""
-        annotations = tool.get("annotations") if isinstance(tool.get("annotations"), dict) else {}
+        input_schema = getattr(tool, "args_schema", None)
+        if not isinstance(input_schema, dict):
+            input_schema = getattr(tool, "args", None)
         return AgentToolDefinition(
-            toolName=tool.get("name"),
-            schemaVersion="mcp-2025-06-18",
-            description=str(tool.get("description") or tool.get("title") or tool.get("name") or ""),
-            inputSchema=tool.get("inputSchema") if isinstance(tool.get("inputSchema"), dict) else {},
-            outputSchema=tool.get("outputSchema") if isinstance(tool.get("outputSchema"), dict) else {},
-            executionMode=str(annotations.get("x-rag.executionMode") or "READ_ONLY"),
-            maxRiskLevel=str(annotations.get("x-rag.maxRiskLevel") or "LOW"),
+            toolName=str(getattr(tool, "name", "") or ""),
+            schemaVersion="langchain-mcp-adapter",
+            description=str(getattr(tool, "description", "") or getattr(tool, "name", "") or ""),
+            inputSchema=input_schema if isinstance(input_schema, dict) else {},
+            outputSchema={},
+            executionMode=str(metadata["x-rag.executionMode"]),
+            maxRiskLevel=str(metadata["x-rag.maxRiskLevel"]),
             sourceType="MCP",
-            requiresConfirmation=bool(annotations.get("x-rag.requiresConfirmation") or False),
+            requiresConfirmation=bool(metadata.get("x-rag.requiresConfirmation") or False),
             timeoutMs=5000,
         )
 
@@ -173,21 +141,85 @@ class McpAgentToolClient:
             endpoint = f"/{endpoint}"
         return f"{base_url}{endpoint}"
 
-    def _tool_error_message(self, result: dict[str, Any]) -> str | None:
-        """从 MCP content 中提取工具错误文本。"""
-        if not bool(result.get("isError")):
-            return None
-        content = result.get("content")
-        if isinstance(content, list) and content and isinstance(content[0], dict):
-            text = content[0].get("text")
-            return str(text) if text else "MCP tool returned isError=true"
-        return "MCP tool returned isError=true"
-
-    def _request_id(self) -> str:
-        """为每个 JSON-RPC request 生成独立 ID。"""
-        return f"mcp-{uuid4()}"
-
     @staticmethod
     def _elapsed_ms(started_at: float) -> int:
         """计算工具调用耗时毫秒数。"""
         return max(0, int((perf_counter() - started_at) * 1000))
+
+
+def _runtime_headers_interceptor(run_code: str | None):
+    """把 Agent runtime 元数据通过 headers 传给 Java MCP endpoint。"""
+
+    async def inject_runtime_headers(request: MCPToolCallRequest, handler):
+        if run_code:
+            request.headers = {
+                **(request.headers or {}),
+                "X-Rag-Run-Code": run_code,
+                "X-Rag-Operator": "agent-runtime",
+            }
+        return await handler(request)
+
+    return inject_runtime_headers
+
+
+def _default_httpx_client_factory(
+    headers: dict[str, str] | None = None,
+    timeout: httpx.Timeout | None = None,
+    auth: httpx.Auth | None = None,
+) -> httpx.AsyncClient:
+    """创建 adapter 使用的 AsyncClient，默认绕过环境代理。"""
+    return httpx.AsyncClient(headers=headers, timeout=timeout, auth=auth, trust_env=False)
+
+
+def _extract_structured_content(output: Any) -> dict[str, Any] | None:
+    """从 LangChain MCP tool 输出中提取 MCP structuredContent。"""
+    artifact = getattr(output, "artifact", None)
+    structured = getattr(artifact, "structured_content", None)
+    if isinstance(structured, dict):
+        return structured
+    if isinstance(output, dict):
+        return output
+    return None
+
+
+def _tool_output_success(output: Any) -> bool:
+    """判断 LangChain tool 输出是否成功。"""
+    status = getattr(output, "status", None)
+    return status != "error"
+
+
+def _tool_output_error_message(output: Any) -> str | None:
+    """从 LangChain ToolMessage 中提取错误文本。"""
+    if _tool_output_success(output):
+        return None
+    if isinstance(output, ToolMessage):
+        content = output.content
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+    return "MCP tool returned error"
+
+
+def _run_async(coro):
+    """在同步 Runtime 中安全执行 LangChain MCP adapter 的 async API。"""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    result_queue: Queue[tuple[bool, Any]] = Queue(maxsize=1)
+
+    def runner() -> None:
+        try:
+            result_queue.put((True, asyncio.run(coro)))
+        except Exception as exc:  # pragma: no cover - defensive bridge
+            result_queue.put((False, exc))
+
+    import threading
+
+    thread = threading.Thread(target=runner, name="langchain-mcp-adapter", daemon=True)
+    thread.start()
+    thread.join()
+    ok, result = result_queue.get()
+    if ok:
+        return result
+    raise result

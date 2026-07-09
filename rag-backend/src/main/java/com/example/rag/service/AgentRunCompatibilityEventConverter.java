@@ -48,7 +48,6 @@ public class AgentRunCompatibilityEventConverter {
     public void publishRunStarted(AgentRunEntity run) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("source", "COMPATIBILITY");
-        payload.put("runMode", run.getRunMode());
         payload.put("goal", run.getGoal());
         eventService.persist(new AgentRunEventDraft(
                 run.getRunCode() + "-RUN-STARTED",

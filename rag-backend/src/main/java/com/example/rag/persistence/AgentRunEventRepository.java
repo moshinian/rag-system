@@ -5,6 +5,7 @@ import com.example.rag.mapper.AgentRunEventMapper;
 import com.example.rag.persistence.entity.AgentRunEventEntity;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -50,5 +51,15 @@ public class AgentRunEventRepository {
                 .gt(lastDatabaseId != null, AgentRunEventEntity::getId, lastDatabaseId)
                 .orderByAsc(AgentRunEventEntity::getId);
         return mapper.selectList(query);
+    }
+
+    /** 按运行编码批量删除运行事件。 */
+    public void deleteByRunCodes(Collection<String> runCodes) {
+        if (runCodes == null || runCodes.isEmpty()) {
+            return;
+        }
+        LambdaQueryWrapper<AgentRunEventEntity> query = new LambdaQueryWrapper<AgentRunEventEntity>()
+                .in(AgentRunEventEntity::getRunCode, runCodes);
+        mapper.delete(query);
     }
 }

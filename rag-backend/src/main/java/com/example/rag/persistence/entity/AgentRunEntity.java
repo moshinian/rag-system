@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.example.rag.model.enums.AgentRunMode;
 import com.example.rag.model.enums.AgentRunStatus;
 import lombok.Getter;
 import lombok.Setter;
@@ -31,9 +30,6 @@ public class AgentRunEntity {
 
     private String goal;
     private String question;
-
-    @TableField("run_mode")
-    private AgentRunMode runMode = AgentRunMode.DIAGNOSE_AND_RECOMMEND;
 
     private AgentRunStatus status = AgentRunStatus.RUNNING;
     private String summary;
