@@ -4,7 +4,6 @@ import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.config.RequestIdFilter;
 import com.example.rag.model.enums.AgentActionRiskLevel;
 import com.example.rag.model.enums.AgentActionStatus;
-import com.example.rag.model.enums.AgentRunMode;
 import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.enums.AgentStepStatus;
 import com.example.rag.model.enums.AgentStepType;
@@ -56,7 +55,6 @@ class AgentControllerTest {
                                 {
                                   "goal": "诊断这个知识库为什么不能问答",
                                   "question": "第二百三十八条是什么",
-                                  "runMode": "DIAGNOSE_AND_RECOMMEND",
                                   "createdBy": "tester"
                                 }
                                 """))
@@ -81,8 +79,7 @@ class AgentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Request-Id", "REQ-test"))
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
-                .andExpect(jsonPath("$.data.runCode").value("AR-100"))
-                .andExpect(jsonPath("$.data.runMode").value("DIAGNOSE_AND_RECOMMEND"));
+                .andExpect(jsonPath("$.data.runCode").value("AR-100"));
     }
 
     @Test
@@ -138,7 +135,6 @@ class AgentControllerTest {
                 "day20-cn-kb",
                 "诊断这个知识库为什么不能问答",
                 "第二百三十八条是什么",
-                AgentRunMode.DIAGNOSE_AND_RECOMMEND,
                 AgentRunStatus.RUNNING,
                 null,
                 null,
@@ -157,7 +153,6 @@ class AgentControllerTest {
                 "day20-cn-kb",
                 "诊断这个知识库为什么不能问答",
                 "第二百三十八条是什么",
-                AgentRunMode.DIAGNOSE_AND_RECOMMEND,
                 runStatus,
                 "知识库当前不可问答，主要原因是 embedding 配置变化后尚未完成重嵌入。",
                 null,

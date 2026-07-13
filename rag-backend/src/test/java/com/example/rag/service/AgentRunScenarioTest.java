@@ -6,7 +6,6 @@ import com.example.rag.model.dto.AgentRuntimeResponse;
 import com.example.rag.model.dto.AgentRuntimeStepResult;
 import com.example.rag.model.enums.AgentActionRiskLevel;
 import com.example.rag.model.enums.AgentActionStatus;
-import com.example.rag.model.enums.AgentRunMode;
 import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.enums.AgentStepStatus;
 import com.example.rag.model.enums.AgentStepType;
@@ -86,7 +85,6 @@ class AgentRunScenarioTest {
         run.setRunCode("AR-100");
         run.setKnowledgeBaseId(1L);
         run.setGoal("诊断");
-        run.setRunMode(AgentRunMode.DIAGNOSE_AND_RECOMMEND);
         run.setStatus(AgentRunStatus.RUNNING);
         run.setCreatedBy("tester");
         when(agentRunRepository.findByRunCode("AR-100")).thenReturn(Optional.of(run));

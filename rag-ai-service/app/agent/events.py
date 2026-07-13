@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from datetime import datetime, timezone
 from queue import Queue
 from threading import Event, Lock
-from typing import Any, Protocol, TypeVar, cast
+from typing import Any, Protocol
 
-from app.agent.state import AgentRuntimeEvent, AgentRuntimeEventType, AgentStepResult
+from langgraph.config import get_stream_writer
+
+from app.agent.state import AgentRuntimeEvent, AgentRuntimeEventType
 
 
 class AgentRunCancelled(RuntimeError):
-    """SSE 客户端断开后用于协作终止后续 LangGraph node 的内部异常。"""
+    """SSE 客户端断开后用于协作终止后续 LangGraph 节点的内部异常。"""
 
 
 class AgentEventSink(Protocol):
@@ -69,101 +70,81 @@ class QueueAgentEventSink:
         return self._cancellation.is_set()
 
 
-NodeFunction = TypeVar("NodeFunction", bound=Callable[[dict[str, Any]], dict[str, Any]])
+class LangGraphStreamEventSink:
+    """把 Runtime 事件写入 LangGraph custom stream。"""
 
+    def __init__(self, cancellation: Event) -> None:
+        self._cancellation = cancellation
 
-def traced_node(node_name: str, function: NodeFunction) -> NodeFunction:
-    """包装 LangGraph node，统一发布 STEP_STARTED/COMPLETED/FAILED。"""
-
-    def wrapper(state: dict[str, Any]) -> dict[str, Any]:
-        sink = _event_sink(state)
-        if sink is None:
-            # 旧 JSON run 未注入 sink，继续保持原有执行行为。
-            return function(state)
-        if sink.is_cancelled():
-            raise AgentRunCancelled("Agent SSE stream was cancelled")
-
-        sequence = _event_sequence(state)
-        invocation_id = sequence.next_node_invocation_id()
-        invocation_state = dict(state)
-        invocation_state["current_node_invocation_id"] = invocation_id
-        invocation_state["current_node_name"] = node_name
-        emit_runtime_event(
-            invocation_state,
-            "STEP_STARTED",
-            status="RUNNING",
-            message=f"{node_name} 开始执行",
+    def emit(self, event: AgentRuntimeEvent) -> bool:
+        """在 LangGraph node 内把事件投递给原生 custom stream。"""
+        if self._cancellation.is_set():
+            return False
+        writer = get_stream_writer()
+        writer(
+            {
+                "type": "agent_runtime_event",
+                "event": event.model_dump(by_alias=True),
+            }
         )
+        return True
 
-        try:
-            result = function(invocation_state)
-            if sink.is_cancelled():
-                raise AgentRunCancelled("Agent SSE stream was cancelled")
-            result["current_node_invocation_id"] = invocation_id
-            result["current_node_name"] = node_name
-            step = _latest_node_step(result, node_name)
-            event_type: AgentRuntimeEventType = (
-                "STEP_FAILED" if step is not None and step.status == "FAILED" else "STEP_COMPLETED"
-            )
-            emit_runtime_event(
-                result,
-                event_type,
-                tool_name=step.tool_name if step is not None else None,
-                status=step.status if step is not None else "SUCCEEDED",
-                message=(
-                    step.error_message
-                    if step is not None and step.error_message
-                    else f"{node_name} 执行完成"
-                ),
-                payload=_step_payload(step),
-            )
-            return result
-        except AgentRunCancelled:
-            raise
-        except Exception as exc:
-            emit_runtime_event(
-                invocation_state,
-                "STEP_FAILED",
-                status="FAILED",
-                message=str(exc),
-                payload={"errorMessage": str(exc)},
-            )
-            raise
-
-    return cast(NodeFunction, wrapper)
+    def is_cancelled(self) -> bool:
+        """返回 graph stream 是否已取消。"""
+        return self._cancellation.is_set()
 
 
-def emit_runtime_event(
-    state: dict[str, Any],
-    event_type: AgentRuntimeEventType,
-    *,
-    node_name: str | None = None,
-    node_invocation_id: str | None = None,
-    tool_name: str | None = None,
-    status: str | None = None,
-    message: str | None = None,
-    payload: dict[str, Any] | None = None,
-    terminal: bool = False,
-) -> bool:
-    """使用 state 中的 sink 和序列生成并发布一条安全事件。"""
-    sink = _event_sink(state)
-    if sink is None or sink.is_cancelled():
-        return False
-    request = state["request"]
-    event = AgentRuntimeEvent(
-        eventId=_event_sequence(state).next_event_id(),
-        runCode=request.run_code,
-        type=event_type,
-        nodeInvocationId=node_invocation_id or state.get("current_node_invocation_id"),
-        nodeName=node_name or state.get("current_node_name"),
-        toolName=tool_name,
-        status=status,
-        message=message,
-        payload=payload or {},
-        terminal=terminal,
-        createdAt=datetime.now(timezone.utc).isoformat(),
-    )
-    return sink.emit(event)
+class RuntimeEventEmitter:
+    """生成并输出面向 Java 的 runtime 事件，不暴露 graph 内部状态。"""
+
+    def __init__(self, request: Any, sink: AgentEventSink, sequence: RuntimeEventSequence) -> None:
+        self._request = request
+        self._sink = sink
+        self._sequence = sequence
+
+    def next_node_invocation_id(self) -> str:
+        """为一个逻辑 step 返回稳定的 correlation id。"""
+        return self._sequence.next_node_invocation_id()
+
+    def emit(
+        self,
+        event_type: AgentRuntimeEventType,
+        *,
+        node_name: str | None = None,
+        node_invocation_id: str | None = None,
+        tool_name: str | None = None,
+        status: str | None = None,
+        message: str | None = None,
+        payload: dict[str, Any] | None = None,
+        terminal: bool = False,
+    ) -> bool:
+        """在 stream 仍然活跃时输出一条 runtime 事件。"""
+        if self._sink.is_cancelled():
+            return False
+        # eventId 和 createdAt 由 Python Runtime 生成，Java 负责落库和状态归并。
+        event = AgentRuntimeEvent(
+            eventId=self._sequence.next_event_id(),
+            runCode=self._request.run_code,
+            type=event_type,
+            nodeInvocationId=node_invocation_id,
+            nodeName=node_name,
+            toolName=tool_name,
+            status=status,
+            message=message,
+            payload=payload or {},
+            terminal=terminal,
+            createdAt=datetime.now(timezone.utc).isoformat(),
+        )
+        return self._sink.emit(event)
+
+    def is_cancelled(self) -> bool:
+        """返回 SSE 消费端是否已经断开。"""
+        return self._sink.is_cancelled()
+
+    def raise_if_cancelled(self) -> None:
+        """流关闭后抛出内部取消哨兵异常。"""
+        if self.is_cancelled():
+            raise AgentRunCancelled("Agent SSE stream was cancelled")
 
 
 def format_sse(event: AgentRuntimeEvent) -> str:
@@ -179,54 +160,3 @@ def format_sse(event: AgentRuntimeEvent) -> str:
 def heartbeat_sse() -> str:
     """返回不进入业务协议的 SSE comment heartbeat。"""
     return ": heartbeat\n\n"
-
-
-def _event_sink(state: dict[str, Any]) -> AgentEventSink | None:
-    value = state.get("event_sink")
-    return cast(AgentEventSink | None, value)
-
-
-def _event_sequence(state: dict[str, Any]) -> RuntimeEventSequence:
-    value = state.get("event_sequence")
-    if not isinstance(value, RuntimeEventSequence):
-        raise RuntimeError("Agent event sequence is missing")
-    return value
-
-
-def _latest_node_step(
-    state: dict[str, Any],
-    node_name: str,
-) -> AgentStepResult | None:
-    for step in reversed(state.get("steps", [])):
-        if isinstance(step, AgentStepResult) and step.node_name == node_name:
-            return step
-    return None
-
-
-def _step_payload(step: AgentStepResult | None) -> dict[str, Any]:
-    if step is None:
-        return {}
-    output = _safe_json_object(step.output_json)
-    payload: dict[str, Any] = {
-        "stepType": step.step_type,
-        "inputJson": step.input_json,
-        "outputJson": step.output_json,
-        "durationMs": step.duration_ms,
-        "errorMessage": step.error_message,
-    }
-    if "attemptCount" in output:
-        payload["attemptCount"] = output["attemptCount"]
-    if "durationMs" in output and payload["durationMs"] is None:
-        payload["durationMs"] = output["durationMs"]
-    return payload
-
-
-def _safe_json_object(value: str | None) -> dict[str, Any]:
-    """从 step outputJson 中提取可提升到 STEP_FAILED payload 的稳定字段。"""
-    if value is None:
-        return {}
-    try:
-        parsed = json.loads(value)
-    except ValueError:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}

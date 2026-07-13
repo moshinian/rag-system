@@ -2,7 +2,6 @@ package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
-import com.example.rag.model.enums.AgentRunMode;
 import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.request.AgentRunCreateRequest;
 import com.example.rag.persistence.AgentRunRepository;
@@ -50,9 +49,6 @@ public class AgentRunRecordService {
         entity.setKnowledgeBaseId(knowledgeBase.getId());
         entity.setGoal(request.goal().trim());
         entity.setQuestion(trimToNull(request.question()));
-        entity.setRunMode(request.runMode() == null
-                ? AgentRunMode.DIAGNOSE_AND_RECOMMEND
-                : request.runMode());
         entity.setStatus(AgentRunStatus.RUNNING);
         // 初始化 runtime heartbeat，避免刚创建尚未收到 Python heartbeat 时被恢复扫描误判。
         entity.setRuntimeHeartbeatAt(OffsetDateTime.now());

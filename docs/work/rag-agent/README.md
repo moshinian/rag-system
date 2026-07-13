@@ -2,12 +2,12 @@
 
 ## Position
 
-`rag-agent` 是当前 RAG 系统的下一阶段改造板块，目标是在现有企业知识库 RAG 主链路之上补入一层可演示、可审计、可写进简历的 LangGraph 运维诊断 Agent。
+`rag-agent` 是当前 RAG 系统的下一阶段改造板块，目标是在现有企业知识库 RAG 主链路之上补入一层可演示、可审计、可写进简历的 LangChain / LangGraph 运维诊断 Agent。
 
 这个板块的定位是：
 
 1. 把现有 `health / readiness / documents / indexing tasks / retrieval` 能力封装成 Agent 可调用工具。
-2. 用 LangGraph 表达 Agent 状态图和工具调用编排。
+2. 当前用 LangGraph 承载工具调用主循环，LangChain 只补充 node 内的模型、消息、工具 schema 和结构化输出能力。
 3. 让 Java 后端继续承担业务权威、安全边界、落库审计和确认执行。
 4. 让前端承接 Agent 轨迹、推荐动作和 human-in-the-loop 操作。
 
@@ -28,7 +28,7 @@
 3. Day 1 已完成 `AgentState` 草案、工具协议、状态枚举和三张表。
 4. Day 2 已完成 Agent run 创建、详情查询、`AgentRunService` 和 `AgentController` 骨架。
 5. Day 3 已完成 `system.health.check` 和 `kb.readiness.check` 两个 P0 只读工具。
-6. Day 4 已完成 `rag-ai-service` 内的 LangGraph 最小诊断图和 `POST /v1/agent/runs`。
+6. Day 4 已完成 `rag-ai-service` 内的早期最小诊断图和 `POST /v1/agent/runs`；当前运行入口已切换为统一 LangGraph 智能图。
 7. Day 5 已完成 Java 调用 Python Agent Runtime，并将返回 steps/actions 落库。
 8. Day 6 已完成 `documents.status.scan` 和 `indexing.tasks.scan`。
 9. Day 7 已完成 `reembedRequired` 和 `FAILED indexing task` 两个场景的端到端测试固定。
@@ -40,18 +40,23 @@
 15. Day 13 已完成 `qa.retrieve.probe` 简化版，对同一 question 对比 Dense / Hybrid 检索结果并输出诊断 signals。
 16. Day 14 已作为第 2 周收口目标，后续表达以第 3 周智能 Tool-use Agent 为主线。
 17. Day 15 已完成智能 Agent 基础骨架：
-    - 新增 `INTELLIGENT_TOOL_AGENT` runMode。
-    - 保留 legacy 固定图 `build_readiness_diagnosis_graph()`。
-    - 新增智能图 `build_intelligent_tool_agent_graph()`。
+    - Agent Runtime 已收口为唯一智能 Tool-use Agent，不再暴露 run mode。
+    - 当前已由统一 LangGraph 智能图接管 model/tool loop。
+    - 已移除 legacy 固定图 `build_readiness_diagnosis_graph()`。
     - Tool Definition 升级为 v2。
     - Java 暴露内部 tool definitions 查询接口。
     - Python Runtime 支持 LLM_DECISION / TOOL_CALL 轨迹、recommended action 强制拦截、fake MCP tool 和只读 CLI tool。
 18. Day 18 已完成 LLM 决策校验和失败恢复测试。
 19. Day 19 已完成智能模式 recommended action 到 Java `WAITING_CONFIRMATION` 的落库边界测试。
 20. Day 20 已完成 fake MCP tool 和只读 CLI tool 的配置化最小 MVP。
-21. 已补齐智能模式前端入口：`INTELLIGENT_TOOL_AGENT` runMode 和 `LLM_DECISION` step type。
-22. 已完成一次三端联调：通过前端 Vite proxy 创建 `INTELLIGENT_TOOL_AGENT` run，Java 调 Python，Python 在同一主循环中执行 fake MCP tool 和只读 CLI tool，run `AR-327301374603825153` 返回 `SUCCEEDED`。
-23. 下一步从 `plan.md` 第 3 周 Day 21 继续：准备确定性演示数据、固定 demo timeline 和面试材料。
+21. 已补齐智能模式前端入口：`LLM_DECISION` step type。
+22. 已完成一次三端联调：通过前端 Vite proxy 创建 Agent run，Java 调 Python，Python 在同一主循环中执行 fake MCP tool 和只读 CLI tool，run `AR-327301374603825153` 返回 `SUCCEEDED`。
+23. 已完成 LangChain / LangGraph 引入第一切片：
+    - `rag-ai-service` 依赖升级到 LangChain 1.x / LangGraph 1.2.x。
+    - 生产 Runtime 默认使用 LangGraph graph，node 内使用 LangChain `ChatOpenAI`、tool binding 和 structured response。
+    - MCP tools discovery 和 execution 已统一使用 `langchain-mcp-adapters`。
+    - Python 侧已移除自研 MCP JSON-RPC client；Agent runtime 元数据通过 LangChain tool interceptor headers 传给 Java。
+24. 下一步从 `plan.md` 第 3 周 Day 21 继续：准备确定性演示数据、固定 demo timeline 和面试材料。
 
 ## History
 

@@ -4,7 +4,6 @@ import com.example.rag.common.exception.BusinessException;
 import com.example.rag.config.RagAiGatewayProperties;
 import com.example.rag.model.dto.AgentRuntimeEvent;
 import com.example.rag.model.dto.AgentRuntimeRequest;
-import com.example.rag.model.enums.AgentRunMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -94,8 +93,7 @@ class AgentRuntimeStreamingClientTest {
                 "AR-1",
                 "kb-1",
                 "诊断",
-                null,
-                AgentRunMode.DIAGNOSE_ONLY
+                null
         );
     }
 

@@ -4,11 +4,16 @@ import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.config.CacheNames;
 import com.example.rag.ingestion.storage.LocalFileStorageService;
+import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.KnowledgeBaseEnableResponse;
 import com.example.rag.model.request.CreateKnowledgeBaseRequest;
 import com.example.rag.model.response.KnowledgeBaseResponse;
 import com.example.rag.model.response.PageResponse;
+import com.example.rag.persistence.AgentActionRepository;
+import com.example.rag.persistence.AgentRunEventRepository;
+import com.example.rag.persistence.AgentRunRepository;
+import com.example.rag.persistence.AgentStepRepository;
 import com.example.rag.persistence.ChatMessageRepository;
 import com.example.rag.persistence.ChatSessionRepository;
 import com.example.rag.persistence.DocumentChunkRepository;
@@ -44,6 +49,10 @@ public class KnowledgeBaseService {
     private final IndexingTaskRepository indexingTaskRepository;
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final AgentRunRepository agentRunRepository;
+    private final AgentStepRepository agentStepRepository;
+    private final AgentActionRepository agentActionRepository;
+    private final AgentRunEventRepository agentRunEventRepository;
     private final LocalFileStorageService localFileStorageService;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final DocumentIndexingService documentIndexingService;
@@ -55,6 +64,10 @@ public class KnowledgeBaseService {
                                 IndexingTaskRepository indexingTaskRepository,
                                 ChatSessionRepository chatSessionRepository,
                                 ChatMessageRepository chatMessageRepository,
+                                AgentRunRepository agentRunRepository,
+                                AgentStepRepository agentStepRepository,
+                                AgentActionRepository agentActionRepository,
+                                AgentRunEventRepository agentRunEventRepository,
                                 LocalFileStorageService localFileStorageService,
                                 SnowflakeIdGenerator snowflakeIdGenerator,
                                 DocumentIndexingService documentIndexingService) {
@@ -64,6 +77,10 @@ public class KnowledgeBaseService {
         this.indexingTaskRepository = indexingTaskRepository;
         this.chatSessionRepository = chatSessionRepository;
         this.chatMessageRepository = chatMessageRepository;
+        this.agentRunRepository = agentRunRepository;
+        this.agentStepRepository = agentStepRepository;
+        this.agentActionRepository = agentActionRepository;
+        this.agentRunEventRepository = agentRunEventRepository;
         this.localFileStorageService = localFileStorageService;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
         this.documentIndexingService = documentIndexingService;
@@ -171,15 +188,25 @@ public class KnowledgeBaseService {
         if (indexingTaskRepository.existsActiveTaskInKnowledgeBase(entity.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
             throw new BusinessException("Knowledge base has active indexing tasks and cannot be deleted: " + kbCode);
         }
+        if (agentRunRepository.existsByKnowledgeBaseIdAndStatus(entity.getId(), AgentRunStatus.RUNNING)) {
+            throw new BusinessException("Knowledge base has active agent runs and cannot be deleted: " + kbCode);
+        }
 
         List<DocumentEntity> documents = documentRepository.findByKnowledgeBaseId(entity.getId());
         List<Long> sessionIds = chatSessionRepository.findIdsByKnowledgeBaseId(entity.getId());
+        List<String> agentRunCodes = agentRunRepository.findRunCodesByKnowledgeBaseId(entity.getId());
 
         if (!sessionIds.isEmpty()) {
             chatMessageRepository.deleteBySessionIds(sessionIds);
         }
-        // 这里按“消息 -> 会话 -> 任务/chunk/文档 -> 知识库”的顺序级联，尽量减少脏数据风险。
+        // 这里按“消息 -> 会话 -> Agent轨迹 -> 任务/chunk/文档 -> 知识库”的顺序级联，尽量减少脏数据风险。
         chatSessionRepository.deleteByKnowledgeBaseId(entity.getId());
+        if (!agentRunCodes.isEmpty()) {
+            agentRunEventRepository.deleteByRunCodes(agentRunCodes);
+            agentStepRepository.deleteByRunCodes(agentRunCodes);
+            agentActionRepository.deleteByRunCodes(agentRunCodes);
+            agentRunRepository.deleteByKnowledgeBaseId(entity.getId());
+        }
         indexingTaskRepository.deleteByKnowledgeBaseId(entity.getId());
         documentChunkRepository.deleteByKnowledgeBaseId(entity.getId());
         documentRepository.deleteByKnowledgeBaseId(entity.getId());

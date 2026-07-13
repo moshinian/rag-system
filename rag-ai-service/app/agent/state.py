@@ -6,11 +6,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-AgentRunMode = Literal["DIAGNOSE_ONLY", "DIAGNOSE_AND_RECOMMEND", "INTELLIGENT_TOOL_AGENT"]
 AgentStepType = Literal["NODE", "TOOL_CALL", "REASONING", "LLM_DECISION"]
 AgentStepStatus = Literal["PENDING", "RUNNING", "SUCCEEDED", "FAILED", "SKIPPED"]
 AgentActionRiskLevel = Literal["LOW", "MEDIUM", "HIGH"]
-AgentDecisionAction = Literal["CALL_TOOL", "REQUEST_CONFIRMATION", "FINAL_ANSWER"]
 AgentToolExecutionMode = Literal["READ_ONLY", "REQUIRES_CONFIRMATION", "WRITE"]
 AgentRuntimeEventType = Literal[
     "RUN_STARTED",
@@ -37,7 +35,6 @@ class AgentRuntimeRequest(BaseModel):
     kb_code: str = Field(alias="kbCode")
     goal: str = Field(min_length=1)
     question: str | None = None
-    run_mode: AgentRunMode = Field(default="DIAGNOSE_AND_RECOMMEND", alias="runMode")
 
 
 class AgentStepResult(BaseModel):
@@ -69,7 +66,7 @@ class AgentActionDraft(BaseModel):
 
 
 class AgentToolDefinition(BaseModel):
-    """Tool Registry 暴露给 planner 的工具契约。"""
+    """工具注册表暴露给 planner 的工具契约。"""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -104,27 +101,6 @@ class AgentToolDefinition(BaseModel):
                 return parsed
             return {"description": stripped}
         return {"description": str(value)}
-
-
-class AgentDecision(BaseModel):
-    """planner 每一轮必须输出的严格 JSON 决策。"""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    action: AgentDecisionAction
-    tool_name: str | None = Field(default=None, alias="toolName")
-    arguments: dict[str, Any] = Field(default_factory=dict)
-    reason: str
-    final_answer: str | None = Field(default=None, alias="finalAnswer")
-    risk_level: AgentActionRiskLevel | None = Field(default=None, alias="riskLevel")
-
-    @field_validator("arguments", mode="before")
-    @classmethod
-    def _normalize_arguments(cls, value: Any) -> dict[str, Any]:
-        """兼容 LLM 在 FINAL_ANSWER 场景把 arguments 返回为 null。"""
-        if value is None:
-            return {}
-        return value
 
 
 class AgentObservation(BaseModel):
@@ -179,7 +155,6 @@ class AgentState(BaseModel):
     request: AgentRuntimeRequest
     tools: list[AgentToolDefinition] = Field(default_factory=list)
     messages: list[dict[str, Any]] = Field(default_factory=list)
-    decision: AgentDecision | None = None
     observations: list[AgentObservation] = Field(default_factory=list)
     tool_call_count: int = Field(default=0, alias="toolCallCount")
     tool_results: dict[str, Any] = Field(default_factory=dict)

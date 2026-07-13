@@ -1,7 +1,6 @@
 package com.example.rag.service;
 
 import com.example.rag.common.id.SnowflakeIdGenerator;
-import com.example.rag.model.enums.AgentRunMode;
 import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.request.AgentRunCreateRequest;
 import com.example.rag.persistence.AgentRunRepository;
@@ -48,7 +47,6 @@ class AgentRunRecordServiceTest {
         AgentRunEntity run = service.create("kb-1", new AgentRunCreateRequest(
                 "诊断",
                 null,
-                AgentRunMode.INTELLIGENT_TOOL_AGENT,
                 "tester"
         ));
 

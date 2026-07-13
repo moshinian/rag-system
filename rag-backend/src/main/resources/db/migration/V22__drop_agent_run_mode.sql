@@ -1,0 +1,2 @@
+ALTER TABLE agent_run
+DROP COLUMN IF EXISTS run_mode;

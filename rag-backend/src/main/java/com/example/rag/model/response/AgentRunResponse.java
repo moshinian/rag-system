@@ -1,6 +1,5 @@
 package com.example.rag.model.response;
 
-import com.example.rag.model.enums.AgentRunMode;
 import com.example.rag.model.enums.AgentRunStatus;
 
 import java.time.OffsetDateTime;
@@ -12,7 +11,6 @@ public record AgentRunResponse(
         String knowledgeBaseCode,
         String goal,
         String question,
-        AgentRunMode runMode,
         AgentRunStatus status,
         String summary,
         String errorMessage,

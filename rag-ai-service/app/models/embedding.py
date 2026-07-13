@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class EmbeddingRequest(BaseModel):
-    """embedding 请求体。"""
+    """向量化请求体。"""
 
     model: str | None = None
     input: Union[str, list[str]]
@@ -23,7 +23,7 @@ class EmbeddingRequest(BaseModel):
 
 
 class EmbeddingData(BaseModel):
-    """单条 embedding 结果。"""
+    """单条向量化结果。"""
 
     object: str = "embedding"
     index: int
@@ -31,14 +31,14 @@ class EmbeddingData(BaseModel):
 
 
 class EmbeddingUsage(BaseModel):
-    """embedding 接口的最小 token 使用量信息。"""
+    """向量化接口的最小 token 使用量信息。"""
 
     prompt_tokens: int = 0
     total_tokens: int = 0
 
 
 class EmbeddingResponse(BaseModel):
-    """embedding 响应体。"""
+    """向量化响应体。"""
 
     object: str = "list"
     data: list[EmbeddingData]

@@ -5,7 +5,6 @@ import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.integration.agent.AgentRuntimeClient;
 import com.example.rag.model.enums.AgentActionRiskLevel;
 import com.example.rag.model.enums.AgentActionStatus;
-import com.example.rag.model.enums.AgentRunMode;
 import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.request.AgentActionConfirmRequest;
 import com.example.rag.model.request.AgentActionRejectRequest;
@@ -316,7 +315,6 @@ class AgentActionExecutionTest {
         entity.setKnowledgeBaseId(knowledgeBaseId);
         entity.setRunCode("AR-100");
         entity.setGoal("检查这个知识库有没有索引异常");
-        entity.setRunMode(AgentRunMode.DIAGNOSE_AND_RECOMMEND);
         entity.setStatus(status);
         entity.setCreatedBy("tester");
         return entity;

@@ -12,7 +12,7 @@ def default_tool_definitions(settings: Settings | None = None) -> list[AgentTool
 
 
 def default_java_tool_definitions() -> list[AgentToolDefinition]:
-    """定义 Java 侧工具的默认契约，用作 Java Tool Registry 不可用时的 fallback。"""
+    """定义 Java 侧工具的默认契约，用作 Java 工具注册表不可用时的兜底。"""
     return [
         tool_definition("system.health.check", "检查系统健康状态。", input_schema=object_schema({}, [])),
         tool_definition(

@@ -56,8 +56,7 @@ public class AgentRunExecutor {
                     run.getRunCode(),
                     kbCode,
                     run.getGoal(),
-                    run.getQuestion(),
-                    run.getRunMode()
+                    run.getQuestion()
             ), event -> {
                 heartbeatService.touchRuntimeHeartbeat(event.runCode());
                 boolean inserted = eventApplier.apply(event);

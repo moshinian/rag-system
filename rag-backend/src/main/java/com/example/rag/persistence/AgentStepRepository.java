@@ -5,6 +5,7 @@ import com.example.rag.mapper.AgentStepMapper;
 import com.example.rag.persistence.entity.AgentStepEntity;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -53,5 +54,15 @@ public class AgentStepRepository {
                 .eq(AgentStepEntity::getRunCode, runCode)
                 .orderByAsc(AgentStepEntity::getCreatedAt);
         return mapper.selectList(query);
+    }
+
+    /** 按运行编码批量删除执行步骤。 */
+    public void deleteByRunCodes(Collection<String> runCodes) {
+        if (runCodes == null || runCodes.isEmpty()) {
+            return;
+        }
+        LambdaQueryWrapper<AgentStepEntity> query = new LambdaQueryWrapper<AgentStepEntity>()
+                .in(AgentStepEntity::getRunCode, runCodes);
+        mapper.delete(query);
     }
 }

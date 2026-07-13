@@ -5,7 +5,6 @@ import com.example.rag.model.dto.AgentRunEventDraft;
 import com.example.rag.model.dto.AgentRuntimeEvent;
 import com.example.rag.model.enums.AgentActionRiskLevel;
 import com.example.rag.model.enums.AgentRunEventType;
-import com.example.rag.model.enums.AgentRunMode;
 import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.enums.AgentRuntimeEventType;
 import com.example.rag.model.enums.AgentStepStatus;
@@ -249,7 +248,6 @@ class AgentRunEventApplierTest {
         run.setRunCode("AR-1");
         run.setKnowledgeBaseId(1L);
         run.setGoal("诊断");
-        run.setRunMode(AgentRunMode.INTELLIGENT_TOOL_AGENT);
         run.setStatus(AgentRunStatus.RUNNING);
         run.setCreatedBy("tester");
         return run;

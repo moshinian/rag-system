@@ -1,2 +1,1 @@
-"""Agent policies for risk and permission decisions."""
-
+"""Agent 风险和权限决策策略。"""

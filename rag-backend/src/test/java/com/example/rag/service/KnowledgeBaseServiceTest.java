@@ -2,10 +2,15 @@ package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.ingestion.storage.LocalFileStorageService;
+import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.KnowledgeBaseEnableResponse;
 import com.example.rag.model.response.KnowledgeBaseResponse;
 import com.example.rag.model.response.PageResponse;
+import com.example.rag.persistence.AgentActionRepository;
+import com.example.rag.persistence.AgentRunEventRepository;
+import com.example.rag.persistence.AgentRunRepository;
+import com.example.rag.persistence.AgentStepRepository;
 import com.example.rag.persistence.ChatMessageRepository;
 import com.example.rag.persistence.ChatSessionRepository;
 import com.example.rag.persistence.DocumentChunkRepository;
@@ -57,6 +62,18 @@ class KnowledgeBaseServiceTest {
 
     @Mock
     private ChatMessageRepository chatMessageRepository;
+
+    @Mock
+    private AgentRunRepository agentRunRepository;
+
+    @Mock
+    private AgentStepRepository agentStepRepository;
+
+    @Mock
+    private AgentActionRepository agentActionRepository;
+
+    @Mock
+    private AgentRunEventRepository agentRunEventRepository;
 
     @Mock
     private LocalFileStorageService localFileStorageService;
@@ -203,19 +220,45 @@ class KnowledgeBaseServiceTest {
 
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(entity));
         when(indexingTaskRepository.existsActiveTaskInKnowledgeBase(1L, "DOCUMENT_INDEXING")).thenReturn(false);
+        when(agentRunRepository.existsByKnowledgeBaseIdAndStatus(1L, AgentRunStatus.RUNNING)).thenReturn(false);
         when(documentRepository.findByKnowledgeBaseId(1L)).thenReturn(List.of(document));
         when(chatSessionRepository.findIdsByKnowledgeBaseId(1L)).thenReturn(List.of(11L, 12L));
+        when(agentRunRepository.findRunCodesByKnowledgeBaseId(1L)).thenReturn(List.of("AR-1", "AR-2"));
 
         KnowledgeBaseResponse response = knowledgeBaseService.delete("settlement-kb");
 
         assertThat(response.kbCode()).isEqualTo("settlement-kb");
         verify(chatMessageRepository).deleteBySessionIds(eq(List.of(11L, 12L)));
         verify(chatSessionRepository).deleteByKnowledgeBaseId(1L);
+        verify(agentRunEventRepository).deleteByRunCodes(eq(List.of("AR-1", "AR-2")));
+        verify(agentStepRepository).deleteByRunCodes(eq(List.of("AR-1", "AR-2")));
+        verify(agentActionRepository).deleteByRunCodes(eq(List.of("AR-1", "AR-2")));
+        verify(agentRunRepository).deleteByKnowledgeBaseId(1L);
         verify(indexingTaskRepository).deleteByKnowledgeBaseId(1L);
         verify(documentChunkRepository).deleteByKnowledgeBaseId(1L);
         verify(documentRepository).deleteByKnowledgeBaseId(1L);
         verify(knowledgeBaseRepository).deleteById(1L);
         verify(localFileStorageService).deleteKnowledgeBaseDirectory("settlement-kb");
+    }
+
+    @Test
+    void deleteShouldRejectWhenKnowledgeBaseHasRunningAgentRuns() throws Exception {
+        KnowledgeBaseEntity entity = new KnowledgeBaseEntity();
+        entity.setId(1L);
+        entity.setKbCode("settlement-kb");
+        entity.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(entity));
+        when(indexingTaskRepository.existsActiveTaskInKnowledgeBase(1L, "DOCUMENT_INDEXING")).thenReturn(false);
+        when(agentRunRepository.existsByKnowledgeBaseIdAndStatus(1L, AgentRunStatus.RUNNING)).thenReturn(true);
+
+        assertThatThrownBy(() -> knowledgeBaseService.delete("settlement-kb"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("active agent runs");
+
+        verify(agentRunRepository, never()).findRunCodesByKnowledgeBaseId(any());
+        verify(documentRepository, never()).deleteByKnowledgeBaseId(any());
+        verify(localFileStorageService, never()).deleteKnowledgeBaseDirectory(any());
     }
 
     @Test
@@ -232,7 +275,9 @@ class KnowledgeBaseServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("cannot be deleted");
 
+        verify(agentRunRepository, never()).existsByKnowledgeBaseIdAndStatus(any(), any());
         verify(documentRepository, never()).deleteByKnowledgeBaseId(any());
+        verify(agentRunRepository, never()).findRunCodesByKnowledgeBaseId(any());
         verify(localFileStorageService, never()).deleteKnowledgeBaseDirectory(any());
     }
 }

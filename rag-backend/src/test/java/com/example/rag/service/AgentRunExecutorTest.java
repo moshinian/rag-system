@@ -2,7 +2,6 @@ package com.example.rag.service;
 
 import com.example.rag.integration.agent.AgentRuntimeStreamingClient;
 import com.example.rag.model.dto.AgentRuntimeEvent;
-import com.example.rag.model.enums.AgentRunMode;
 import com.example.rag.model.enums.AgentRuntimeEventType;
 import com.example.rag.persistence.entity.AgentRunEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -104,7 +103,6 @@ class AgentRunExecutorTest {
         AgentRunEntity run = new AgentRunEntity();
         run.setRunCode("AR-1");
         run.setGoal("诊断");
-        run.setRunMode(AgentRunMode.DIAGNOSE_ONLY);
         return run;
     }
 

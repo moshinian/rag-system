@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 
 class GatewayService:
-    """编排 embedding 和 chat 请求，并转换为网关统一响应模型。"""
+    """编排向量化和聊天请求，并转换为网关统一响应模型。"""
 
     def __init__(self, settings: Settings) -> None:
         """创建服务并注入底层 provider 客户端。"""
@@ -29,9 +29,9 @@ class GatewayService:
         self.provider_client = OpenAiCompatibleProviderClient(settings)
 
     async def create_embeddings(self, payload: EmbeddingRequest, request_id: str) -> EmbeddingResponse:
-        """处理 embedding 请求，并把上游返回映射成标准响应。"""
+        """处理向量化请求，并把上游返回映射成标准响应。"""
         started_at = time.perf_counter()
-        # OpenAI-compatible 协议同时支持单字符串和字符串数组输入，这里统一归一化。
+        # OpenAI 兼容协议同时支持单字符串和字符串数组输入，这里统一归一化。
         inputs = [payload.input] if isinstance(payload.input, str) else payload.input
         model = payload.model or self.settings.embedding_default_model
         upstream_payload = {"model": model, "input": inputs if len(inputs) > 1 else inputs[0]}
@@ -75,7 +75,7 @@ class GatewayService:
         return response
 
     async def create_chat_completion(self, payload: ChatCompletionRequest, request_id: str) -> ChatCompletionResponse:
-        """处理 chat completion 请求，并映射最小 OpenAI-compatible 子集。"""
+        """处理聊天补全请求，并映射最小 OpenAI 兼容子集。"""
         started_at = time.perf_counter()
         model = payload.model or self.settings.chat_default_model
         upstream_payload = payload.model_dump(exclude_none=True)
@@ -90,7 +90,7 @@ class GatewayService:
         )
         upstream = await asyncio.to_thread(self.provider_client.post_json, target, upstream_payload, request_id)
         usage = upstream.get("usage") or {}
-        # choices / usage 字段采用宽松解析，兼容不同上游实现的细小结构差异。
+        # 候选结果和用量字段采用宽松解析，兼容不同上游实现的细小结构差异。
         response = ChatCompletionResponse(
             id=upstream.get("id", "chatcmpl-rag-ai-service"),
             object=upstream.get("object", "chat.completion"),

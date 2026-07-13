@@ -4,7 +4,6 @@ import com.example.rag.common.exception.BusinessException;
 import com.example.rag.config.RagAiGatewayProperties;
 import com.example.rag.model.dto.AgentRuntimeRequest;
 import com.example.rag.model.dto.AgentRuntimeResponse;
-import com.example.rag.model.enums.AgentRunMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -63,15 +62,13 @@ class AgentRuntimeClientTest {
                 "AR-100",
                 "day20-cn-kb",
                 "诊断这个知识库为什么不能问答",
-                null,
-                AgentRunMode.DIAGNOSE_AND_RECOMMEND
+                null
         ));
 
         assertThat(client.openedUrl).isEqualTo("http://agent-runtime.test/v1/agent/runs");
         assertThat(connection.getRequestProperty("X-Request-Id")).isEqualTo("REQ-123");
         assertThat(connection.requestBody()).contains("\"runCode\":\"AR-100\"");
         assertThat(connection.requestBody()).contains("\"kbCode\":\"day20-cn-kb\"");
-        assertThat(connection.requestBody()).contains("\"runMode\":\"DIAGNOSE_AND_RECOMMEND\"");
         assertThat(response.status()).isEqualTo("SUCCEEDED");
         assertThat(response.steps()).hasSize(1);
         assertThat(response.recommendedActions()).hasSize(1);
@@ -87,8 +84,7 @@ class AgentRuntimeClientTest {
                 "AR-100",
                 "day20-cn-kb",
                 "诊断",
-                null,
-                AgentRunMode.DIAGNOSE_AND_RECOMMEND
+                null
         )))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("500");

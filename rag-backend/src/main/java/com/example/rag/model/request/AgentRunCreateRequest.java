@@ -1,6 +1,5 @@
 package com.example.rag.model.request;
 
-import com.example.rag.model.enums.AgentRunMode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -12,8 +11,6 @@ public record AgentRunCreateRequest(
 
         @Size(max = 2000, message = "question length must be <= 2000")
         String question,
-
-        AgentRunMode runMode,
 
         @Size(max = 128, message = "createdBy length must be <= 128")
         String createdBy

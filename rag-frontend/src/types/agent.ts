@@ -1,5 +1,3 @@
-export type AgentRunMode = "DIAGNOSE_ONLY" | "DIAGNOSE_AND_RECOMMEND" | "INTELLIGENT_TOOL_AGENT";
-
 export type AgentRunStatus = "RUNNING" | "WAITING_CONFIRMATION" | "SUCCEEDED" | "FAILED";
 
 export type AgentRunEventType =
@@ -36,7 +34,6 @@ export type AgentActionStatus =
 export type AgentRunCreatePayload = {
   goal: string;
   question?: string;
-  runMode?: AgentRunMode;
   createdBy?: string;
 };
 
@@ -88,7 +85,6 @@ export type AgentRun = {
   knowledgeBaseCode: string;
   goal: string;
   question?: string;
-  runMode: AgentRunMode;
   status: AgentRunStatus;
   summary?: string;
   errorMessage?: string;
