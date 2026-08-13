@@ -3,12 +3,14 @@ package com.example.rag.service;
 import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.config.RagAgentProperties;
 import com.example.rag.persistence.AgentRunRepository;
+import com.example.rag.persistence.entity.AgentRunEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -57,6 +59,12 @@ public class AgentRunHeartbeatService {
                     .field("message", ex.getMessage())
                     .build(), ex);
         }
+    }
+
+    public boolean touchOwnedHeartbeat(AgentRunEntity run) {
+        OffsetDateTime now = OffsetDateTime.now();
+        return runRepository.heartbeatOwned(run.getRunCode(), run.getOwnerInstanceId(), run.getLeaseVersion(),
+                now, now.plus(agentProperties.getWorker().getLeaseDuration()));
     }
 
     /** run 进入终态或后台任务结束后清理节流记录，避免内存长期积累。 */

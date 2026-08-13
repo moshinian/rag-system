@@ -9,7 +9,8 @@
 1. 已具备知识库、文档、检索、问答、历史、健康页的第一版页面骨架。
 2. 已接入后端统一 `ApiResponse` 契约和 requestId 错误展示。
 3. 已完成 `DENSE / HYBRID` 检索模式、`retrievalMode / fusionStrategy` 展示与历史回放适配。
-4. 已具备知识库恢复、文档禁用/恢复、重新嵌入等运维入口的第一版交互承接。
+4. 已适配 rerank 状态、模型、候选数、耗时，以及召回分/重排分双分数展示；启用与否仍由后端配置控制。
+5. 已具备知识库恢复、文档禁用/恢复、重新嵌入等运维入口的第一版交互承接。
 
 当前前端的真实定位不是“展示 demo 页”，而是：
 
@@ -58,6 +59,7 @@
 2. 前端已适配 `retrievalMode / fusionStrategy` 字段。
 3. 前端已适配 `qa/history` 的新旧检索快照兼容。
 4. 前端已适配知识库与文档恢复相关状态语义。
+5. 前端已适配 `rerankStatus / rerankModel / rerankDurationMs / rerankScore` 契约。
 
 ## 已验证
 

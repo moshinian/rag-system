@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     chat_default_model: str = "deepseek-v4-pro"
     chat_path: str = "/chat/completions"
 
+    # 文本重排序能力使用独立配置，避免非 OpenAI-compatible 协议泄漏给 Java。
+    rerank_provider: str = "aliyun-bailian"
+    rerank_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
+    rerank_api_key: str = Field(default="", validation_alias="RERANK_API_KEY")
+    rerank_default_model: str = "qwen3-rerank"
+    rerank_path: str = "/services/rerank/text-rerank/text-rerank"
+    rerank_request_format: str = "dashscope-input"
+    rerank_read_timeout_ms: int = 8000
+    rerank_retry_attempts: int = 2
+
     # provider 专属兼容变量，避免本地沿用旧 .env 时出现“有 key 但没接上”的问题。
     dashscope_api_key: str = Field(default="", validation_alias="DASHSCOPE_API_KEY", exclude=True)
     deepseek_api_key: str = Field(default="", validation_alias="DEEPSEEK_API_KEY", exclude=True)
@@ -35,6 +45,8 @@ class Settings(BaseSettings):
     # 连接超时主要覆盖建连和连接池等待，读超时覆盖上游生成阶段。
     http_connect_timeout_ms: int = 5000
     http_read_timeout_ms: int = 30000
+    http_max_connections: int = 20
+    http_max_keepalive_connections: int = 10
 
     # Agent Runtime 调用 Java MCP 工具能力的配置。
     agent_tool_client: str = "mcp"
@@ -56,6 +68,8 @@ class Settings(BaseSettings):
             self.embedding_api_key = self._resolve_provider_api_key(self.embedding_provider)
         if not self.chat_api_key:
             self.chat_api_key = self._resolve_provider_api_key(self.chat_provider)
+        if not self.rerank_api_key:
+            self.rerank_api_key = self._resolve_provider_api_key(self.rerank_provider)
 
     def _resolve_provider_api_key(self, provider: str) -> str:
         """按 provider 选择兼容环境变量，避免把错误的 key 发给上游。"""

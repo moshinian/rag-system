@@ -89,6 +89,10 @@ public class QaRecordService {
         message.setRetrievedChunks(toJson(new RetrievedChunksSnapshot(
                 answerResponse.retrievalMode(),
                 answerResponse.fusionStrategy(),
+                answerResponse.rerankStatus(),
+                answerResponse.rerankModel(),
+                answerResponse.rerankCandidateCount(),
+                answerResponse.rerankDurationMs(),
                 answerResponse.retrievalResults()
         )));
         message.setSources(toJson(answerResponse.sources()));
@@ -135,6 +139,10 @@ public class QaRecordService {
                 view.getTopK(),
                 retrievalSnapshot.retrievalMode(),
                 retrievalSnapshot.fusionStrategy(),
+                retrievalSnapshot.rerankStatus(),
+                retrievalSnapshot.rerankModel(),
+                retrievalSnapshot.rerankCandidateCount(),
+                retrievalSnapshot.rerankDurationMs(),
                 view.getLatencyMs(),
                 view.getPromptTemplate(),
                 retrievalSnapshot.chunks(),
@@ -183,7 +191,15 @@ public class QaRecordService {
                     ? "NONE"
                     : snapshot.fusionStrategy();
             List<RetrievedChunkResponse> chunks = snapshot.chunks() == null ? List.of() : snapshot.chunks();
-            return new RetrievedChunksSnapshot(retrievalMode, fusionStrategy, chunks);
+            return new RetrievedChunksSnapshot(
+                    retrievalMode,
+                    fusionStrategy,
+                    snapshot.rerankStatus() == null ? com.example.rag.model.enums.RerankStatus.DISABLED : snapshot.rerankStatus(),
+                    snapshot.rerankModel(),
+                    snapshot.rerankCandidateCount(),
+                    snapshot.rerankDurationMs(),
+                    chunks
+            );
         } catch (JsonProcessingException ex) {
             throw new BusinessException("Failed to deserialize retrieval snapshot: " + ex.getMessage());
         }

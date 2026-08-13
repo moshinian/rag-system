@@ -85,6 +85,10 @@ export function QaPage() {
                   denseDurationMs: mutation.data.denseDurationMs,
                   keywordDurationMs: mutation.data.keywordDurationMs,
                   fusionDurationMs: mutation.data.fusionDurationMs,
+                  rerankStatus: mutation.data.rerankStatus,
+                  rerankModel: mutation.data.rerankModel,
+                  rerankCandidateCount: mutation.data.rerankCandidateCount,
+                  rerankDurationMs: mutation.data.rerankDurationMs,
                   totalDurationMs: mutation.data.totalDurationMs
                 }}
               />

@@ -46,6 +46,12 @@ public class DocumentEntity {
     @TableField("storage_path")
     private String storagePath;
 
+    @TableField("storage_type")
+    private String storageType;
+
+    @TableField("object_key")
+    private String objectKey;
+
     @TableField("file_size")
     private Long fileSize;
 

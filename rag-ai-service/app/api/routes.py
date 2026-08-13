@@ -7,6 +7,7 @@ from app.core.config import Settings, get_settings
 from app.models.chat import ChatCompletionRequest, ChatCompletionResponse
 from app.models.embedding import EmbeddingRequest, EmbeddingResponse
 from app.models.health import HealthResponse
+from app.models.rerank import RerankRequest, RerankResponse
 from app.services.gateway_service import GatewayService, get_gateway_service
 
 router = APIRouter()
@@ -33,6 +34,8 @@ async def health(settings: Settings = Depends(resolve_settings)) -> HealthRespon
         embedding_default_model=settings.embedding_default_model,
         chat_provider=settings.chat_provider,
         chat_default_model=settings.chat_default_model,
+        rerank_provider=settings.rerank_provider,
+        rerank_default_model=settings.rerank_default_model,
     )
 
 
@@ -60,6 +63,19 @@ async def create_chat_completion(
     request_id = request.state.request_id
     response.headers["X-Request-Id"] = request_id
     return await gateway_service.create_chat_completion(payload, request_id)
+
+
+@router.post("/v1/rerank", response_model=RerankResponse)
+async def create_rerank(
+    payload: RerankRequest,
+    request: Request,
+    response: Response,
+    gateway_service: GatewayService = Depends(resolve_gateway_service),
+) -> RerankResponse:
+    """重排文本候选，并把 requestId 回传给调用方。"""
+    request_id = request.state.request_id
+    response.headers["X-Request-Id"] = request_id
+    return await gateway_service.create_rerank(payload, request_id)
 
 
 @router.post("/v1/agent/runs", response_model=AgentRuntimeResponse)

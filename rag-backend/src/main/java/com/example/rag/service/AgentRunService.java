@@ -78,17 +78,7 @@ public class AgentRunService {
     /** 创建一条 Agent 诊断运行记录。 */
     public AgentRunResponse createRun(String kbCode, AgentRunCreateRequest request) {
         AgentRunEntity saved = runRecordService.create(kbCode, request);
-        try {
-            runExecutor.submit(kbCode, saved);
-            return toResponse(kbCode, saved, List.of(), List.of());
-        } catch (RuntimeException ex) {
-            AgentRunEntity failed = runResultService.fail(
-                    saved.getRunCode(),
-                    "Agent executor rejected run: " + ex.getMessage()
-            );
-            eventConverter.publishPersistedResult(saved.getRunCode());
-            return toResponse(kbCode, failed, List.of(), List.of());
-        }
+        return toResponse(kbCode, saved, List.of(), List.of());
     }
 
     /** 查询 Agent 诊断运行详情。 */
@@ -114,11 +104,13 @@ public class AgentRunService {
 
         OffsetDateTime now = OffsetDateTime.now();
         String operator = defaultCreatedBy(request == null ? null : request.operator());
+        if (!agentActionRepository.claimForExecution(runCode, actionCode, operator, now)) {
+            throw new BusinessException("Agent action was already claimed by another request: " + actionCode);
+        }
         action.setStatus(AgentActionStatus.EXECUTING);
         action.setConfirmedBy(operator);
         action.setConfirmedAt(now);
         action.setErrorMessage(null);
-        agentActionRepository.updateById(action);
 
         try {
             Object result = executeConfirmedAction(kbCode, action, operator);

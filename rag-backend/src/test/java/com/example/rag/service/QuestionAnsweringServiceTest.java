@@ -7,6 +7,7 @@ import com.example.rag.model.dto.RetrievedChunkCandidate;
 import com.example.rag.model.enums.KeywordStrategy;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.enums.RetrievalMode;
+import com.example.rag.model.enums.RerankStatus;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.persistence.DocumentChunkRepository;
@@ -251,6 +252,92 @@ class QuestionAnsweringServiceTest {
         assertThat(response.totalDurationMs()).isGreaterThanOrEqualTo(response.denseDurationMs() + response.keywordDurationMs());
         assertThat(response.chunks()).extracting("documentCode").containsExactly("DOC-1", "DOC-2");
         assertThat(response.chunks().get(0).score()).isGreaterThan(response.chunks().get(1).score());
+    }
+
+    @Test
+    void retrieveShouldRerankExpandedDenseCandidatesBeforeFinalTopK() {
+        retrievalProperties.getRerank().setEnabled(true);
+        retrievalProperties.getRerank().setCandidateLimit(20);
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
+        when(aiGatewayClient.createEmbedding(eq("text-embedding-3-small"), eq("结算异常怎么处理")))
+                .thenReturn(List.of(0.11D, 0.22D));
+        when(documentChunkRepository.findTopKSimilarChunks(
+                eq(100L),
+                eq("[0.110000000000,0.220000000000]"),
+                eq(20)
+        )).thenReturn(List.of(
+                createRetrievedChunkCandidate(1L, "DOC-1", 0.91D),
+                createRetrievedChunkCandidate(2L, "DOC-2", 0.85D),
+                createRetrievedChunkCandidate(3L, "DOC-3", 0.80D)
+        ));
+        when(aiGatewayClient.createRerank(
+                eq("qwen3-rerank"),
+                eq("结算异常怎么处理"),
+                org.mockito.ArgumentMatchers.anyList(),
+                eq(2),
+                eq("")
+        )).thenReturn(new AiGatewayClient.RerankGatewayResponse(
+                "qwen3-rerank",
+                List.of(
+                        new AiGatewayClient.RerankGatewayResult(2, 0.96D),
+                        new AiGatewayClient.RerankGatewayResult(0, 0.72D)
+                )
+        ));
+
+        QuestionRetrievalResponse response = questionAnsweringService.retrieve(
+                "settlement-kb",
+                "结算异常怎么处理",
+                2,
+                RetrievalMode.DENSE
+        );
+
+        assertThat(response.rerankStatus()).isEqualTo(RerankStatus.APPLIED);
+        assertThat(response.rerankCandidateCount()).isEqualTo(3);
+        assertThat(response.hitCount()).isEqualTo(2);
+        assertThat(response.chunks()).extracting("documentCode").containsExactly("DOC-3", "DOC-1");
+        assertThat(response.chunks()).extracting("rerankScore").containsExactly(0.96D, 0.72D);
+        assertThat(response.chunks()).extracting("score").containsExactly(0.80D, 0.91D);
+    }
+
+    @Test
+    void retrieveShouldDegradeToRecallOrderWhenRerankFails() {
+        retrievalProperties.getRerank().setEnabled(true);
+        KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
+        knowledgeBase.setId(100L);
+        knowledgeBase.setKbCode("settlement-kb");
+        knowledgeBase.setStatus(KnowledgeBaseStatus.ACTIVE);
+
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
+        org.mockito.Mockito.doNothing().when(retrievalReadinessService).assertRetrievalReady("settlement-kb");
+        when(aiGatewayClient.createEmbedding(eq("text-embedding-3-small"), eq("问题")))
+                .thenReturn(List.of(0.11D, 0.22D));
+        when(documentChunkRepository.findTopKSimilarChunks(
+                eq(100L),
+                eq("[0.110000000000,0.220000000000]"),
+                eq(20)
+        )).thenReturn(List.of(
+                createRetrievedChunkCandidate(1L, "DOC-1", 0.91D),
+                createRetrievedChunkCandidate(2L, "DOC-2", 0.85D)
+        ));
+        when(aiGatewayClient.createRerank(
+                eq("qwen3-rerank"),
+                eq("问题"),
+                org.mockito.ArgumentMatchers.anyList(),
+                eq(1),
+                eq("")
+        )).thenThrow(new com.example.rag.common.exception.BusinessException("504 upstream timeout"));
+
+        QuestionRetrievalResponse response = questionAnsweringService.retrieve("settlement-kb", "问题", 1);
+
+        assertThat(response.rerankStatus()).isEqualTo(RerankStatus.DEGRADED);
+        assertThat(response.chunks()).extracting("documentCode").containsExactly("DOC-1");
+        assertThat(response.chunks().get(0).rerankScore()).isNull();
     }
 
     @Test

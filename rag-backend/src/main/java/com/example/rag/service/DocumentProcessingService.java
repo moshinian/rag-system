@@ -8,6 +8,8 @@ import com.example.rag.ingestion.chunk.ChunkDraft;
 import com.example.rag.ingestion.chunk.FixedWindowChunker;
 import com.example.rag.ingestion.parser.DocumentTextParser;
 import com.example.rag.ingestion.parser.ParsedDocument;
+import com.example.rag.ingestion.storage.FileStorageService;
+import com.example.rag.ingestion.storage.MaterializedFile;
 import com.example.rag.model.enums.DocumentChunkStatus;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.EmbeddingStatus;
@@ -34,8 +36,6 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,6 +60,7 @@ public class DocumentProcessingService {
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final ObjectMapper objectMapper;
     private final CacheManager cacheManager;
+    private final FileStorageService fileStorageService;
 
     /** 注入文档处理所需依赖。 */
     public DocumentProcessingService(DocumentRepository documentRepository,
@@ -70,7 +71,8 @@ public class DocumentProcessingService {
                                      FixedWindowChunker fixedWindowChunker,
                                      SnowflakeIdGenerator snowflakeIdGenerator,
                                      ObjectMapper objectMapper,
-                                     CacheManager cacheManager) {
+                                     CacheManager cacheManager,
+                                     FileStorageService fileStorageService) {
         this.documentRepository = documentRepository;
         this.documentChunkRepository = documentChunkRepository;
         this.indexingTaskRepository = indexingTaskRepository;
@@ -80,6 +82,7 @@ public class DocumentProcessingService {
         this.snowflakeIdGenerator = snowflakeIdGenerator;
         this.objectMapper = objectMapper;
         this.cacheManager = cacheManager;
+        this.fileStorageService = fileStorageService;
     }
 
     /**
@@ -101,7 +104,12 @@ public class DocumentProcessingService {
 
     /** 异步索引链路内部调用时允许复用 process 逻辑，但要绕过“活动索引任务”自校验。 */
     DocumentProcessResponse processForIndexing(@NonNull String kbCode, @NonNull String documentCode, String operator) {
-        return processInternal(kbCode, documentCode, operator, true);
+        return processInternal(kbCode, documentCode, operator, true, () -> { });
+    }
+
+    DocumentProcessResponse processForIndexing(@NonNull String kbCode, @NonNull String documentCode,
+                                                String operator, Runnable ownershipCheck) {
+        return processInternal(kbCode, documentCode, operator, true, ownershipCheck);
     }
 
     /** 执行文档处理主流程，并按场景决定是否跳过活动索引任务校验。 */
@@ -109,6 +117,14 @@ public class DocumentProcessingService {
                                                     @NonNull String documentCode,
                                                     String operator,
                                                     boolean allowDuringActiveIndexing) {
+        return processInternal(kbCode, documentCode, operator, allowDuringActiveIndexing, () -> { });
+    }
+
+    private DocumentProcessResponse processInternal(@NonNull String kbCode,
+                                                    @NonNull String documentCode,
+                                                    String operator,
+                                                    boolean allowDuringActiveIndexing,
+                                                    Runnable ownershipCheck) {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
         ensureKnowledgeBaseActive(knowledgeBase);
@@ -126,27 +142,33 @@ public class DocumentProcessingService {
                     + documentCode);
         }
 
-        IndexingTaskEntity task = createRunningTask(document, operator);
+        // 分布式索引已有 DOCUMENT_INDEXING 作为唯一的集群级执行权与审计记录。
+        // 再创建一个没有 Lease 的 DOCUMENT_PROCESS 会在 Pod Crash 后永久 RUNNING，
+        // 并阻塞 Recovery child；仅手工同步 process 保留这条兼容审计记录。
+        IndexingTaskEntity task = allowDuringActiveIndexing ? null : createRunningTask(document, operator);
         try {
             log.info(StructuredLogMessage.of("document.processing.started")
-                    .field("taskId", task.getId())
+                    .field("taskId", task == null ? null : task.getId())
                     .field("kbCode", kbCode)
                     .field("documentCode", documentCode)
                     .field("fileType", document.getFileType())
                     .build());
             // 先进入 PARSING，便于观察当前处理阶段。
+            ownershipCheck.run();
             updateStatus(document, DocumentStatus.PARSING, null);
             ParsedDocument parsedDocument = parse(document);
             if (parsedDocument.sections().isEmpty()) {
                 throw new BusinessException("No readable text extracted from document: " + documentCode);
             }
 
+            ownershipCheck.run();
             updateStatus(document, DocumentStatus.PARSED, null);
             List<ChunkDraft> chunkDrafts = fixedWindowChunker.chunk(parsedDocument);
             if (chunkDrafts.isEmpty()) {
                 throw new BusinessException("No chunks generated from document: " + documentCode);
             }
 
+            ownershipCheck.run();
             updateStatus(document, DocumentStatus.CHUNKING, null);
             // 重新处理同一文档时，先清掉旧 chunk，避免重复数据残留。
             documentChunkRepository.deleteByDocumentId(document.getId());
@@ -155,10 +177,13 @@ public class DocumentProcessingService {
                     .toList();
             documentChunkRepository.batchInsert(chunks);
 
+            ownershipCheck.run();
             updateStatus(document, DocumentStatus.INDEXED, null);
-            markTaskSucceeded(task, parsedDocument.parserName(), chunks.size());
+            if (task != null) {
+                markTaskSucceeded(task, parsedDocument.parserName(), chunks.size());
+            }
             log.info(StructuredLogMessage.of("document.processing.succeeded")
-                    .field("taskId", task.getId())
+                    .field("taskId", task == null ? null : task.getId())
                     .field("kbCode", kbCode)
                     .field("documentCode", documentCode)
                     .field("parserName", parsedDocument.parserName())
@@ -175,11 +200,18 @@ public class DocumentProcessingService {
                     document.getUpdatedAt()
             );
         } catch (RuntimeException ex) {
+            // 旧 Owner 恢复后必须先验证执行权；若已失去 Lease，不得把新 Owner 已完成的
+            // document/chunk 状态重新覆盖为 FAILED。
+            if (allowDuringActiveIndexing) {
+                ownershipCheck.run();
+            }
             // 任一阶段失败都统一落到 FAILED，方便后续排障和重试。
             markFailed(document, ex.getMessage());
-            markTaskFailed(task, ex.getMessage());
+            if (task != null) {
+                markTaskFailed(task, ex.getMessage());
+            }
             log.warn(StructuredLogMessage.of("document.processing.failed")
-                    .field("taskId", task.getId())
+                    .field("taskId", task == null ? null : task.getId())
                     .field("kbCode", kbCode)
                     .field("documentCode", documentCode)
                     .field("message", ex.getMessage())
@@ -197,13 +229,9 @@ public class DocumentProcessingService {
                 .findFirst()
                 .orElseThrow(() -> new BusinessException("No parser available for file type: " + document.getFileType()));
 
-        Path path = Path.of(document.getStoragePath());
-        if (!Files.exists(path)) {
-            throw new BusinessException("Stored file not found: " + document.getStoragePath());
-        }
-
-        try {
-            return parser.parse(document, path);
+        try (MaterializedFile materialized = fileStorageService.materialize(
+                document.getObjectKey(), document.getStoragePath())) {
+            return parser.parse(document, materialized.path());
         } catch (IOException ex) {
             throw new BusinessException("Failed to parse document: " + ex.getMessage());
         }

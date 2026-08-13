@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-config
+  namespace: rag-system
+data:
+  # 仅供可丢弃的故障演练集群使用，缩短 Crash/Recovery 验证周期。
+  RAG_ID_WORKER_LEASE_DURATION: 20s
+  RAG_ID_WORKER_RENEWAL_INTERVAL: 5s
+  RAG_INDEXING_LEASE_DURATION: 20s
+  RAG_INDEXING_HEARTBEAT_INTERVAL: 5s
+  RAG_INDEXING_RECOVERY_SCAN_INTERVAL: 2s
+  RAG_AGENT_LEASE_DURATION: 20s
+  RAG_AGENT_HEARTBEAT_INTERVAL: 5s
+  RAG_AGENT_RECOVERY_SCAN_INTERVAL_SECONDS: "2"
+  # E2E 显式验证真实 rerank Provider；base 默认关闭，避免日常部署产生额外调用成本。
+  RAG_RERANK_ENABLED: "true"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-backend
+  namespace: rag-system
+spec:
+  template:
+    spec:
+      containers:
+        - name: rag-backend
+          # 仅为 old-worker-resume 演练保留超过 20s Lease 的暂停窗口；base 仍为 3。
+          livenessProbe:
+            failureThreshold: 8

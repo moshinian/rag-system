@@ -131,6 +131,32 @@ class AgentRunEventApplierTest {
     }
 
     @Test
+    void recoveredAttemptShouldUseLeaseScopedEventAndNodeIdentifiers() {
+        AgentRunEntity run = run();
+        run.setLeaseVersion(2L);
+        run.setOwnerInstanceId("pod-b");
+        when(runRepository.lockOwned("AR-1", "pod-b", 2L)).thenReturn(Optional.of(run));
+        when(eventService.persist(any())).thenReturn(Optional.empty());
+
+        boolean inserted = applier.applyOwned(event(
+                "AR-1-000001",
+                AgentRuntimeEventType.STEP_STARTED,
+                "AR-1-N-000001",
+                "llm_plan",
+                null,
+                "RUNNING",
+                objectMapper.createObjectNode(),
+                false
+        ), "pod-b", 2L);
+
+        ArgumentCaptor<AgentRunEventDraft> captor = ArgumentCaptor.forClass(AgentRunEventDraft.class);
+        verify(eventService).persist(captor.capture());
+        assertThat(inserted).isFalse();
+        assertThat(captor.getValue().eventCode()).isEqualTo("AR-1-000001-A2");
+        assertThat(captor.getValue().nodeInvocationId()).isEqualTo("AR-1-N-000001-A2");
+    }
+
+    @Test
     void lateRuntimeEventAfterTerminalRunShouldBeIgnoredBeforePersistingEvent() {
         AgentRunEntity run = run();
         run.setStatus(AgentRunStatus.FAILED);

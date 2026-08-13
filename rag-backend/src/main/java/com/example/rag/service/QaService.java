@@ -90,6 +90,10 @@ public class QaService {
                 retrievalResponse.denseDurationMs(),
                 retrievalResponse.keywordDurationMs(),
                 retrievalResponse.fusionDurationMs(),
+                retrievalResponse.rerankStatus(),
+                retrievalResponse.rerankModel(),
+                retrievalResponse.rerankCandidateCount(),
+                retrievalResponse.rerankDurationMs(),
                 llmDurationMs,
                 totalDurationMs,
                 retrievalResponse.chunks(),
@@ -107,6 +111,10 @@ public class QaService {
                 .field("denseDurationMs", retrievalResponse.denseDurationMs())
                 .field("keywordDurationMs", retrievalResponse.keywordDurationMs())
                 .field("fusionDurationMs", retrievalResponse.fusionDurationMs())
+                .field("rerankStatus", retrievalResponse.rerankStatus().name())
+                .field("rerankModel", retrievalResponse.rerankModel())
+                .field("rerankCandidateCount", retrievalResponse.rerankCandidateCount())
+                .field("rerankDurationMs", retrievalResponse.rerankDurationMs())
                 .field("llmDurationMs", llmDurationMs)
                 .field("chatModel", chatResult.model())
                 .field("answerLength", answer.length())
@@ -124,6 +132,7 @@ public class QaService {
                 chunk.chunkIndex(),
                 chunk.content(),
                 chunk.score(),
+                chunk.rerankScore(),
                 chunk.startOffset(),
                 chunk.endOffset()
         );

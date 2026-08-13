@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /** Agent 运行管理服务测试。 */
@@ -74,8 +75,9 @@ class AgentRunServiceTest {
     }
 
     @Test
-    void createRunShouldReturnRunningImmediatelyAndSubmitBackgroundTask() {
+    void createRunShouldReturnQueuedWithoutBindingToLocalExecutor() {
         AgentRunEntity run = run(1L, "AR-100");
+        run.setStatus(AgentRunStatus.QUEUED);
         when(runRecordService.create(any(), any())).thenReturn(run);
 
         AgentRunResponse response = agentRunService.createRun(
@@ -88,34 +90,12 @@ class AgentRunServiceTest {
         );
 
         assertThat(response.runCode()).isEqualTo("AR-100");
-        assertThat(response.status()).isEqualTo(AgentRunStatus.RUNNING);
+        assertThat(response.status()).isEqualTo(AgentRunStatus.QUEUED);
         assertThat(response.steps()).isEmpty();
         assertThat(response.actions()).isEmpty();
         verify(eventConverter, never()).publishRunStarted(any());
-        verify(runExecutor).submit("day20-cn-kb", run);
+        verifyNoInteractions(runExecutor);
         verify(runResultService, never()).complete(any(), any());
-    }
-
-    @Test
-    void createRunShouldMarkFailedWhenExecutorRejectsTask() {
-        AgentRunEntity run = run(1L, "AR-100");
-        AgentRunEntity failed = run(1L, "AR-100");
-        failed.setStatus(AgentRunStatus.FAILED);
-        failed.setErrorMessage("Agent executor rejected run: queue full");
-        when(runRecordService.create(any(), any())).thenReturn(run);
-        doThrow(new IllegalStateException("queue full"))
-                .when(runExecutor).submit("day20-cn-kb", run);
-        when(runResultService.fail("AR-100", "Agent executor rejected run: queue full"))
-                .thenReturn(failed);
-
-        AgentRunResponse response = agentRunService.createRun(
-                "day20-cn-kb",
-                new AgentRunCreateRequest("诊断", null, null)
-        );
-
-        assertThat(response.status()).isEqualTo(AgentRunStatus.FAILED);
-        assertThat(response.errorMessage()).contains("queue full");
-        verify(eventConverter).publishPersistedResult("AR-100");
     }
 
     @Test
@@ -130,7 +110,7 @@ class AgentRunServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Knowledge base not found");
 
-        verify(runExecutor, never()).submit(any(), any());
+        verifyNoInteractions(runExecutor);
         verify(eventConverter, never()).publishRunStarted(any());
     }
 

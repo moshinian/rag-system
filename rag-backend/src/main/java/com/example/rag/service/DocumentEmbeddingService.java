@@ -76,7 +76,11 @@ public class DocumentEmbeddingService {
 
     /** 异步索引链路内部调用时允许复用 embed 逻辑，但要绕过“活动索引任务”自校验。 */
     DocumentEmbeddingResponse embedForIndexing(String kbCode, String documentCode) {
-        return embedInternal(kbCode, documentCode, true, buildContext("system", null));
+        return embedInternal(kbCode, documentCode, true, buildContext("system", null), () -> { });
+    }
+
+    DocumentEmbeddingResponse embedForIndexing(String kbCode, String documentCode, Runnable ownershipCheck) {
+        return embedInternal(kbCode, documentCode, true, buildContext("system", null), ownershipCheck);
     }
 
     /** 全量重嵌入内部入口，记录操作人和 rebuild run 关联信息。 */
@@ -89,6 +93,14 @@ public class DocumentEmbeddingService {
                                                     String documentCode,
                                                     boolean allowDuringActiveIndexing,
                                                     EmbeddingWriteContext context) {
+        return embedInternal(kbCode, documentCode, allowDuringActiveIndexing, context, () -> { });
+    }
+
+    private DocumentEmbeddingResponse embedInternal(String kbCode,
+                                                    String documentCode,
+                                                    boolean allowDuringActiveIndexing,
+                                                    EmbeddingWriteContext context,
+                                                    Runnable ownershipCheck) {
         KnowledgeBaseEntity knowledgeBase = knowledgeBaseRepository.findByCode(kbCode)
                 .orElseThrow(() -> new BusinessException("Knowledge base not found: " + kbCode));
         ensureKnowledgeBaseActive(knowledgeBase);
@@ -126,6 +138,7 @@ public class DocumentEmbeddingService {
             }
 
             OffsetDateTime startedAt = OffsetDateTime.now();
+            ownershipCheck.run();
             log.info(StructuredLogMessage.of("document.embedding.batch_started")
                     .field("kbCode", kbCode)
                     .field("documentCode", documentCode)
@@ -158,6 +171,7 @@ public class DocumentEmbeddingService {
                 validateEmbeddingDimensions(embeddings);
 
                 OffsetDateTime updatedAt = OffsetDateTime.now();
+                ownershipCheck.run();
                 // 接口返回顺序和输入顺序一一对应，逐条回写到原始 chunk 即可。
                 for (int index = 0; index < chunks.size(); index++) {
                     DocumentChunkEntity chunk = chunks.get(index);

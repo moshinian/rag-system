@@ -24,6 +24,7 @@
 - PostgreSQL + pgvector 向量存储
 - `DENSE / HYBRID` 双检索模式
 - keyword recall + RRF fusion
+- 可配置 `qwen3-rerank` 召回后重排序、双分数回放和失败降级
 - `LIKE / POSTGRES_FTS` 可配置 lexical strategy
 - 结构化来源返回、问答历史和检索证据回放
 - Redis 短 TTL 检索缓存及坏缓存自愈
@@ -169,7 +170,17 @@ export CHAT_PROVIDER="deepseek-openai-compatible"
 export CHAT_BASE_URL="https://api.deepseek.com"
 export CHAT_API_KEY="<your-chat-api-key>"
 export CHAT_DEFAULT_MODEL="<your-chat-model>"
+
+export RERANK_PROVIDER="aliyun-bailian"
+export RERANK_BASE_URL="https://dashscope.aliyuncs.com/api/v1"
+export RERANK_API_KEY="<your-rerank-api-key>"
+export RERANK_DEFAULT_MODEL="qwen3-rerank"
+export RERANK_REQUEST_FORMAT="dashscope-input"
 ```
+
+公共 DashScope `/api/v1/services/rerank/...` 端点使用 `dashscope-input`；如果配置的是新版 qwen3 工作空间端点，则将 `RERANK_REQUEST_FORMAT` 设为 `qwen3-flat`。
+
+重排序默认关闭。完成评测后可通过 `RAG_RERANK_ENABLED=true` 启用；上游超时或限流时，Java 会保留原 Dense/RRF 顺序继续问答，降级结果不会进入检索缓存。
 
 启动服务：
 
@@ -222,6 +233,12 @@ npm run dev
 curl --noproxy '*' http://127.0.0.1:8001/health
 curl --noproxy '*' http://127.0.0.1:8080/api/health
 curl --noproxy '*' http://127.0.0.1:8080/api/health/redis-probe
+```
+
+真实 LLM Agent smoke 不进入默认 pytest 发现范围，避免常规单测隐式消耗外部额度。需要验证时显式运行：
+
+```bash
+RUN_REAL_LLM_TESTS=1 ./.venv/bin/python -m pytest rag-ai-service/tests/agent_llm_smoke.py -q
 ```
 
 完整健康检查会真实探测 PostgreSQL、Redis、AI Gateway、embedding 和 LLM，因此模型凭证缺失或不可用时，Java 健康结果会反映对应组件异常。

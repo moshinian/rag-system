@@ -1,3 +1,5 @@
+"""需要显式启用的真实 LLM Agent smoke。"""
+
 import os
 
 import pytest
@@ -33,7 +35,7 @@ def test_real_langgraph_agent_can_drive_readiness_probe_and_final_answer():
 
     response = runtime.run(request)
 
-    assert response.status == "SUCCEEDED"
+    assert response.status == "SUCCEEDED", response.error_message
     assert response.recommended_actions == []
     assert tool_client.calls == ["kb.readiness.check", "qa.retrieve.probe"]
     assert response.summary
@@ -45,7 +47,16 @@ class SmokeToolClient:
 
     def definitions(self) -> list[AgentToolDefinition]:
         return [
-            AgentToolDefinition(toolName="kb.readiness.check", description="检查知识库 readiness。"),
+            AgentToolDefinition(
+                toolName="kb.readiness.check",
+                description="检查知识库 readiness。",
+                inputSchema={
+                    "type": "object",
+                    "required": ["kbCode"],
+                    "properties": {"kbCode": {"type": "string"}},
+                    "additionalProperties": False,
+                },
+            ),
             AgentToolDefinition(
                 toolName="qa.retrieve.probe",
                 description="执行 Dense / Hybrid 检索探测。",

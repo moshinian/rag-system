@@ -1,33 +1,15 @@
-import asyncio
 import json
 
-import httpx
 import pytest
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, ToolMessage
 
 from app.agent.graph import AgentFinalAnswer
-from app.agent.runtime import AgentRuntime, _default_tool_client, get_agent_runtime
+from app.agent.runtime import AgentRuntime, _default_tool_client
 from app.agent.state import AgentRuntimeRequest, AgentToolDefinition
 from app.agent.tools import AgentToolExecution, McpAgentToolClient
 from app.agent.tools.mcp_client import _extract_structured_content
 from app.core.config import Settings
-from app.main import create_app
-
-
-def build_app(runtime: AgentRuntime):
-    app = create_app()
-    app.dependency_overrides[get_agent_runtime] = lambda: runtime
-    return app
-
-
-async def request(app, method: str, url: str, **kwargs):
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        sender = getattr(client, method.lower())
-        response = await sender(url, **kwargs)
-        await response.aread()
-        return response
 
 
 def test_agent_run_uses_langgraph_main_path_structured_final_answer():
@@ -37,27 +19,15 @@ def test_agent_run_uses_langgraph_main_path_structured_final_answer():
                 _final_answer_message("默认智能图执行完成。"),
             ]),
     )
-    app = build_app(runtime)
+    response = runtime.run(AgentRuntimeRequest(
+        runCode="AR-test",
+        kbCode="day20-cn-kb",
+        goal="检查这个知识库状态",
+    ))
 
-    response = asyncio.run(
-        request(
-            app,
-            "POST",
-            "/v1/agent/runs",
-            headers={"X-Request-Id": "REQ-AGENT-1"},
-            json={
-                "runCode": "AR-test",
-                "kbCode": "day20-cn-kb",
-                "goal": "检查这个知识库状态",
-            },
-        )
-    )
-
-    assert response.status_code == 200
-    assert response.headers["X-Request-Id"] == "REQ-AGENT-1"
-    body = response.json()
-    assert body["status"] == "SUCCEEDED"
-    assert body["summary"] == "默认智能图执行完成。"
+    assert response.status == "SUCCEEDED"
+    assert response.summary == "默认智能图执行完成。"
+    body = response.model_dump(by_alias=True, exclude_none=True)
     assert [step["nodeName"] for step in body["steps"]] == ["agent_model"]
     assert body["steps"][0]["stepType"] == "LLM_DECISION"
     assert "stepCode" not in str(body)

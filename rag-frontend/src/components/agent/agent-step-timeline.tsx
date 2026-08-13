@@ -1,6 +1,6 @@
-import { Alert, Card, Collapse, Empty, Space, Tag, Timeline, Typography } from "antd";
+import { Alert, Collapse, Empty, Space, Tag, Timeline, Typography } from "antd";
 import type { AgentStep } from "../../types/agent";
-import { truncateText } from "../../utils/format";
+import { JsonBlock } from "./json-block";
 import { AgentStepInsight } from "./agent-step-insight";
 
 type AgentStepTimelineProps = {
@@ -39,14 +39,14 @@ export function AgentStepTimeline({ steps }: AgentStepTimelineProps) {
                   ? {
                       key: "input",
                       label: "输入",
-                      children: <JsonBlock value={step.inputJson} />
+                      children: <JsonBlock value={step.inputJson} maxHeight={240} maxRawLength={3000} />
                     }
                   : null,
                 step.outputJson
                   ? {
                       key: "output",
                       label: "输出",
-                      children: <JsonBlock value={step.outputJson} />
+                      children: <JsonBlock value={step.outputJson} maxHeight={240} maxRawLength={3000} />
                     }
                   : null
               ].filter((item): item is NonNullable<typeof item> => item !== null)}
@@ -56,24 +56,6 @@ export function AgentStepTimeline({ steps }: AgentStepTimelineProps) {
       }))}
     />
   );
-}
-
-function JsonBlock({ value }: { value: string }) {
-  return (
-    <Card size="small" styles={{ body: { padding: 12 } }}>
-      <pre style={{ margin: 0, maxHeight: 240, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-        {prettyJson(value)}
-      </pre>
-    </Card>
-  );
-}
-
-function prettyJson(value: string) {
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return truncateText(value, 3000);
-  }
 }
 
 function renderStepStatus(status: string) {

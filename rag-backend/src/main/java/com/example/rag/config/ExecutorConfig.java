@@ -7,6 +7,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * 异步执行器配置。
@@ -55,6 +57,16 @@ public class ExecutorConfig {
         executor.setAwaitTerminationSeconds(normalizePositive(properties.getAwaitTerminationSeconds(), 30));
         executor.initialize();
         return executor;
+    }
+
+    /** 独立于业务 Stage 的 Lease Heartbeat 调度器。 */
+    @Bean(destroyMethod = "shutdown")
+    public ScheduledExecutorService heartbeatExecutor() {
+        return Executors.newScheduledThreadPool(2, runnable -> {
+            Thread thread = new Thread(runnable, "rag-lease-heartbeat");
+            thread.setDaemon(true);
+            return thread;
+        });
     }
 
     /** 归一化核心线程数，非法配置回退为 4。 */

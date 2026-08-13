@@ -15,4 +15,6 @@ class HealthResponse(BaseModel):
     embedding_default_model: str
     chat_provider: str
     chat_default_model: str
+    rerank_provider: str
+    rerank_default_model: str
     time: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

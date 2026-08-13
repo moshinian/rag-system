@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import type { RetrievalMode } from "../types/qa";
+import type { RerankStatus, RetrievalMode } from "../types/qa";
 
 /** 格式化日期时间。 */
 export function formatDateTime(value?: string) {
@@ -32,4 +32,16 @@ export function formatRetrievalMode(mode?: RetrievalMode) {
 export function formatFusionStrategy(strategy?: string) {
   if (!strategy) return "-";
   return strategy === "NONE" ? "无融合" : strategy;
+}
+
+/** 格式化重排序执行状态。 */
+export function formatRerankStatus(status?: RerankStatus) {
+  if (!status) return "-";
+  const labels: Record<RerankStatus, string> = {
+    DISABLED: "未启用",
+    SKIPPED_EMPTY: "无候选",
+    APPLIED: "已重排",
+    DEGRADED: "已降级"
+  };
+  return labels[status];
 }

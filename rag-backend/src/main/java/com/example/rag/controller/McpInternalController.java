@@ -8,6 +8,7 @@ import com.example.rag.service.agent.McpToolContext;
 import com.example.rag.service.agent.McpToolDefinition;
 import com.example.rag.service.agent.McpToolRegistry;
 import com.example.rag.service.agent.McpToolResult;
+import com.example.rag.service.agent.McpSessionStore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * MCP Streamable HTTP transport 的内部 tools endpoint。
@@ -50,15 +52,25 @@ public class McpInternalController {
     private final McpToolRegistry mcpToolRegistry;
     private final RagAgentProperties ragAgentProperties;
     private final ObjectMapper objectMapper;
+    private final McpSessionStore sessionStore;
     private final Map<String, SessionState> sessions = new ConcurrentHashMap<>();
 
     /** 构造McpInternalController。 */
     public McpInternalController(McpToolRegistry mcpToolRegistry,
                                  RagAgentProperties ragAgentProperties,
                                  ObjectMapper objectMapper) {
+        this(mcpToolRegistry, ragAgentProperties, objectMapper, null);
+    }
+
+    @Autowired
+    public McpInternalController(McpToolRegistry mcpToolRegistry,
+                                 RagAgentProperties ragAgentProperties,
+                                 ObjectMapper objectMapper,
+                                 McpSessionStore sessionStore) {
         this.mcpToolRegistry = mcpToolRegistry;
         this.ragAgentProperties = ragAgentProperties;
         this.objectMapper = objectMapper;
+        this.sessionStore = sessionStore;
     }
 
     /** 第一版暂不支持 SSE。 */
@@ -77,7 +89,7 @@ public class McpInternalController {
         }
         String sessionId = headers.getFirst(SESSION_ID_HEADER);
         if (sessionId != null && !sessionId.isBlank()) {
-            sessions.remove(sessionId);
+            deleteSession(sessionId);
         }
         return ResponseEntity.noContent().build();
     }
@@ -108,7 +120,9 @@ public class McpInternalController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
         if ("notifications/initialized".equals(method)) {
-            session.initialized = true;
+            if (!markSessionInitialized(sessionId, session)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
             return ResponseEntity.accepted().build();
         }
         if (!session.initialized) {
@@ -123,8 +137,7 @@ public class McpInternalController {
 
     /** 创建 MCP session，并返回客户端后续请求必须携带的 sessionId。 */
     private ResponseEntity<?> handleInitialize(Object id) {
-        String sessionId = UUID.randomUUID().toString();
-        sessions.put(sessionId, new SessionState());
+        String sessionId = createSession();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("protocolVersion", PROTOCOL_VERSION);
         result.put("capabilities", Map.of("tools", Map.of("listChanged", false)));
@@ -293,7 +306,40 @@ public class McpInternalController {
         if (sessionId == null || sessionId.isBlank()) {
             return null;
         }
+        if (sessionStore != null) {
+            if (!sessionStore.exists(sessionId)) {
+                return null;
+            }
+            SessionState state = new SessionState();
+            state.initialized = sessionStore.initialized(sessionId);
+            return state;
+        }
         return sessions.get(sessionId);
+    }
+
+    private String createSession() {
+        if (sessionStore != null) {
+            return sessionStore.create();
+        }
+        String sessionId = UUID.randomUUID().toString();
+        sessions.put(sessionId, new SessionState());
+        return sessionId;
+    }
+
+    private boolean markSessionInitialized(String sessionId, SessionState state) {
+        if (sessionStore != null) {
+            return sessionStore.markInitialized(sessionId);
+        }
+        state.initialized = true;
+        return true;
+    }
+
+    private void deleteSession(String sessionId) {
+        if (sessionStore != null) {
+            sessionStore.delete(sessionId);
+        } else {
+            sessions.remove(sessionId);
+        }
     }
 
     /** 构造成功的 JSON-RPC 2.0 响应，并附加 transport 级响应头。 */

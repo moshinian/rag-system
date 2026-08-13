@@ -6,12 +6,12 @@
 
 当前它的真实角色是：
 
-**作为 Java RAG 主系统前面的最小 AI Gateway，统一承接 embeddings 和 chat completions 能力，并把模型供应商边界从业务系统中剥离出来。**
+**作为 Java RAG 主系统前面的最小 AI Gateway，统一承接 embeddings、chat completions 和 rerank 能力，并把模型供应商边界从业务系统中剥离出来。**
 
 当前已经完成的核心目标包括：
 
 1. 独立 Python FastAPI 服务已落地。
-2. `GET /health`、`POST /v1/embeddings`、`POST /v1/chat/completions` 已落地。
+2. `GET /health`、`POST /v1/embeddings`、`POST /v1/chat/completions`、`POST /v1/rerank` 已落地。
 3. Java 后端已改为通过 Gateway 调用模型能力。
 4. 真实健康检查、embedding rebuild、retrieve、ask 已完成联调验证。
 
@@ -20,7 +20,7 @@
 ### 服务结构
 
 1. `app/main.py` 已作为服务入口落地。
-2. `app/api/` 已收口健康检查和两个模型能力接口。
+2. `app/api/` 已收口健康检查和三个模型能力接口。
 3. `app/core/` 已承接配置、异常处理和 requestId middleware。
 4. `app/clients/` 已承接上游 OpenAI-compatible provider 调用。
 5. `app/services/` 已承接 gateway 编排与日志。
@@ -33,6 +33,7 @@
 4. 错误返回已统一成 `error.message / error.type / error.code` 结构。
 5. `X-Request-Id` 已支持透传和回传。
 6. `/health` 当前还会返回 `embedding/chat` 的 provider 与默认模型，便于 Java 健康页和前端页面展示实时运行配置。
+7. `/v1/rerank` 已形成 `query / documents / top_n -> index / relevance_score` 的稳定 Gateway 契约，并透传 `X-Request-Id`。
 
 ### 上游能力适配
 
@@ -40,6 +41,7 @@
 2. chat completions 已支持通过 OpenAI-compatible 协议调用 DeepSeek，也已验证可切换到阿里云百炼兼容模式。
 3. HTTP timeout、有限重试和 provider 错误映射已落地。
 4. usage 字段已按最小契约向下透出。
+5. 文本重排序已接入百炼 `qwen3-rerank`，使用独立 provider、模型、超时和重试配置。
 
 ### Java 集成
 
@@ -50,6 +52,7 @@
 5. Java `/api/health` 已改为通过 Gateway 做真实能力探测。
 6. Java 健康检查中的 `llm / embedding` provider 和 model 已改为透传 Gateway 当前运行配置，而不是只展示 Java 本地默认值。
 7. Java chat 实际调用、`qa/ask` 返回值和 `qa/history` 落库的 `chatModel` 已与 Gateway 当前 `chat_default_model` 对齐。
+8. Java 已通过 Gateway 执行召回后重排序；Gateway 只负责模型协议适配，不接管候选生成、TopK、缓存或历史语义。
 
 ## 已验证
 
@@ -62,6 +65,7 @@
 5. 真实 `POST /qa/retrieve` 已通过 Gateway 生成 query embedding 并完成检索。
 6. 真实 `POST /qa/ask` 已通过 Gateway 调用 chat provider 成功返回回答。
 7. 2026-05-20 已完成一次真实切换验证：`CHAT_PROVIDER=aliyun-bailian-openai-compatible`、`CHAT_DEFAULT_MODEL=qwen-plus` 生效后，Gateway `/health`、Java `/api/health`、前端健康页、`qa/ask` 返回体与 `qa/history` 落库中的 `chatModel` 都已同步切换为 `qwen-plus`。
+8. 2026-07-16 已完成真实 `qwen3-rerank` 往返：Gateway 同时兼容公共 DashScope 的 `input/parameters + output.results` 协议和新版工作空间端点的扁平协议，示例结果能把正确证据从输入序号 1 排到首位。
 
 ### 本次联调中确认的关键事实
 
@@ -74,7 +78,7 @@
 ## 当前未完成
 
 1. 还没有 provider fallback、多 provider 路由或模型治理面板。
-2. 还没有 rerank、evaluation、本地模型或 vLLM 接入。
+2. 还没有独立 evaluation 服务、本地模型或 vLLM 接入；rerank 已完成代码与契约接入，但默认关闭，仍需真实评测后再切换环境默认值。
 3. 还没有独立指标系统或 tracing，只完成了最小日志观测。
 4. 第一阶段仍以最小 OpenAI-compatible 子集为边界，还没有覆盖更完整的 API 面。
 
@@ -91,7 +95,7 @@
 
 建议 `rag-ai-service` 下一步优先推进：
 
-1. 继续维护 `plan.md`，明确下一阶段 rerank / vLLM / evaluation 的进入顺序。
+1. 使用现有中文评测资产完成 rerank 开关前后的真实对照，并据此决定环境默认值。
 2. 增强 provider 级日志字段和失败分类。
 3. 引入更稳定的健康探针和 provider 兼容策略沉淀。
-4. 根据后端演进，决定是否把 rerank 和 evaluation 一起收口到这个服务。
+4. 继续评估 evaluation 是保留在后端旁路测试，还是形成独立服务边界。

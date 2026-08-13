@@ -47,6 +47,30 @@ public class AgentRunRepository {
         return Optional.ofNullable(mapper.selectOne(query));
     }
 
+    public Optional<AgentRunEntity> claimNext(String ownerInstanceId,
+                                               OffsetDateTime now,
+                                               OffsetDateTime leaseUntil) {
+        return Optional.ofNullable(mapper.claimNext(ownerInstanceId, now, leaseUntil));
+    }
+
+    public boolean heartbeatOwned(String runCode, String ownerInstanceId, Long leaseVersion,
+                                  OffsetDateTime now, OffsetDateTime leaseUntil) {
+        return mapper.heartbeatOwned(runCode, ownerInstanceId, leaseVersion, now, leaseUntil) == 1;
+    }
+
+    public Optional<AgentRunEntity> lockOwned(String runCode, String ownerInstanceId, Long leaseVersion) {
+        return Optional.ofNullable(mapper.lockOwned(runCode, ownerInstanceId, leaseVersion));
+    }
+
+    public Optional<AgentRunEntity> lockNextExpired(OffsetDateTime now) {
+        return Optional.ofNullable(mapper.lockNextExpired(now));
+    }
+
+    public boolean returnOwnedToQueue(AgentRunEntity run, String errorMessage, OffsetDateTime now) {
+        return mapper.returnOwnedToQueue(run.getRunCode(), run.getOwnerInstanceId(), run.getLeaseVersion(),
+                errorMessage, now) == 1;
+    }
+
     /** 判断知识库下是否存在指定状态的运行记录。 */
     public boolean existsByKnowledgeBaseIdAndStatus(Long knowledgeBaseId, AgentRunStatus status) {
         LambdaQueryWrapper<AgentRunEntity> query = new LambdaQueryWrapper<AgentRunEntity>()

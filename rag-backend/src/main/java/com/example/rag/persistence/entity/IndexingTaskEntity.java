@@ -75,6 +75,18 @@ public class IndexingTaskEntity {
     @TableField("recovered_at")
     private OffsetDateTime recoveredAt;
 
+    @TableField("owner_instance_id")
+    private String ownerInstanceId;
+
+    @TableField("claimed_at")
+    private OffsetDateTime claimedAt;
+
+    @TableField("lease_until")
+    private OffsetDateTime leaseUntil;
+
+    @TableField("lease_version")
+    private Long leaseVersion = 0L;
+
     @TableField("created_by")
     private String createdBy = "system";
 

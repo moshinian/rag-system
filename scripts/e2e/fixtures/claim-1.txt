@@ -1,0 +1,1 @@
+Distributed claim fixture 1. PostgreSQL SKIP LOCKED gives this task to one backend worker.

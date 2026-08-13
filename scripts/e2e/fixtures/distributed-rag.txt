@@ -1,0 +1,11 @@
+RAG System Kubernetes distributed validation document.
+
+The first phase runs four identical rag-backend pods. PostgreSQL provides
+durable task state and atomic task claims. MinIO stores uploaded source files
+so every backend pod can process them. Redis provides Snowflake worker leases
+and realtime SSE notifications, while PostgreSQL remains the durable event
+history used for replay.
+
+Workers use leases and independent heartbeats. If a pod disappears, its lease
+expires and another pod can recover the task. Execution is at-least-once, so
+business writes must remain idempotent and stale owners must not finalize work.

@@ -46,6 +46,11 @@ public class RequestIdFilter extends OncePerRequestFilter {
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
+    @Override
+    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
+        return request.getRequestURI().startsWith("/actuator/");
+    }
+
     /** 为请求补充 requestId 并写回响应头。 */
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,

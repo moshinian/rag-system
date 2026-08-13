@@ -7,6 +7,8 @@ import com.example.rag.ingestion.chunk.FixedWindowChunker;
 import com.example.rag.ingestion.parser.MarkdownDocumentTextParser;
 import com.example.rag.ingestion.parser.PlainTextDocumentTextParser;
 import com.example.rag.ingestion.parser.PdfDocumentTextParser;
+import com.example.rag.ingestion.storage.FileStorageService;
+import com.example.rag.ingestion.storage.MaterializedFile;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.IndexingTaskStage;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
@@ -33,6 +35,7 @@ import org.springframework.cache.support.NoOpCacheManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.List;
 import java.util.Optional;
@@ -41,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 /**
@@ -66,11 +70,73 @@ class DocumentProcessingServiceTest {
     @Mock
     private SnowflakeIdGenerator snowflakeIdGenerator;
 
+    @Mock
+    private FileStorageService fileStorageService;
+
     @Captor
     private ArgumentCaptor<List<DocumentChunkEntity>> documentChunkCaptor;
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void processForIndexingShouldUseParentDistributedTaskWithoutNestedProcessTask() throws Exception {
+        DocumentEntity document = createDocument("txt");
+        Path file = tempDir.resolve("distributed.txt");
+        Files.writeString(file, "Distributed indexing recovery must not create an unleased nested task.");
+        document.setStoragePath(file.toString());
+
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb"))
+                .thenReturn(Optional.of(document));
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(createKnowledgeBase()));
+        when(documentRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(documentChunkRepository.batchInsert(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(fileStorageService.materialize(null, file.toString()))
+                .thenReturn(new MaterializedFile(file, false));
+        mockSnowflakeSequence(10L);
+
+        DocumentProcessingService service = new DocumentProcessingService(
+                documentRepository, documentChunkRepository, indexingTaskRepository,
+                knowledgeBaseRepository, List.of(new PlainTextDocumentTextParser()),
+                new FixedWindowChunker(defaultChunkingProperties()), snowflakeIdGenerator,
+                new ObjectMapper(), new NoOpCacheManager(), fileStorageService
+        );
+        AtomicInteger ownershipChecks = new AtomicInteger();
+
+        DocumentProcessResponse response = service.processForIndexing(
+                "settlement-kb", "DOC-1", "worker", ownershipChecks::incrementAndGet);
+
+        assertThat(response.status()).isEqualTo("INDEXED");
+        assertThat(ownershipChecks).hasValueGreaterThan(3);
+        verify(indexingTaskRepository, never()).insert(any());
+        verify(indexingTaskRepository, never()).updateById(any());
+    }
+
+    @Test
+    void processForIndexingShouldNotOverwriteDocumentWhenOwnershipIsLost() {
+        DocumentEntity document = createDocument("txt");
+        when(documentRepository.findByCodeInKnowledgeBase("DOC-1", "settlement-kb"))
+                .thenReturn(Optional.of(document));
+        when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(createKnowledgeBase()));
+
+        DocumentProcessingService service = new DocumentProcessingService(
+                documentRepository, documentChunkRepository, indexingTaskRepository,
+                knowledgeBaseRepository, List.of(new PlainTextDocumentTextParser()),
+                new FixedWindowChunker(defaultChunkingProperties()), snowflakeIdGenerator,
+                new ObjectMapper(), new NoOpCacheManager(), fileStorageService
+        );
+        Runnable lostOwnership = () -> {
+            throw new IllegalStateException("Task ownership lost: 42");
+        };
+
+        assertThatThrownBy(() -> service.processForIndexing(
+                "settlement-kb", "DOC-1", "worker", lostOwnership))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ownership lost");
+
+        verify(documentRepository, never()).updateById(any());
+        verify(indexingTaskRepository, never()).insert(any());
+    }
 
     @Test
     void processShouldParseMarkdownAndPersistChunks() throws Exception {
@@ -103,6 +169,8 @@ class DocumentProcessingServiceTest {
         when(indexingTaskRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
         mockSnowflakeSequence(10L);
         when(documentChunkRepository.batchInsert(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(fileStorageService.materialize(null, file.toString()))
+                .thenReturn(new MaterializedFile(file, false));
 
         DocumentProcessingService service = new DocumentProcessingService(
                 documentRepository,
@@ -113,7 +181,8 @@ class DocumentProcessingServiceTest {
                 new FixedWindowChunker(defaultChunkingProperties()),
                 snowflakeIdGenerator,
                 new ObjectMapper(),
-                new NoOpCacheManager()
+                new NoOpCacheManager(),
+                fileStorageService
         );
 
         DocumentProcessResponse response = service.process("settlement-kb", "DOC-1", "tester");
@@ -154,6 +223,8 @@ class DocumentProcessingServiceTest {
         when(indexingTaskRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
         mockSnowflakeSequence(10L);
         when(documentChunkRepository.batchInsert(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(fileStorageService.materialize(null, file.toString()))
+                .thenReturn(new MaterializedFile(file, false));
 
         DocumentProcessingService service = new DocumentProcessingService(
                 documentRepository,
@@ -164,7 +235,8 @@ class DocumentProcessingServiceTest {
                 new FixedWindowChunker(defaultChunkingProperties()),
                 snowflakeIdGenerator,
                 new ObjectMapper(),
-                new NoOpCacheManager()
+                new NoOpCacheManager(),
+                fileStorageService
         );
 
         DocumentProcessResponse response = service.process("settlement-kb", "DOC-1", "tester");
@@ -190,7 +262,8 @@ class DocumentProcessingServiceTest {
                 new FixedWindowChunker(defaultChunkingProperties()),
                 snowflakeIdGenerator,
                 new ObjectMapper(),
-                new NoOpCacheManager()
+                new NoOpCacheManager(),
+                fileStorageService
         );
 
         assertThatThrownBy(() -> service.process("settlement-kb", "DOC-1", "tester"))
@@ -216,7 +289,8 @@ class DocumentProcessingServiceTest {
                 new FixedWindowChunker(defaultChunkingProperties()),
                 snowflakeIdGenerator,
                 new ObjectMapper(),
-                new NoOpCacheManager()
+                new NoOpCacheManager(),
+                fileStorageService
         );
 
         assertThatThrownBy(() -> service.process("settlement-kb", "DOC-1", "tester"))

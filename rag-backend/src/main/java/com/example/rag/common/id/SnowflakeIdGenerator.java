@@ -1,6 +1,7 @@
 package com.example.rag.common.id;
 
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * 雪花 ID 生成器。
@@ -21,13 +22,35 @@ public class SnowflakeIdGenerator {
     private static final long TIMESTAMP_LEFT_SHIFT = SEQUENCE_BITS + WORKER_ID_BITS + DATACENTER_ID_BITS;
     private final long workerId;
     private final long datacenterId;
+    private final SnowflakeWorkerIdAllocator allocator;
     private long sequence = 0L;
     private long lastTimestamp = -1L;
 
     /** 构造SnowflakeIdGenerator。 */
     public SnowflakeIdGenerator(SnowflakeIdProperties properties) {
-        this.workerId = properties.workerId();
+        this(properties, new SnowflakeWorkerIdAllocator() {
+            @Override
+            public long workerId() {
+                return properties.workerId();
+            }
+
+            @Override
+            public boolean canGenerateIds() {
+                return true;
+            }
+
+            @Override
+            public String description() {
+                return "test-static:" + properties.workerId();
+            }
+        });
+    }
+
+    @Autowired
+    public SnowflakeIdGenerator(SnowflakeIdProperties properties, SnowflakeWorkerIdAllocator allocator) {
+        this.workerId = allocator.workerId();
         this.datacenterId = properties.datacenterId();
+        this.allocator = allocator;
 
         if (workerId < 0 || workerId > MAX_WORKER_ID) {
             throw new IllegalArgumentException("workerId must be between 0 and " + MAX_WORKER_ID);
@@ -39,6 +62,9 @@ public class SnowflakeIdGenerator {
 
     /** 生成下一个长整型 ID。 */
     public synchronized long nextId() {
+        if (!allocator.canGenerateIds()) {
+            throw new IllegalStateException("Snowflake ID generation stopped because workerId lease was lost");
+        }
         long currentTimestamp = timestamp();
         if (currentTimestamp < lastTimestamp) {
             currentTimestamp = waitUntilNextMillis(lastTimestamp);

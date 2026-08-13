@@ -1,6 +1,7 @@
-import { Alert, Badge, Card, Collapse, Empty, Space, Tag, Timeline, Typography } from "antd";
+import { Alert, Badge, Collapse, Empty, Space, Tag, Timeline, Typography } from "antd";
 import type { AgentRunEvent, AgentRunEventConnectionStatus, AgentRunEventType } from "../../types/agent";
 import { formatDateTime, truncateText } from "../../utils/format";
+import { JsonBlock } from "./json-block";
 
 type AgentRunEventTimelineProps = {
   events: AgentRunEvent[];
@@ -33,7 +34,6 @@ export function AgentRunEventTimeline({ events, connectionStatus, connectionErro
 }
 
 function AgentRunEventItem({ event }: { event: AgentRunEvent }) {
-  const payload = parsePayload(event.payloadJson);
   return (
     <Space direction="vertical" size="small" style={{ width: "100%" }}>
       <Space wrap>
@@ -50,7 +50,7 @@ function AgentRunEventItem({ event }: { event: AgentRunEvent }) {
         <Typography.Text type="secondary">{formatDateTime(event.createdAt)}</Typography.Text>
       </Space>
       {event.message ? <Typography.Text>{event.message}</Typography.Text> : null}
-      {payload ? (
+      {event.payloadJson ? (
         <Collapse
           size="small"
           ghost
@@ -58,7 +58,7 @@ function AgentRunEventItem({ event }: { event: AgentRunEvent }) {
             {
               key: "payload",
               label: "事件 payload",
-              children: <JsonBlock value={payload} />
+              children: <JsonBlock value={event.payloadJson} maxHeight={260} />
             }
           ]}
         />
@@ -111,23 +111,4 @@ function eventTagColor(type: AgentRunEventType) {
   if (type === "PLANNER_DECISION") return "cyan";
   if (type.startsWith("TOOL_CALL")) return "blue";
   return "default";
-}
-
-function parsePayload(payloadJson?: string) {
-  if (!payloadJson) {
-    return undefined;
-  }
-  try {
-    return JSON.stringify(JSON.parse(payloadJson), null, 2);
-  } catch {
-    return truncateText(payloadJson, 4000);
-  }
-}
-
-function JsonBlock({ value }: { value: string }) {
-  return (
-    <Card size="small" styles={{ body: { padding: 12 } }}>
-      <pre style={{ margin: 0, maxHeight: 260, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{value}</pre>
-    </Card>
-  );
 }
