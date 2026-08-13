@@ -14,7 +14,7 @@ import com.example.rag.service.DocumentIndexingService;
 import com.example.rag.service.DocumentProcessingService;
 import com.example.rag.service.DocumentService;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;

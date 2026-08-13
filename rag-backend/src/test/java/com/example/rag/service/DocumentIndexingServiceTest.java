@@ -29,16 +29,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.RejectedExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
@@ -66,13 +62,6 @@ class DocumentIndexingServiceTest {
 
     @Mock
     private SnowflakeIdGenerator snowflakeIdGenerator;
-
-    private final Executor directExecutor = new Executor() {
-        @Override
-        public void execute(Runnable command) {
-            command.run();
-        }
-    };
 
     @Test
     void submitShouldOnlyPersistQueuedTask() {
@@ -117,11 +106,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         DocumentIndexingTaskResponse response = service.submit("settlement-kb", "DOC-1", "tester");
@@ -185,11 +171,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         DocumentIndexingTaskResponse response = service.submit("settlement-kb", "DOC-1", "tester");
@@ -259,11 +242,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         DocumentIndexingTaskResponse response = service.retry("settlement-kb", "DOC-1", 500L, "tester");
@@ -295,11 +275,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         assertThatThrownBy(() -> service.submit("settlement-kb", "DOC-1", "tester"))
@@ -331,11 +308,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         assertThatThrownBy(() -> service.submit("settlement-kb", "DOC-1", "tester"))
@@ -377,11 +351,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         assertThatThrownBy(() -> service.retry("settlement-kb", "DOC-1", 500L, "tester"))
@@ -408,11 +379,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         assertThatThrownBy(() -> service.retry("settlement-kb", "DOC-1", 500L, "tester"))
@@ -439,11 +407,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         assertThatThrownBy(() -> service.retry("settlement-kb", "DOC-1", 500L, "tester"))
@@ -507,11 +472,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         service.recoverStaleTasks();
@@ -557,13 +519,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                command -> {
-                    throw new RejectedExecutionException("queue full");
-                }
+                createIndexingProperties()
         );
 
         DocumentIndexingTaskResponse response = service.submit("settlement-kb", "DOC-1", "tester");
@@ -608,11 +565,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         DocumentIndexingTaskResponse response = service.submit("settlement-kb", "DOC-1", "tester");
@@ -644,11 +598,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         assertThat(service.listTasks("settlement-kb", "DOC-1"))
@@ -677,11 +628,8 @@ class DocumentIndexingServiceTest {
                 knowledgeBaseRepository,
                 documentRepository,
                 indexingTaskRepository,
-                documentProcessingService,
-                documentEmbeddingService,
                 snowflakeIdGenerator,
-                createIndexingProperties(),
-                directExecutor
+                createIndexingProperties()
         );
 
         assertThat(service.listTasks("settlement-kb", "DOC-1"))

@@ -11,12 +11,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.TransactionDefinition;
 
 import java.time.OffsetDateTime;
 
@@ -99,7 +100,7 @@ class AgentRunEventSseListenerTransactionTest {
 
                 @Override
                 protected void doBegin(@NonNull Object transaction,
-                                       @NonNull org.springframework.transaction.TransactionDefinition definition) {
+                                       @NonNull TransactionDefinition definition) {
                     // 测试用空事务管理器，只需要触发 Spring 事务同步回调。
                 }
 

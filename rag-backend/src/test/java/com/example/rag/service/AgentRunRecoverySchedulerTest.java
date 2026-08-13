@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -33,7 +32,9 @@ class AgentRunRecoverySchedulerTest {
     void schedulerShouldRecoverEachCandidateIndependently() {
         RagAgentProperties properties = new RagAgentProperties();
         AgentRunLeaseRecoveryCoordinator coordinator = mock(AgentRunLeaseRecoveryCoordinator.class);
-        when(coordinator.recoverOne()).thenReturn(Optional.of("AR-1"), Optional.empty());
+        when(coordinator.recoverOne())
+                .thenReturn(Optional.of("AR-1"))
+                .thenReturn(Optional.empty());
         AgentRunRecoveryScheduler scheduler = new AgentRunRecoveryScheduler(
                 properties,
                 coordinator

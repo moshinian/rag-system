@@ -35,7 +35,6 @@ class AgentRunEventServiceTest {
     private ApplicationEventPublisher applicationEventPublisher;
 
     @Test
-    @SuppressWarnings("null") // Mockito capture/any 以 null matcher 工作，测试断言会在捕获后校验真实事件。
     void persistShouldPublishCommittedEventOnlyWhenInsertSucceeds() {
         AgentRunEventService service = service();
         when(snowflakeIdGenerator.nextId()).thenReturn(101L);
@@ -54,7 +53,6 @@ class AgentRunEventServiceTest {
     }
 
     @Test
-    @SuppressWarnings("null") // Mockito any(Object.class) 以 null matcher 表达任意参数。
     void persistShouldIgnoreDuplicateEventWithoutPublishing() {
         AgentRunEventService service = service();
         when(snowflakeIdGenerator.nextId()).thenReturn(101L);
