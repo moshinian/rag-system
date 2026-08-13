@@ -4,6 +4,7 @@ import type { AgentAction, AgentRun, AgentStep } from "../../types/agent";
 import { formatDateTime, truncateText } from "../../utils/format";
 import { AgentRunEventTimeline } from "./agent-run-event-timeline";
 import type { AgentRunViewModel } from "./agent-run-view-model";
+import { JsonBlock } from "./json-block";
 
 type AgentDebugPanelProps = {
   viewModel: AgentRunViewModel;
@@ -83,11 +84,7 @@ function PayloadList({ payloads }: { payloads: Record<string, unknown> }) {
       items={entries.map(([eventId, payload]) => ({
         key: eventId,
         label: eventId,
-        children: (
-          <pre style={{ margin: 0, maxHeight: 320, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-            {JSON.stringify(payload, null, 2)}
-          </pre>
-        )
+        children: <JsonBlock value={payload} maxHeight={320} />
       }))}
     />
   );

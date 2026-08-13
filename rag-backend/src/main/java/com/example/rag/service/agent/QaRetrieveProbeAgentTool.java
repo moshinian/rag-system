@@ -152,6 +152,10 @@ public class QaRetrieveProbeAgentTool implements McpTool {
         branch.put("denseDurationMs", response.denseDurationMs());
         branch.put("keywordDurationMs", response.keywordDurationMs());
         branch.put("fusionDurationMs", response.fusionDurationMs());
+        branch.put("rerankStatus", response.rerankStatus());
+        branch.put("rerankModel", response.rerankModel());
+        branch.put("rerankCandidateCount", response.rerankCandidateCount());
+        branch.put("rerankDurationMs", response.rerankDurationMs());
         branch.put("totalDurationMs", response.totalDurationMs());
         branch.put("sources", response.chunks().stream().map(this::toSource).toList());
         return branch;
@@ -165,6 +169,7 @@ public class QaRetrieveProbeAgentTool implements McpTool {
         source.put("chunkId", chunk.chunkId());
         source.put("chunkIndex", chunk.chunkIndex());
         source.put("score", chunk.score());
+        source.put("rerankScore", chunk.rerankScore());
         return source;
     }
 

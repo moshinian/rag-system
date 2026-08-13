@@ -1,0 +1,1 @@
+Distributed claim fixture 3. MinIO lets a worker on another pod load this source file.

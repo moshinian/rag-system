@@ -3,7 +3,8 @@ package com.example.rag.service;
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.config.CacheNames;
-import com.example.rag.ingestion.storage.LocalFileStorageService;
+import com.example.rag.ingestion.storage.FileStorageService;
+import com.example.rag.ingestion.storage.StoredFile;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.response.DocumentChunkResponse;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
@@ -66,7 +67,7 @@ public class DocumentService {
     private final DocumentChunkRepository documentChunkRepository;
     private final DocumentRepository documentRepository;
     private final IndexingTaskRepository indexingTaskRepository;
-    private final LocalFileStorageService localFileStorageService;
+    private final FileStorageService fileStorageService;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
 
     /** 构造DocumentService。 */
@@ -74,13 +75,13 @@ public class DocumentService {
                            DocumentChunkRepository documentChunkRepository,
                            DocumentRepository documentRepository,
                            IndexingTaskRepository indexingTaskRepository,
-                           LocalFileStorageService localFileStorageService,
+                           FileStorageService fileStorageService,
                            SnowflakeIdGenerator snowflakeIdGenerator) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
         this.documentChunkRepository = documentChunkRepository;
         this.documentRepository = documentRepository;
         this.indexingTaskRepository = indexingTaskRepository;
-        this.localFileStorageService = localFileStorageService;
+        this.fileStorageService = fileStorageService;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
     }
 
@@ -118,15 +119,15 @@ public class DocumentService {
         String documentCode = generateDocumentCode(documentId);
         String displayName = normalizeDisplayName(documentName, fileName);
         String normalizedOperator = normalizeOperator(operator);
-        String storagePath;
+        StoredFile storedFile;
         try {
-            storagePath = localFileStorageService.store(
+            storedFile = fileStorageService.store(
                     knowledgeBase.getKbCode(),
                     LocalDate.now().format(DATE_FORMATTER),
                     documentCode,
                     fileName,
                     file
-            ).toString();
+            );
         } catch (IOException ex) {
             throw new BusinessException("Failed to store document: " + ex.getMessage());
         }
@@ -139,7 +140,9 @@ public class DocumentService {
         entity.setDisplayName(displayName);
         entity.setFileType(fileType);
         entity.setMediaType(mediaType);
-        entity.setStoragePath(storagePath);
+        entity.setStoragePath(storedFile.storagePath());
+        entity.setStorageType(storedFile.storageType());
+        entity.setObjectKey(storedFile.objectKey());
         entity.setFileSize(file.getSize());
         entity.setContentHash(contentHash);
         entity.setStatus(DocumentStatus.UPLOADED);

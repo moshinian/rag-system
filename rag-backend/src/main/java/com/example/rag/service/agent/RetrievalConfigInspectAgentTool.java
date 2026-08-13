@@ -57,6 +57,15 @@ public class RetrievalConfigInspectAgentTool implements McpTool {
         output.put("keywordStrategy", retrievalProperties.getKeywordStrategy());
         output.put("keywordMinTokenLength", retrievalProperties.getKeywordMinTokenLength());
         output.put("keywordMinHitThreshold", retrievalProperties.getKeywordMinHitThreshold());
+        RagRetrievalProperties.Rerank rerank = retrievalProperties.getRerank();
+        if (rerank != null) {
+            Map<String, Object> rerankOutput = new LinkedHashMap<>();
+            rerankOutput.put("enabled", rerank.isEnabled());
+            rerankOutput.put("model", rerank.getModel());
+            rerankOutput.put("candidateLimit", rerank.getCandidateLimit());
+            rerankOutput.put("policyVersion", rerank.getPolicyVersion());
+            output.put("rerank", rerankOutput);
+        }
         return McpToolResult.success(
                 TOOL_NAME,
                 output,

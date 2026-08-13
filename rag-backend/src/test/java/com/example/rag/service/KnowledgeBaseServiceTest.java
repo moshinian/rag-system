@@ -1,7 +1,7 @@
 package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
-import com.example.rag.ingestion.storage.LocalFileStorageService;
+import com.example.rag.ingestion.storage.FileStorageService;
 import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.KnowledgeBaseEnableResponse;
@@ -76,7 +76,7 @@ class KnowledgeBaseServiceTest {
     private AgentRunEventRepository agentRunEventRepository;
 
     @Mock
-    private LocalFileStorageService localFileStorageService;
+    private FileStorageService fileStorageService;
 
     @Mock
     private DocumentIndexingService documentIndexingService;
@@ -238,7 +238,7 @@ class KnowledgeBaseServiceTest {
         verify(documentChunkRepository).deleteByKnowledgeBaseId(1L);
         verify(documentRepository).deleteByKnowledgeBaseId(1L);
         verify(knowledgeBaseRepository).deleteById(1L);
-        verify(localFileStorageService).deleteKnowledgeBaseDirectory("settlement-kb");
+        verify(fileStorageService).deleteKnowledgeBase("settlement-kb");
     }
 
     @Test
@@ -258,7 +258,7 @@ class KnowledgeBaseServiceTest {
 
         verify(agentRunRepository, never()).findRunCodesByKnowledgeBaseId(any());
         verify(documentRepository, never()).deleteByKnowledgeBaseId(any());
-        verify(localFileStorageService, never()).deleteKnowledgeBaseDirectory(any());
+        verify(fileStorageService, never()).deleteKnowledgeBase(any());
     }
 
     @Test
@@ -278,6 +278,6 @@ class KnowledgeBaseServiceTest {
         verify(agentRunRepository, never()).existsByKnowledgeBaseIdAndStatus(any(), any());
         verify(documentRepository, never()).deleteByKnowledgeBaseId(any());
         verify(agentRunRepository, never()).findRunCodesByKnowledgeBaseId(any());
-        verify(localFileStorageService, never()).deleteKnowledgeBaseDirectory(any());
+        verify(fileStorageService, never()).deleteKnowledgeBase(any());
     }
 }

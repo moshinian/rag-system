@@ -4,6 +4,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.List;
+import java.time.Duration;
 
 /**
  * Agent 内部调用配置。
@@ -14,6 +15,7 @@ public class RagAgentProperties {
     private String internalToolToken = "dev-agent-tool-token";
     private List<String> mcpAllowedOrigins = List.of("http://127.0.0.1:8001", "http://localhost:8001");
     private Executor executor = new Executor();
+    private Worker worker = new Worker();
     private Recovery recovery = new Recovery();
 
     /**
@@ -26,6 +28,15 @@ public class RagAgentProperties {
         private Integer queueCapacity = 100;
         private Integer awaitTerminationSeconds = 30;
         private String threadNamePrefix = "rag-agent-";
+    }
+
+    @Data
+    public static class Worker {
+        private boolean enabled = true;
+        private Duration pollInterval = Duration.ofSeconds(1);
+        private Duration leaseDuration = Duration.ofSeconds(120);
+        private Duration heartbeatInterval = Duration.ofSeconds(30);
+        private int maxAttempts = 3;
     }
 
     /**

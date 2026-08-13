@@ -14,6 +14,12 @@ services:
       CHAT_BASE_URL: https://api.deepseek.com
       CHAT_API_KEY: ${DEEPSEEK_API_KEY:-}
       CHAT_DEFAULT_MODEL: deepseek-v4-pro
+      RERANK_PROVIDER: aliyun-bailian
+      RERANK_BASE_URL: ${RERANK_BASE_URL:-https://dashscope.aliyuncs.com/api/v1}
+      RERANK_API_KEY: ${DASHSCOPE_API_KEY:-}
+      RERANK_DEFAULT_MODEL: qwen3-rerank
+      RERANK_PATH: ${RERANK_PATH:-/services/rerank/text-rerank/text-rerank}
+      RERANK_REQUEST_FORMAT: ${RERANK_REQUEST_FORMAT:-dashscope-input}
     ports:
       - "8001:8001"
 
@@ -41,7 +47,7 @@ services:
       --appendonly yes
       --requirepass rag_password
       --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
     volumes:
       - ./rag-backend/data/redis:/data
 
@@ -55,3 +61,17 @@ services:
       - redis
     volumes:
       - ./rag-backend/data/redisinsight:/data
+
+  minio:
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    container_name: rag-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-rag_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-rag_minio_password}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./rag-backend/data/minio:/data

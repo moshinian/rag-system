@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_fixed
+from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_fixed
 
 from app.core.config import Settings
 from app.core.exceptions import ProviderError
@@ -22,6 +22,8 @@ class ProviderTarget:
     api_key: str
     default_model: str
     path: str
+    read_timeout_ms: int | None = None
+    retry_attempts: int = 3
 
 
 class OpenAiCompatibleProviderClient:
@@ -37,19 +39,26 @@ class OpenAiCompatibleProviderClient:
             write=resolved_read_timeout_ms / 1000.0,
             pool=settings.http_connect_timeout_ms / 1000.0,
         )
-        self.http_client = httpx.Client(timeout=timeout)
+        self.http_client = httpx.AsyncClient(
+            timeout=timeout,
+            limits=httpx.Limits(
+                max_connections=max(1, settings.http_max_connections),
+                max_keepalive_connections=max(0, settings.http_max_keepalive_connections),
+            ),
+        )
 
-    def post_json(self, target: ProviderTarget, payload: dict[str, Any], request_id: str) -> dict[str, Any]:
+    async def post_json(self, target: ProviderTarget, payload: dict[str, Any], request_id: str) -> dict[str, Any]:
         """对外暴露统一 JSON POST 入口。"""
-        return self._post_json(target, payload, request_id)
+        attempts = max(1, target.retry_attempts)
+        retrying = AsyncRetrying(
+            reraise=True,
+            stop=stop_after_attempt(attempts),
+            wait=wait_fixed(0.2),
+            retry=retry_if_exception(lambda exc: _is_retryable_exception(exc)),
+        )
+        return await retrying(self._post_json, target, payload, request_id)
 
-    @retry(
-        reraise=True,
-        stop=stop_after_attempt(3),
-        wait=wait_fixed(0.2),
-        retry=retry_if_exception(lambda exc: _is_retryable_exception(exc)),
-    )
-    def _post_json(self, target: ProviderTarget, payload: dict[str, Any], request_id: str) -> dict[str, Any]:
+    async def _post_json(self, target: ProviderTarget, payload: dict[str, Any], request_id: str) -> dict[str, Any]:
         """向上游 provider 发起请求，并把常见失败收口成统一异常。"""
         url = _join_url(target.base_url, target.path)
         headers = {
@@ -62,7 +71,16 @@ class OpenAiCompatibleProviderClient:
             headers["Authorization"] = "Bearer " + target.api_key
 
         try:
-            response = self.http_client.post(url, headers=headers, json=payload)
+            if target.read_timeout_ms is not None:
+                timeout = httpx.Timeout(
+                    connect=self.settings.http_connect_timeout_ms / 1000.0,
+                    read=target.read_timeout_ms / 1000.0,
+                    write=target.read_timeout_ms / 1000.0,
+                    pool=self.settings.http_connect_timeout_ms / 1000.0,
+                )
+                response = await self.http_client.post(url, headers=headers, json=payload, timeout=timeout)
+            else:
+                response = await self.http_client.post(url, headers=headers, json=payload)
         except httpx.TimeoutException as exc:
             raise ProviderError(
                 message=f"{target.capability} upstream timeout",
@@ -100,6 +118,10 @@ class OpenAiCompatibleProviderClient:
 
         return response.json()
 
+    async def aclose(self) -> None:
+        """关闭共享连接池，供 FastAPI 生命周期与测试显式释放资源。"""
+        await self.http_client.aclose()
+
 
 def _join_url(base_url: str, path: str) -> str:
     """拼接 base_url 和 path，避免出现重复或缺失斜杠。"""
@@ -119,12 +141,15 @@ def _safe_json(response: httpx.Response) -> dict[str, Any]:
 
 
 def _extract_error_message(payload: dict[str, Any]) -> str | None:
-    """从 OpenAI 兼容错误结构中提取可展示的 message。"""
+    """从 OpenAI 兼容或 DashScope 错误结构中提取可展示的 message。"""
     error = payload.get("error")
     if isinstance(error, dict):
         message = error.get("message")
         if isinstance(message, str) and message.strip():
             return message.strip()
+    message = payload.get("message")
+    if isinstance(message, str) and message.strip():
+        return message.strip()
     return None
 
 

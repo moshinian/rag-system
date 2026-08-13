@@ -1,14 +1,11 @@
 package com.example.rag.service;
 
 import com.example.rag.config.RagAgentProperties;
-import com.example.rag.persistence.AgentRunRepository;
-import com.example.rag.persistence.entity.AgentRunEntity;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -21,34 +18,29 @@ class AgentRunRecoverySchedulerTest {
     void schedulerShouldSkipWhenDisabled() {
         RagAgentProperties properties = new RagAgentProperties();
         properties.getRecovery().setEnabled(false);
-        AgentRunRepository runRepository = mock(AgentRunRepository.class);
+        AgentRunLeaseRecoveryCoordinator coordinator = mock(AgentRunLeaseRecoveryCoordinator.class);
         AgentRunRecoveryScheduler scheduler = new AgentRunRecoveryScheduler(
                 properties,
-                runRepository,
-                mock(AgentRunRecoveryService.class)
+                coordinator
         );
 
         scheduler.recoverStaleRuns();
 
-        verify(runRepository, never()).findRecoverableRunningRuns(any(), any(), any(Integer.class));
+        verify(coordinator, never()).recoverOne();
     }
 
     @Test
     void schedulerShouldRecoverEachCandidateIndependently() {
         RagAgentProperties properties = new RagAgentProperties();
-        AgentRunRepository runRepository = mock(AgentRunRepository.class);
-        AgentRunRecoveryService recoveryService = mock(AgentRunRecoveryService.class);
-        AgentRunEntity run = new AgentRunEntity();
-        run.setRunCode("AR-1");
-        when(runRepository.findRecoverableRunningRuns(any(), any(), eq(100))).thenReturn(List.of(run));
+        AgentRunLeaseRecoveryCoordinator coordinator = mock(AgentRunLeaseRecoveryCoordinator.class);
+        when(coordinator.recoverOne()).thenReturn(Optional.of("AR-1"), Optional.empty());
         AgentRunRecoveryScheduler scheduler = new AgentRunRecoveryScheduler(
                 properties,
-                runRepository,
-                recoveryService
+                coordinator
         );
 
         scheduler.recoverStaleRuns();
 
-        verify(recoveryService).recoverOne(eq(run), any());
+        verify(coordinator, org.mockito.Mockito.times(2)).recoverOne();
     }
 }

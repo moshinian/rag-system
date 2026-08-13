@@ -1,6 +1,7 @@
 package com.example.rag.ingestion.storage;
 
 import com.example.rag.config.RagStorageProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -17,7 +18,8 @@ import java.nio.file.StandardCopyOption;
  * 本地文件存储服务。
  */
 @Service
-public class LocalFileStorageService {
+@ConditionalOnProperty(prefix = "rag.storage", name = "type", havingValue = "local", matchIfMissing = true)
+public class LocalFileStorageService implements FileStorageService {
     private final RagStorageProperties ragStorageProperties;
 
     /** 构造LocalFileStorageService。 */
@@ -35,11 +37,12 @@ public class LocalFileStorageService {
      *
      * 目录结构按知识库和日期分层，文件名前缀使用 documentCode。
      */
-    public Path store(String kbCode,
-                      String datePath,
-                      String documentCode,
-                      String originalFileName,
-                      MultipartFile file) throws IOException {
+    @Override
+    public StoredFile store(String kbCode,
+                            String datePath,
+                            String documentCode,
+                            String originalFileName,
+                            MultipartFile file) throws IOException {
         Path targetDirectory = baseDirectory().resolve(kbCode).resolve(datePath).normalize();
         Files.createDirectories(targetDirectory);
 
@@ -48,7 +51,26 @@ public class LocalFileStorageService {
         try (InputStream inputStream = file.getInputStream()) {
             Files.copy(inputStream, targetFile, StandardCopyOption.REPLACE_EXISTING);
         }
-        return targetFile;
+        String objectKey = kbCode + "/" + datePath + "/" + documentCode + "_" + originalFileName;
+        return new StoredFile("local", objectKey, targetFile.toString());
+    }
+
+    @Override
+    public MaterializedFile materialize(String objectKey, String legacyStoragePath) throws IOException {
+        Path path;
+        if (legacyStoragePath != null && !legacyStoragePath.isBlank()) {
+            // 兼容迁移前已经落库的绝对路径；该字段只由服务端写入，不接受请求参数直接覆盖。
+            path = Path.of(legacyStoragePath).toAbsolutePath().normalize();
+        } else {
+            path = baseDirectory().resolve(objectKey).normalize();
+            if (!path.startsWith(baseDirectory())) {
+                throw new IOException("Stored object key resolves outside configured base directory");
+            }
+        }
+        if (!Files.exists(path)) {
+            throw new IOException("Stored file not found: " + path);
+        }
+        return new MaterializedFile(path, false);
     }
 
     /** 删除知识库对应的本地上传目录。 */
@@ -75,5 +97,10 @@ public class LocalFileStorageService {
                 return FileVisitResult.CONTINUE;
             }
         });
+    }
+
+    @Override
+    public void deleteKnowledgeBase(String kbCode) throws IOException {
+        deleteKnowledgeBaseDirectory(kbCode);
     }
 }

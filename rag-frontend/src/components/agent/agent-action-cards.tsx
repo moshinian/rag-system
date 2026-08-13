@@ -2,7 +2,8 @@ import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Collapse, Descriptions, Empty, Input, Modal, Popconfirm, Space, Tag, Typography } from "antd";
 import { useState } from "react";
 import type { AgentAction } from "../../types/agent";
-import { formatDateTime, truncateText } from "../../utils/format";
+import { formatDateTime } from "../../utils/format";
+import { JsonBlock } from "./json-block";
 
 type AgentActionCardsProps = {
   actions: AgentAction[];
@@ -109,14 +110,14 @@ export function AgentActionCards({
                       ? {
                           key: "payload",
                           label: "actionPayload",
-                          children: <JsonBlock value={action.actionPayload} />
+                          children: <JsonBlock value={action.actionPayload} maxHeight={240} maxRawLength={3000} />
                         }
                       : null,
                     action.resultJson
                       ? {
                           key: "result",
                           label: "resultJson",
-                          children: <JsonBlock value={action.resultJson} />
+                          children: <JsonBlock value={action.resultJson} maxHeight={240} maxRawLength={3000} />
                         }
                       : null
                   ].filter((item): item is NonNullable<typeof item> => item !== null)}
@@ -149,22 +150,6 @@ export function AgentActionCards({
       </Modal>
     </>
   );
-}
-
-function JsonBlock({ value }: { value: string }) {
-  return (
-    <pre style={{ margin: 0, maxHeight: 240, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-      {prettyJson(value)}
-    </pre>
-  );
-}
-
-function prettyJson(value: string) {
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return truncateText(value, 3000);
-  }
 }
 
 function renderActionStatus(status: string) {

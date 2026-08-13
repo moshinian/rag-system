@@ -70,8 +70,44 @@ public class AgentRunEventApplier {
      */
     @Transactional
     public boolean apply(AgentRuntimeEvent runtimeEvent) {
+        return applyInternal(runtimeEvent, null, null);
+    }
+
+    @Transactional
+    public boolean applyOwned(AgentRuntimeEvent runtimeEvent, String ownerInstanceId, Long leaseVersion) {
+        return applyInternal(scopeToExecutionAttempt(runtimeEvent, leaseVersion), ownerInstanceId, leaseVersion);
+    }
+
+    /**
+     * Python 在一次新的 Runtime 调用中会从 1 重新生成 eventId/nodeInvocationId。
+     * Lease 接管后的合法重试必须拥有独立命名空间，否则数据库幂等键会把整次重试误判成重复事件。
+     */
+    private AgentRuntimeEvent scopeToExecutionAttempt(AgentRuntimeEvent event, Long leaseVersion) {
+        if (leaseVersion == null || leaseVersion <= 1L) {
+            return event;
+        }
+        String attemptSuffix = "-A" + leaseVersion;
+        return new AgentRuntimeEvent(
+                event.eventId() + attemptSuffix,
+                event.runCode(),
+                event.type(),
+                event.nodeInvocationId() == null ? null : event.nodeInvocationId() + attemptSuffix,
+                event.nodeName(),
+                event.toolName(),
+                event.status(),
+                event.message(),
+                event.payload(),
+                event.terminal(),
+                event.createdAt()
+        );
+    }
+
+    private boolean applyInternal(AgentRuntimeEvent runtimeEvent, String ownerInstanceId, Long leaseVersion) {
         validateRuntimeEvent(runtimeEvent);
-        AgentRunEntity run = requireRun(runtimeEvent.runCode());
+        AgentRunEntity run = ownerInstanceId == null
+                ? requireRun(runtimeEvent.runCode())
+                : runRepository.lockOwned(runtimeEvent.runCode(), ownerInstanceId, leaseVersion)
+                        .orElseThrow(() -> new BusinessException("Agent run ownership lost: " + runtimeEvent.runCode()));
         if (isTerminalRunStatus(run.getStatus())) {
             log.info(StructuredLogMessage.of("agent.runtime.event.ignored_after_terminal")
                     .field("runCode", runtimeEvent.runCode())
@@ -115,7 +151,20 @@ public class AgentRunEventApplier {
     /** Java 在 stream 异常或无 terminal 时合成唯一失败事件。 */
     @Transactional
     public void markStreamFailed(String runCode, String errorMessage) {
-        AgentRunEntity run = requireRun(runCode);
+        markStreamFailedInternal(runCode, errorMessage, null, null);
+    }
+
+    @Transactional
+    public void markStreamFailedOwned(String runCode, String ownerInstanceId, Long leaseVersion, String errorMessage) {
+        markStreamFailedInternal(runCode, errorMessage, ownerInstanceId, leaseVersion);
+    }
+
+    private void markStreamFailedInternal(String runCode, String errorMessage,
+                                          String ownerInstanceId, Long leaseVersion) {
+        AgentRunEntity run = ownerInstanceId == null
+                ? requireRun(runCode)
+                : runRepository.lockOwned(runCode, ownerInstanceId, leaseVersion)
+                        .orElseThrow(() -> new BusinessException("Agent run ownership lost: " + runCode));
         if (run.getStatus() == AgentRunStatus.SUCCEEDED
                 || run.getStatus() == AgentRunStatus.FAILED
                 || run.getStatus() == AgentRunStatus.WAITING_CONFIRMATION) {

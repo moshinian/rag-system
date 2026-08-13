@@ -290,6 +290,8 @@ class AgentActionExecutionTest {
 
     private void stubRunAndAction(KnowledgeBaseEntity knowledgeBase, AgentRunEntity run, AgentActionEntity action) {
         stubRunAndActionLookup(knowledgeBase, run, action);
+        org.mockito.Mockito.lenient().when(agentActionRepository.claimForExecution(
+                any(), any(), any(), any())).thenReturn(true);
         when(agentActionRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(agentRunRepository.updateById(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(agentStepRepository.findByRunCode("AR-100")).thenReturn(List.of());

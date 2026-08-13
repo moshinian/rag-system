@@ -5,6 +5,7 @@ import com.example.rag.common.logging.StructuredLogMessage;
 import com.example.rag.config.RagAiGatewayProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -108,6 +109,40 @@ public class AiGatewayClient {
         }
     }
 
+    /** 调用 AI Gateway 文本重排序。 */
+    public RerankGatewayResponse createRerank(String model,
+                                              String query,
+                                              List<String> documents,
+                                              int topN,
+                                              String instruct) {
+        validateModel(model);
+        if (!hasText(query)) {
+            throw new BusinessException("Rerank query must not be blank");
+        }
+        if (documents == null || documents.isEmpty()) {
+            throw new BusinessException("Rerank documents must not be empty");
+        }
+        try {
+            RerankGatewayResponse response = postJson(
+                    ragAiGatewayProperties.getRerankPath(),
+                    new RerankRequest(model, query, documents, topN, hasText(instruct) ? instruct.trim() : null),
+                    RerankGatewayResponse.class,
+                    resolveRerankReadTimeoutMillis()
+            );
+            if (response == null || response.results() == null) {
+                throw new BusinessException("Rerank response is empty");
+            }
+            return response;
+        } catch (IOException ex) {
+            log.warn(StructuredLogMessage.of("ai.gateway.rerank.failed")
+                    .field("model", model)
+                    .field("candidateCount", documents.size())
+                    .field("message", ex.getMessage())
+                    .build());
+            throw new BusinessException("Failed to call AI gateway rerank: " + ex.getMessage());
+        }
+    }
+
     /** 通过 AI Gateway 做 embedding 健康探针。 */
     public void probeEmbedding(String model, String input) {
         createEmbedding(model, input);
@@ -134,7 +169,9 @@ public class AiGatewayClient {
                     response.embeddingProvider(),
                     response.embeddingDefaultModel(),
                     response.chatProvider(),
-                    response.chatDefaultModel()
+                    response.chatDefaultModel(),
+                    response.rerankProvider(),
+                    response.rerankDefaultModel()
             );
         } catch (IOException ex) {
             log.warn(StructuredLogMessage.of("ai.gateway.health.failed")
@@ -154,6 +191,11 @@ public class AiGatewayClient {
         return joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getChatCompletionsPath());
     }
 
+    /** 返回已配置的 rerank endpoint。 */
+    public String rerankEndpoint() {
+        return joinUrl(ragAiGatewayProperties.getBaseUrl(), ragAiGatewayProperties.getRerankPath());
+    }
+
     /** 返回 AI Gateway 健康检查 endpoint。 */
     public String gatewayHealthEndpoint() {
         return joinUrl(ragAiGatewayProperties.getBaseUrl(), "/health");
@@ -161,12 +203,17 @@ public class AiGatewayClient {
 
     /** 发送 JSON POST 请求，并统一处理 requestId、超时、状态码和反序列化。 */
     private <T> T postJson(String path, Object payload, Class<T> responseType) throws IOException {
+        return postJson(path, payload, responseType, resolveReadTimeoutMillis());
+    }
+
+    /** 发送使用指定读超时的 JSON POST 请求。 */
+    private <T> T postJson(String path, Object payload, Class<T> responseType, int readTimeoutMillis) throws IOException {
         byte[] jsonBytes = toJson(payload).getBytes(StandardCharsets.UTF_8);
         HttpURLConnection connection = (HttpURLConnection) new URL(joinUrl(ragAiGatewayProperties.getBaseUrl(), path)).openConnection();
         connection.setRequestMethod("POST");
         connection.setDoOutput(true);
         connection.setConnectTimeout(resolveConnectTimeoutMillis());
-        connection.setReadTimeout(resolveReadTimeoutMillis());
+        connection.setReadTimeout(readTimeoutMillis);
         connection.setRequestProperty(HttpHeaders.CONTENT_TYPE, "application/json; charset=UTF-8");
         connection.setRequestProperty(HttpHeaders.ACCEPT, "application/json");
         connection.setFixedLengthStreamingMode(jsonBytes.length);
@@ -261,6 +308,13 @@ public class AiGatewayClient {
                 : ragAiGatewayProperties.getReadTimeoutMillis();
     }
 
+    /** 读取 rerank 专用超时，避免降级前长时间阻塞在线问答。 */
+    private int resolveRerankReadTimeoutMillis() {
+        return ragAiGatewayProperties.getRerankReadTimeoutMillis() == null
+                ? 10_000
+                : ragAiGatewayProperties.getRerankReadTimeoutMillis();
+    }
+
     /** 规范拼接 Gateway 地址与接口路径，并拒绝空地址。 */
     private String joinUrl(String baseUrl, String path) {
         String normalizedBaseUrl = baseUrl == null ? "" : baseUrl.trim();
@@ -336,6 +390,30 @@ public class AiGatewayClient {
     ) {
     }
 
+    /** Gateway 文本重排序请求。 */
+    private record RerankRequest(
+            String model,
+            String query,
+            List<String> documents,
+            @JsonProperty("top_n") int topN,
+            String instruct
+    ) {
+    }
+
+    /** Gateway 文本重排序响应。 */
+    public record RerankGatewayResponse(
+            String model,
+            List<RerankGatewayResult> results
+    ) {
+    }
+
+    /** Gateway 单条重排序结果。 */
+    public record RerankGatewayResult(
+            Integer index,
+            @JsonProperty("relevance_score") Double relevanceScore
+    ) {
+    }
+
     /** 单个 chat completion 候选项。 */
     private record ChatChoice(
             ChatMessage message
@@ -367,7 +445,9 @@ public class AiGatewayClient {
             String embedding_provider,
             String embedding_default_model,
             String chat_provider,
-            String chat_default_model
+            String chat_default_model,
+            String rerank_provider,
+            String rerank_default_model
     ) {
         /** 返回 embedding provider。 */
         String embeddingProvider() {
@@ -388,6 +468,14 @@ public class AiGatewayClient {
         String chatDefaultModel() {
             return chat_default_model;
         }
+
+        String rerankProvider() {
+            return rerank_provider;
+        }
+
+        String rerankDefaultModel() {
+            return rerank_default_model;
+        }
     }
 
     /** Java 业务层使用的 AI Gateway 健康快照。 */
@@ -396,7 +484,17 @@ public class AiGatewayClient {
             String embeddingProvider,
             String embeddingDefaultModel,
             String chatProvider,
-            String chatDefaultModel
+            String chatDefaultModel,
+            String rerankProvider,
+            String rerankDefaultModel
     ) {
+        /** 兼容旧测试及仅关心 embedding/chat 的调用方。 */
+        public GatewayHealthSnapshot(String status,
+                                     String embeddingProvider,
+                                     String embeddingDefaultModel,
+                                     String chatProvider,
+                                     String chatDefaultModel) {
+            this(status, embeddingProvider, embeddingDefaultModel, chatProvider, chatDefaultModel, null, null);
+        }
     }
 }

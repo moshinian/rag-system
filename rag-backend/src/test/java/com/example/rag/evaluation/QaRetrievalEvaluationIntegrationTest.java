@@ -1,9 +1,11 @@
 package com.example.rag.evaluation;
 
 import com.example.rag.common.id.SnowflakeIdGenerator;
+import com.example.rag.config.RagRetrievalProperties;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.enums.RetrievalMode;
+import com.example.rag.model.enums.RerankStatus;
 import com.example.rag.model.response.DocumentEmbeddingResponse;
 import com.example.rag.model.response.DocumentProcessResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
@@ -28,6 +30,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,6 +59,9 @@ class QaRetrievalEvaluationIntegrationTest {
 
     @Autowired
     private QuestionAnsweringService questionAnsweringService;
+
+    @Autowired
+    private RagRetrievalProperties retrievalProperties;
 
     @Autowired
     private SnowflakeIdGenerator snowflakeIdGenerator;
@@ -160,6 +167,82 @@ class QaRetrievalEvaluationIntegrationTest {
         System.out.println(String.join("\n", reportLines));
     }
 
+    @Test
+    void shouldPrintDenseAndHybridRerankComparisonReport() throws IOException {
+        JsonNode dataset = objectMapper.readTree(Files.readString(HYBRID_DATASET_PATH));
+        String kbCode = dataset.path("kbCode").asText() + "-rerank-itest-" + snowflakeIdGenerator.nextId();
+        int topK = dataset.path("topK").asInt();
+        List<String> documentCodes = new ArrayList<>();
+
+        createKnowledgeBase(kbCode);
+        documentCodes.add(createDocument(kbCode, "结算异常处理指南", backendFile("work/samples/day20-cn-结算异常处理指南.md"), "md", "text/markdown"));
+        documentCodes.add(createDocument(kbCode, "对账常见问题", backendFile("work/samples/day20-cn-对账常见问题.md"), "md", "text/markdown"));
+        documentCodes.add(createDocument(kbCode, "值班巡检清单", backendFile("work/samples/day20-cn-值班巡检清单.txt"), "txt", "text/plain"));
+        processAndEmbedAll(kbCode, documentCodes);
+
+        RagRetrievalProperties.Rerank rerank = retrievalProperties.getRerank();
+        boolean originalEnabled = rerank.isEnabled();
+        Map<String, List<Integer>> ranksByVariant = new LinkedHashMap<>();
+        Map<String, List<Long>> durationsByVariant = new LinkedHashMap<>();
+        for (String variant : List.of("DENSE", "DENSE_RERANK", "HYBRID", "HYBRID_RERANK")) {
+            ranksByVariant.put(variant, new ArrayList<>());
+            durationsByVariant.put(variant, new ArrayList<>());
+        }
+
+        try {
+            for (JsonNode caseNode : dataset.path("cases")) {
+                if (!"SHOULD_ANSWER".equals(caseNode.path("expectationType").asText())) {
+                    continue;
+                }
+                String question = caseNode.path("question").asText();
+                String expectedDocument = caseNode.path("expectedDocument").asText();
+                for (RetrievalMode mode : RetrievalMode.values()) {
+                    rerank.setEnabled(false);
+                    recordRanking(
+                            mode.name(),
+                            expectedDocument,
+                            questionAnsweringService.retrieve(kbCode, question, topK, mode),
+                            ranksByVariant,
+                            durationsByVariant
+                    );
+
+                    rerank.setEnabled(true);
+                    QuestionRetrievalResponse rerankedResponse = questionAnsweringService.retrieve(
+                            kbCode, question, topK, mode
+                    );
+                    assertThat(rerankedResponse.rerankStatus())
+                            .as(caseNode.path("caseCode").asText() + " should apply rerank")
+                            .isEqualTo(RerankStatus.APPLIED);
+                    recordRanking(
+                            mode.name() + "_RERANK",
+                            expectedDocument,
+                            rerankedResponse,
+                            ranksByVariant,
+                            durationsByVariant
+                    );
+                }
+            }
+        } finally {
+            rerank.setEnabled(originalEnabled);
+        }
+
+        List<String> reportLines = new ArrayList<>();
+        reportLines.add("Dense / Hybrid Rerank Evaluation Report");
+        reportLines.add("| variant | cases | Hit@1 | Hit@3 | MRR@3 | p95 ms |");
+        reportLines.add("| --- | ---: | ---: | ---: | ---: | ---: |");
+        for (Map.Entry<String, List<Integer>> entry : ranksByVariant.entrySet()) {
+            List<Integer> ranks = entry.getValue();
+            reportLines.add("| " + entry.getKey()
+                    + " | " + ranks.size()
+                    + " | " + formatMetric(hitAt(ranks, 1))
+                    + " | " + formatMetric(hitAt(ranks, 3))
+                    + " | " + formatMetric(mrrAt(ranks, 3))
+                    + " | " + percentile95(durationsByVariant.get(entry.getKey()))
+                    + " |");
+        }
+        System.out.println(String.join("\n", reportLines));
+    }
+
     private void createKnowledgeBase(String kbCode) {
         long knowledgeBaseId = snowflakeIdGenerator.nextId();
         KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
@@ -248,6 +331,46 @@ class QaRetrievalEvaluationIntegrationTest {
                 .reduce((left, right) -> left + ", " + right)
                 .orElse("-");
         return new RetrievalObservation(retrievalHit, keywordMatches, topDocuments);
+    }
+
+    private void recordRanking(String variant,
+                               String expectedDocument,
+                               QuestionRetrievalResponse response,
+                               Map<String, List<Integer>> ranksByVariant,
+                               Map<String, List<Long>> durationsByVariant) {
+        int rank = 0;
+        for (int index = 0; index < response.chunks().size(); index++) {
+            if (expectedDocument.equals(response.chunks().get(index).documentName())) {
+                rank = index + 1;
+                break;
+            }
+        }
+        ranksByVariant.get(variant).add(rank);
+        durationsByVariant.get(variant).add(response.totalDurationMs());
+    }
+
+    private double hitAt(List<Integer> ranks, int cutoff) {
+        return ranks.stream().filter(rank -> rank > 0 && rank <= cutoff).count() / (double) ranks.size();
+    }
+
+    private double mrrAt(List<Integer> ranks, int cutoff) {
+        return ranks.stream()
+                .mapToDouble(rank -> rank > 0 && rank <= cutoff ? 1D / rank : 0D)
+                .average()
+                .orElse(0D);
+    }
+
+    private long percentile95(List<Long> durations) {
+        List<Long> sorted = durations.stream().sorted().toList();
+        if (sorted.isEmpty()) {
+            return 0L;
+        }
+        int index = Math.max(0, (int) Math.ceil(sorted.size() * 0.95D) - 1);
+        return sorted.get(index);
+    }
+
+    private String formatMetric(double value) {
+        return String.format(java.util.Locale.ROOT, "%.3f", value);
     }
 
     private record RetrievalObservation(boolean retrievalHit, long keywordMatches, String topDocuments) {

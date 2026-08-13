@@ -2,21 +2,26 @@ spring:
   application:
     name: rag-service
   profiles:
-    active: local
+    active: ${SPRING_PROFILES_ACTIVE:local}
   servlet:
     multipart:
       max-file-size: 20MB
       max-request-size: 20MB
   datasource:
-    url: jdbc:postgresql://localhost:5432/rag_db
-    username: rag_user
-    password: rag_password
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/rag_db}
+    username: ${DB_USERNAME:rag_user}
+    password: ${DB_PASSWORD:rag_password}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:5}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:5000}
+      validation-timeout: ${DB_VALIDATION_TIMEOUT_MS:3000}
   data:
     redis:
-      host: localhost
-      port: 6379
-      password: rag_password
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:rag_password}
       timeout: 3s
       repositories:
         enabled: false
@@ -31,6 +36,16 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 management:
+  endpoint:
+    health:
+      validate-group-membership: false
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState,snowflakeWorkerLease
+        readiness:
+          include: readinessState,snowflakeWorkerLease
   endpoints:
     web:
       exposure:
@@ -38,23 +53,36 @@ management:
 
 logging:
   file:
-    path: ./logs
-    name: rag-service.log
+    path: ${LOG_PATH:./logs}
+    name: ${LOG_FILE_NAME:rag-service.log}
   level:
     root: INFO
     "[com.example.rag]": INFO
 
 rag:
+  instance-id: ${INSTANCE_ID:${HOSTNAME:local}}
   id:
-    worker-id: 1
-    datacenter-id: 1
+    worker-id: ${RAG_ID_WORKER_ID:1}
+    datacenter-id: ${RAG_ID_DATACENTER_ID:1}
+    worker-lease:
+      mode: ${RAG_ID_WORKER_LEASE_MODE:static}
+      key-prefix: ${RAG_ID_WORKER_LEASE_KEY_PREFIX:rag:snowflake:worker}
+      lease-duration: ${RAG_ID_WORKER_LEASE_DURATION:120s}
+      renewal-interval: ${RAG_ID_WORKER_RENEWAL_INTERVAL:30s}
+      max-worker-id: ${RAG_ID_MAX_WORKER_ID:31}
   storage:
-    base-dir: ./data/uploads
+    type: ${RAG_STORAGE_TYPE:local}
+    base-dir: ${RAG_STORAGE_BASE_DIR:./data/uploads}
     max-file-size-mb: 20
+    minio:
+      endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+      bucket: ${MINIO_BUCKET:rag-files}
+      access-key: ${MINIO_ACCESS_KEY:rag_minio}
+      secret-key: ${MINIO_SECRET_KEY:rag_minio_password}
   executor:
-    core-pool-size: 4
-    max-pool-size: 8
-    queue-capacity: 100
+    core-pool-size: ${RAG_INDEXING_CORE_POOL_SIZE:1}
+    max-pool-size: ${RAG_INDEXING_MAX_POOL_SIZE:1}
+    queue-capacity: ${RAG_INDEXING_QUEUE_CAPACITY:20}
     await-termination-seconds: 30
     thread-name-prefix: rag-indexing-
   chunking:
@@ -70,13 +98,15 @@ rag:
     batch-size: 10
   ai:
     gateway:
-      base-url: http://localhost:8001
+      base-url: ${RAG_AI_GATEWAY_BASE_URL:http://localhost:8001}
       embeddings-path: /v1/embeddings
       chat-completions-path: /v1/chat/completions
+      rerank-path: /v1/rerank
       agent-runs-path: /v1/agent/runs
       agent-runs-stream-path: /v1/agent/runs/stream
       connect-timeout-millis: 5000
       read-timeout-millis: 120000
+      rerank-read-timeout-millis: 10000
       agent-stream-read-timeout-millis: 120000
   agent:
     internal-tool-token: ${RAG_AGENT_TOOL_TOKEN:dev-agent-tool-token}
@@ -84,17 +114,23 @@ rag:
       - ${RAG_MCP_ALLOWED_ORIGIN:http://127.0.0.1:8001}
       - http://localhost:8001
     executor:
-      core-pool-size: 2
-      max-pool-size: 4
-      queue-capacity: 100
+      core-pool-size: ${RAG_AGENT_CORE_POOL_SIZE:1}
+      max-pool-size: ${RAG_AGENT_MAX_POOL_SIZE:1}
+      queue-capacity: ${RAG_AGENT_QUEUE_CAPACITY:20}
       await-termination-seconds: 30
       thread-name-prefix: rag-agent-
+    worker:
+      enabled: ${RAG_AGENT_WORKER_ENABLED:true}
+      poll-interval: ${RAG_AGENT_POLL_INTERVAL:1s}
+      lease-duration: ${RAG_AGENT_LEASE_DURATION:120s}
+      heartbeat-interval: ${RAG_AGENT_HEARTBEAT_INTERVAL:30s}
+      max-attempts: ${RAG_AGENT_MAX_ATTEMPTS:3}
     recovery:
-      enabled: true
-      scan-interval-seconds: 60
-      running-timeout-minutes: 10
-      idle-timeout-minutes: 3
-      heartbeat-update-interval-seconds: 30
+      enabled: ${RAG_AGENT_RECOVERY_ENABLED:true}
+      scan-interval-seconds: ${RAG_AGENT_RECOVERY_SCAN_INTERVAL_SECONDS:60}
+      running-timeout-minutes: ${RAG_AGENT_RUNNING_TIMEOUT_MINUTES:10}
+      idle-timeout-minutes: ${RAG_AGENT_IDLE_TIMEOUT_MINUTES:3}
+      heartbeat-update-interval-seconds: ${RAG_AGENT_HEARTBEAT_INTERVAL_SECONDS:30}
   llm:
     chat:
       model: deepseek-v4-pro
@@ -116,6 +152,12 @@ rag:
     keyword-like-title-weight: 1.5
     keyword-min-hit-threshold: 0.5
     max-context-chars: 6000
+    rerank:
+      enabled: ${RAG_RERANK_ENABLED:false}
+      model: ${RAG_RERANK_MODEL:qwen3-rerank}
+      candidate-limit: ${RAG_RERANK_CANDIDATE_LIMIT:20}
+      instruct: ${RAG_RERANK_INSTRUCT:}
+      policy-version: rerank-v1
   qa:
     default-created-by: qa-service
     message-type: QA
@@ -123,10 +165,16 @@ rag:
     session-name-max-length: 80
   indexing:
     max-retry-count: 3
+    worker:
+      enabled: ${RAG_INDEXING_WORKER_ENABLED:true}
+      poll-interval: ${RAG_INDEXING_POLL_INTERVAL:1s}
+      lease-duration: ${RAG_INDEXING_LEASE_DURATION:120s}
+      heartbeat-interval: ${RAG_INDEXING_HEARTBEAT_INTERVAL:30s}
     recovery:
-      enabled: true
-      stale-after-seconds: 600
-      scan-limit: 20
+      enabled: ${RAG_INDEXING_RECOVERY_ENABLED:true}
+      scan-interval: ${RAG_INDEXING_RECOVERY_SCAN_INTERVAL:10s}
+      stale-after-seconds: ${RAG_INDEXING_STALE_AFTER_SECONDS:600}
+      scan-limit: ${RAG_INDEXING_RECOVERY_SCAN_LIMIT:20}
   cache:
     knowledge-base-detail-ttl-seconds: 3600
     knowledge-base-page-ttl-seconds: 3600
@@ -135,3 +183,8 @@ rag:
     document-chunks-ttl-seconds: 1800
     qa-readiness-ttl-seconds: 600
     qa-retrieval-ttl-seconds: 600
+
+server:
+  shutdown: graceful
+
+spring.lifecycle.timeout-per-shutdown-phase: ${SHUTDOWN_PHASE_TIMEOUT:35s}

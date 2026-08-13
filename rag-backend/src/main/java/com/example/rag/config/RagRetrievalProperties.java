@@ -26,4 +26,15 @@ public class RagRetrievalProperties {
     private Double keywordLikeTitleWeight = 1.5D;
     private Double keywordMinHitThreshold = 0.5D;
     private Integer maxContextChars = 6000;
+    private Rerank rerank = new Rerank();
+
+    /** 召回后重排序配置。 */
+    @Data
+    public static class Rerank {
+        private boolean enabled = false;
+        private String model = "qwen3-rerank";
+        private Integer candidateLimit = 20;
+        private String instruct = "";
+        private String policyVersion = "rerank-v1";
+    }
 }

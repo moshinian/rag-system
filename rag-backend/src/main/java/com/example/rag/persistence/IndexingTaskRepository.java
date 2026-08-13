@@ -40,6 +40,49 @@ public class IndexingTaskRepository {
         return Optional.ofNullable(indexingTaskMapper.selectById(id));
     }
 
+    public Optional<IndexingTaskEntity> claimNext(String taskType,
+                                                   String ownerInstanceId,
+                                                   OffsetDateTime now,
+                                                   OffsetDateTime leaseUntil) {
+        return Optional.ofNullable(indexingTaskMapper.claimNext(taskType, ownerInstanceId, now, leaseUntil));
+    }
+
+    public boolean heartbeat(Long taskId, String ownerInstanceId, Long leaseVersion,
+                             OffsetDateTime now, OffsetDateTime leaseUntil) {
+        return indexingTaskMapper.heartbeat(taskId, ownerInstanceId, leaseVersion, now, leaseUntil) == 1;
+    }
+
+    public boolean isOwned(Long taskId, String ownerInstanceId, Long leaseVersion) {
+        return indexingTaskMapper.isOwned(taskId, ownerInstanceId, leaseVersion);
+    }
+
+    public boolean updateOwnedStage(Long taskId, String ownerInstanceId, Long leaseVersion,
+                                    String stage, String parserName, Integer chunkCount,
+                                    OffsetDateTime now, OffsetDateTime leaseUntil) {
+        return indexingTaskMapper.updateOwnedStage(taskId, ownerInstanceId, leaseVersion, stage,
+                parserName, chunkCount, now, leaseUntil) == 1;
+    }
+
+    public boolean completeOwned(Long taskId, String ownerInstanceId, Long leaseVersion,
+                                 Integer embeddedChunkCount, OffsetDateTime now) {
+        return indexingTaskMapper.completeOwned(taskId, ownerInstanceId, leaseVersion,
+                embeddedChunkCount, now) == 1;
+    }
+
+    public boolean failOwned(Long taskId, String ownerInstanceId, Long leaseVersion,
+                             String errorMessage, OffsetDateTime now) {
+        return indexingTaskMapper.failOwned(taskId, ownerInstanceId, leaseVersion, errorMessage, now) == 1;
+    }
+
+    public Optional<IndexingTaskEntity> lockNextExpired(String taskType, OffsetDateTime now) {
+        return Optional.ofNullable(indexingTaskMapper.lockNextExpired(taskType, now));
+    }
+
+    public boolean returnOwnedToQueue(IndexingTaskEntity task, String errorMessage, OffsetDateTime now) {
+        return indexingTaskMapper.returnOwnedToQueue(task.getId(), task.getOwnerInstanceId(),
+                task.getLeaseVersion(), errorMessage, now) == 1;
+    }
+
     /** 按文档倒序读取处理任务。 */
     public List<IndexingTaskEntity> findByDocumentIdOrderByCreatedAtDesc(Long documentId) {
         LambdaQueryWrapper<IndexingTaskEntity> query = new LambdaQueryWrapper<IndexingTaskEntity>()

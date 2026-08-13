@@ -25,7 +25,9 @@ export function SourceList({ sources }: SourceListProps) {
                 {item.documentName} / Chunk #{item.chunkIndex}
               </Typography.Text>
               <Typography.Text type="secondary">
-                score: {item.score?.toFixed(4)} | offset {item.startOffset} - {item.endOffset}
+                召回分 {item.score?.toFixed(4)}
+                {typeof item.rerankScore === "number" ? ` | 重排分 ${item.rerankScore.toFixed(4)}` : ""}
+                {` | offset ${item.startOffset} - ${item.endOffset}`}
               </Typography.Text>
             </Space>
           </List.Item>

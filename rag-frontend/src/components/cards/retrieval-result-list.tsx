@@ -1,6 +1,6 @@
 import { Card, List, Space, Typography } from "antd";
-import type { RetrievalMode, RetrievedChunk } from "../../types/qa";
-import { formatFusionStrategy, formatRetrievalMode } from "../../utils/format";
+import type { RerankStatus, RetrievalMode, RetrievedChunk } from "../../types/qa";
+import { formatFusionStrategy, formatRerankStatus, formatRetrievalMode } from "../../utils/format";
 
 type RetrievalResultListProps = {
   items: RetrievedChunk[];
@@ -13,6 +13,10 @@ type RetrievalResultListProps = {
     denseDurationMs?: number;
     keywordDurationMs?: number;
     fusionDurationMs?: number;
+    rerankStatus?: RerankStatus;
+    rerankModel?: string | null;
+    rerankCandidateCount?: number;
+    rerankDurationMs?: number;
     totalDurationMs?: number;
   };
 };
@@ -26,7 +30,14 @@ export function RetrievalResultList({ items, retrieval }: RetrievalResultListPro
         typeof retrieval.keywordHitCount === "number" ? `keyword ${retrieval.keywordHitCount}` : undefined,
         typeof retrieval.hitCount === "number" ? `final ${retrieval.hitCount}` : undefined,
         typeof retrieval.totalDurationMs === "number" ? `${retrieval.totalDurationMs} ms` : undefined,
-        formatFusionStrategy(retrieval.fusionStrategy)
+        formatFusionStrategy(retrieval.fusionStrategy),
+        retrieval.rerankStatus ? formatRerankStatus(retrieval.rerankStatus) : undefined,
+        retrieval.rerankStatus === "APPLIED" && retrieval.rerankModel
+          ? `${retrieval.rerankModel} ${retrieval.rerankCandidateCount ?? items.length}->${items.length}`
+          : undefined,
+        retrieval.rerankStatus === "APPLIED" && typeof retrieval.rerankDurationMs === "number"
+          ? `rerank ${retrieval.rerankDurationMs} ms`
+          : undefined
       ]
         .filter(Boolean)
         .join(" | ")
@@ -43,7 +54,8 @@ export function RetrievalResultList({ items, retrieval }: RetrievalResultListPro
                   {item.documentName} / Chunk #{item.chunkIndex}
                 </Typography.Text>
                 <Typography.Text type="secondary">
-                  score: {item.score?.toFixed(4)}
+                  召回分 {item.score?.toFixed(4)}
+                  {typeof item.rerankScore === "number" ? ` | 重排分 ${item.rerankScore.toFixed(4)}` : ""}
                 </Typography.Text>
               </Space>
               <Typography.Text type="secondary">

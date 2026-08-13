@@ -29,7 +29,7 @@ class AgentRunRecordServiceTest {
     private SnowflakeIdGenerator idGenerator;
 
     @Test
-    void createShouldInitializeRuntimeHeartbeatAt() {
+    void createShouldRemainQueuedUntilClusterWorkerClaimsIt() {
         KnowledgeBaseEntity kb = new KnowledgeBaseEntity();
         kb.setId(1L);
         kb.setKbCode("kb-1");
@@ -50,7 +50,7 @@ class AgentRunRecordServiceTest {
                 "tester"
         ));
 
-        assertThat(run.getStatus()).isEqualTo(AgentRunStatus.RUNNING);
-        assertThat(captor.getValue().getRuntimeHeartbeatAt()).isNotNull();
+        assertThat(run.getStatus()).isEqualTo(AgentRunStatus.QUEUED);
+        assertThat(captor.getValue().getRuntimeHeartbeatAt()).isNull();
     }
 }

@@ -14,6 +14,78 @@ import java.util.List;
  */
 public interface AgentRunMapper extends BaseMapper<AgentRunEntity> {
 
+    @Select("""
+            WITH candidate AS (
+                SELECT id FROM agent_run
+                WHERE status = 'QUEUED'
+                ORDER BY created_at, id
+                FOR UPDATE SKIP LOCKED
+                LIMIT 1
+            )
+            UPDATE agent_run run
+            SET status = 'RUNNING', owner_instance_id = #{ownerInstanceId},
+                claimed_at = #{now}, runtime_heartbeat_at = #{now}, lease_until = #{leaseUntil},
+                lease_version = lease_version + 1, attempt_count = attempt_count + 1,
+                error_message = NULL, updated_at = #{now}
+            FROM candidate
+            WHERE run.id = candidate.id
+            RETURNING run.*
+            """)
+    AgentRunEntity claimNext(@Param("ownerInstanceId") String ownerInstanceId,
+                             @Param("now") OffsetDateTime now,
+                             @Param("leaseUntil") OffsetDateTime leaseUntil);
+
+    @Update("""
+            UPDATE agent_run
+            SET runtime_heartbeat_at = #{now}, lease_until = #{leaseUntil}, updated_at = #{now}
+            WHERE run_code = #{runCode}
+              AND status = 'RUNNING'
+              AND owner_instance_id = #{ownerInstanceId}
+              AND lease_version = #{leaseVersion}
+            """)
+    int heartbeatOwned(@Param("runCode") String runCode,
+                       @Param("ownerInstanceId") String ownerInstanceId,
+                       @Param("leaseVersion") Long leaseVersion,
+                       @Param("now") OffsetDateTime now,
+                       @Param("leaseUntil") OffsetDateTime leaseUntil);
+
+    @Select("""
+            SELECT * FROM agent_run
+            WHERE run_code = #{runCode}
+              AND status = 'RUNNING'
+              AND owner_instance_id = #{ownerInstanceId}
+              AND lease_version = #{leaseVersion}
+            FOR UPDATE
+            """)
+    AgentRunEntity lockOwned(@Param("runCode") String runCode,
+                             @Param("ownerInstanceId") String ownerInstanceId,
+                             @Param("leaseVersion") Long leaseVersion);
+
+    @Select("""
+            SELECT * FROM agent_run
+            WHERE status = 'RUNNING' AND lease_until < #{now}
+            ORDER BY lease_until, id
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+            """)
+    AgentRunEntity lockNextExpired(@Param("now") OffsetDateTime now);
+
+    @Update("""
+            UPDATE agent_run
+            SET status = 'QUEUED', owner_instance_id = NULL, claimed_at = NULL,
+                lease_until = NULL, runtime_heartbeat_at = NULL,
+                error_message = #{errorMessage}, updated_at = #{now}
+            WHERE run_code = #{runCode}
+              AND status = 'RUNNING'
+              AND owner_instance_id = #{ownerInstanceId}
+              AND lease_version = #{leaseVersion}
+            """)
+    int returnOwnedToQueue(@Param("runCode") String runCode,
+                           @Param("ownerInstanceId") String ownerInstanceId,
+                           @Param("leaseVersion") Long leaseVersion,
+                           @Param("errorMessage") String errorMessage,
+                           @Param("now") OffsetDateTime now);
+
     /** 使用数据库时间更新 Runtime heartbeat，避免应用时间与数据库时间偏移。 */
     @Update("""
             UPDATE agent_run

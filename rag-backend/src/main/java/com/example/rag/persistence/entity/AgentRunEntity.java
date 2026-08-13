@@ -46,6 +46,21 @@ public class AgentRunEntity {
     @TableField("runtime_heartbeat_at")
     private OffsetDateTime runtimeHeartbeatAt;
 
+    @TableField("owner_instance_id")
+    private String ownerInstanceId;
+
+    @TableField("claimed_at")
+    private OffsetDateTime claimedAt;
+
+    @TableField("lease_until")
+    private OffsetDateTime leaseUntil;
+
+    @TableField("lease_version")
+    private Long leaseVersion = 0L;
+
+    @TableField("attempt_count")
+    private Integer attemptCount = 0;
+
     @TableField(value = "created_at", fill = FieldFill.INSERT)
     private OffsetDateTime createdAt;
 

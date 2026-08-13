@@ -1,6 +1,7 @@
 import type { BackendLongId } from "./backend-id";
 
 export type RetrievalMode = "DENSE" | "HYBRID";
+export type RerankStatus = "DISABLED" | "SKIPPED_EMPTY" | "APPLIED" | "DEGRADED";
 
 export type RetrievedChunk = {
   chunkId: BackendLongId;
@@ -14,6 +15,7 @@ export type RetrievedChunk = {
   endOffset: number;
   embeddingModel?: string;
   score: number;
+  rerankScore?: number | null;
 };
 
 export type QaSource = {
@@ -23,6 +25,7 @@ export type QaSource = {
   chunkIndex: number;
   content: string;
   score: number;
+  rerankScore?: number | null;
   startOffset: number;
   endOffset: number;
 };
@@ -40,6 +43,10 @@ export type RetrievalResponse = {
   denseDurationMs: number;
   keywordDurationMs: number;
   fusionDurationMs: number;
+  rerankStatus: RerankStatus;
+  rerankModel?: string | null;
+  rerankCandidateCount: number;
+  rerankDurationMs: number;
   totalDurationMs: number;
   chunks: RetrievedChunk[];
 };
@@ -57,6 +64,10 @@ export type QaAnswerResponse = {
   denseDurationMs: number;
   keywordDurationMs: number;
   fusionDurationMs: number;
+  rerankStatus: RerankStatus;
+  rerankModel?: string | null;
+  rerankCandidateCount: number;
+  rerankDurationMs: number;
   llmDurationMs: number;
   totalDurationMs: number;
   retrievalResults: RetrievedChunk[];
@@ -73,6 +84,10 @@ export type QaHistoryRecord = {
   topK: number;
   retrievalMode: RetrievalMode;
   fusionStrategy: string;
+  rerankStatus: RerankStatus;
+  rerankModel?: string | null;
+  rerankCandidateCount: number;
+  rerankDurationMs: number;
   latencyMs?: number;
   promptTemplate?: string;
   retrievalResults: RetrievedChunk[];

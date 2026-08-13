@@ -9,6 +9,7 @@ import com.example.rag.integration.ai.AiGatewayClient;
 import com.example.rag.model.dto.RetrievedChunkCandidate;
 import com.example.rag.model.enums.KeywordStrategy;
 import com.example.rag.model.enums.RetrievalMode;
+import com.example.rag.model.enums.RerankStatus;
 import com.example.rag.model.response.QuestionAnsweringReadinessResponse;
 import com.example.rag.model.response.QuestionRetrievalResponse;
 import com.example.rag.model.response.RetrievedChunkResponse;
@@ -28,6 +29,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -83,7 +86,8 @@ public class QuestionAnsweringService {
     @Transactional(readOnly = true)
     @Cacheable(
             cacheNames = CacheNames.QA_RETRIEVAL,
-            key = "#kbCode + ':' + (#question == null ? 'null' : #question.trim()) + ':' + (#topK == null ? 'null' : #topK) + ':' + (#retrievalMode == null ? 'AUTO' : #retrievalMode.name()) + ':' + #root.target.currentKeywordStrategyName()"
+            key = "#kbCode + ':' + (#question == null ? 'null' : #question.trim()) + ':' + (#topK == null ? 'null' : #topK) + ':' + (#retrievalMode == null ? 'AUTO' : #retrievalMode.name()) + ':' + #root.target.currentRetrievalPolicySignature()",
+            unless = "#result.rerankStatus().name() == 'DEGRADED'"
     )
     public QuestionRetrievalResponse retrieve(String kbCode,
                                               String question,
@@ -97,6 +101,8 @@ public class QuestionAnsweringService {
         int resolvedTopK = resolveTopK(topK);
         RetrievalMode resolvedRetrievalMode = resolveRetrievalMode(retrievalMode);
         KeywordStrategy keywordStrategy = resolveKeywordStrategy();
+        boolean rerankEnabled = isRerankEnabled();
+        int rerankCandidateLimit = rerankEnabled ? resolveRerankCandidateLimit(resolvedTopK) : resolvedTopK;
         long denseStartedAt = System.currentTimeMillis();
         log.info(StructuredLogMessage.of("qa.retrieve.started")
                 .field("kbCode", kbCode)
@@ -114,7 +120,9 @@ public class QuestionAnsweringService {
         List<RetrievedChunkCandidate> denseCandidates = documentChunkRepository.findTopKSimilarChunks(
                 knowledgeBase.getId(),
                 queryVectorLiteral,
-                resolvedRetrievalMode == RetrievalMode.HYBRID ? resolveDenseCandidateLimit(resolvedTopK) : resolvedTopK
+                resolvedRetrievalMode == RetrievalMode.HYBRID
+                        ? Math.max(resolveDenseCandidateLimit(resolvedTopK), rerankCandidateLimit)
+                        : rerankCandidateLimit
         );
         long denseDurationMs = System.currentTimeMillis() - denseStartedAt;
         log.info(StructuredLogMessage.of("qa.retrieve.dense.completed")
@@ -128,14 +136,14 @@ public class QuestionAnsweringService {
         long keywordDurationMs = 0L;
         long fusionDurationMs = 0L;
         String fusionStrategy = FUSION_STRATEGY_NONE;
-        List<RetrievedChunkResponse> chunks;
+        List<RetrievedChunkResponse> preRerankChunks;
         if (resolvedRetrievalMode == RetrievalMode.HYBRID) {
             long keywordStartedAt = System.currentTimeMillis();
             keywordCandidates = findTopKeywordChunks(
                     knowledgeBase.getId(),
                     normalizedQuestion,
                     keywordStrategy,
-                    resolveKeywordCandidateLimit(resolvedTopK)
+                    Math.max(resolveKeywordCandidateLimit(resolvedTopK), rerankCandidateLimit)
             );
             keywordDurationMs = System.currentTimeMillis() - keywordStartedAt;
             log.info(StructuredLogMessage.of("qa.retrieve.keyword.completed")
@@ -147,7 +155,7 @@ public class QuestionAnsweringService {
                     .build());
 
             long fusionStartedAt = System.currentTimeMillis();
-            chunks = fuseCandidates(denseCandidates, keywordCandidates, resolvedTopK);
+            preRerankChunks = fuseCandidates(denseCandidates, keywordCandidates, rerankCandidateLimit);
             fusionDurationMs = System.currentTimeMillis() - fusionStartedAt;
             fusionStrategy = FUSION_STRATEGY_RRF;
             log.info(StructuredLogMessage.of("qa.retrieve.fusion.completed")
@@ -156,15 +164,18 @@ public class QuestionAnsweringService {
                     .field("keywordStrategy", keywordStrategy.name())
                     .field("denseCandidateCount", denseCandidates.size())
                     .field("keywordCandidateCount", keywordCandidates.size())
-                    .field("finalHitCount", chunks.size())
+                    .field("candidateCount", preRerankChunks.size())
                     .field("durationMs", fusionDurationMs)
                     .build());
         } else {
-            chunks = denseCandidates.stream()
-                    .limit(resolvedTopK)
+            preRerankChunks = denseCandidates.stream()
+                    .limit(rerankCandidateLimit)
                     .map(this::toRetrievedChunkResponse)
                     .toList();
         }
+
+        RerankOutcome rerankOutcome = applyRerank(normalizedQuestion, preRerankChunks, resolvedTopK);
+        List<RetrievedChunkResponse> chunks = rerankOutcome.chunks();
 
         long totalDurationMs = System.currentTimeMillis() - retrievalStartedAt;
         log.info(StructuredLogMessage.of("qa.retrieve.completed")
@@ -179,6 +190,10 @@ public class QuestionAnsweringService {
                 .field("denseDurationMs", denseDurationMs)
                 .field("keywordDurationMs", keywordDurationMs)
                 .field("fusionDurationMs", fusionDurationMs)
+                .field("rerankStatus", rerankOutcome.status().name())
+                .field("rerankModel", rerankOutcome.model())
+                .field("rerankCandidateCount", rerankOutcome.candidateCount())
+                .field("rerankDurationMs", rerankOutcome.durationMs())
                 .field("totalDurationMs", totalDurationMs)
                 .field("embeddingModel", ragEmbeddingProperties.getModel())
                 .build());
@@ -196,6 +211,10 @@ public class QuestionAnsweringService {
                 denseDurationMs,
                 keywordDurationMs,
                 fusionDurationMs,
+                rerankOutcome.status(),
+                rerankOutcome.model(),
+                rerankOutcome.candidateCount(),
+                rerankOutcome.durationMs(),
                 totalDurationMs,
                 chunks
         );
@@ -265,6 +284,53 @@ public class QuestionAnsweringService {
     /** 暴露给缓存 SpEL 使用的当前 keyword strategy 名称。 */
     public String currentKeywordStrategyName() {
         return resolveKeywordStrategy().name();
+    }
+
+    /** 暴露给缓存 SpEL 使用的检索策略签名，避免配置切换后命中旧排序。 */
+    public String currentRetrievalPolicySignature() {
+        RagRetrievalProperties.Rerank rerank = rerankProperties();
+        return resolveKeywordStrategy().name()
+                + ":" + rerank.isEnabled()
+                + ":" + normalizeRerankModel(rerank.getModel())
+                + ":" + rerank.getCandidateLimit()
+                + ":" + normalizePolicyVersion(rerank.getPolicyVersion())
+                + ":" + normalizeInstruct(rerank.getInstruct()).hashCode();
+    }
+
+    /** 判断当前是否启用召回后重排序。 */
+    private boolean isRerankEnabled() {
+        return rerankProperties().isEnabled();
+    }
+
+    /** 解析重排序候选数，并确保不少于调用方要求的最终 topK。 */
+    private int resolveRerankCandidateLimit(int topK) {
+        Integer configured = rerankProperties().getCandidateLimit();
+        int candidateLimit = configured == null ? 20 : configured;
+        return Math.min(50, Math.max(topK, candidateLimit));
+    }
+
+    /** 返回非空的重排序配置对象。 */
+    private RagRetrievalProperties.Rerank rerankProperties() {
+        return ragRetrievalProperties.getRerank() == null
+                ? new RagRetrievalProperties.Rerank()
+                : ragRetrievalProperties.getRerank();
+    }
+
+    /** 解析重排序模型名。 */
+    private String resolveRerankModel() {
+        return normalizeRerankModel(rerankProperties().getModel());
+    }
+
+    private String normalizeRerankModel(String model) {
+        return model == null || model.isBlank() ? "qwen3-rerank" : model.trim();
+    }
+
+    private String normalizeInstruct(String instruct) {
+        return instruct == null ? "" : instruct.trim();
+    }
+
+    private String normalizePolicyVersion(String version) {
+        return version == null || version.isBlank() ? "rerank-v1" : version.trim();
     }
 
     /** 路由到当前配置的 lexical recall 实现。 */
@@ -448,6 +514,133 @@ public class QuestionAnsweringService {
                 .orElseThrow() + "]";
     }
 
+    /** 在召回或融合候选集上执行重排序；供应商失败时保留原排序。 */
+    private RerankOutcome applyRerank(String question,
+                                      List<RetrievedChunkResponse> candidates,
+                                      int topK) {
+        if (!isRerankEnabled()) {
+            return new RerankOutcome(
+                    RerankStatus.DISABLED,
+                    null,
+                    0,
+                    0L,
+                    candidates.stream().limit(topK).toList()
+            );
+        }
+        String model = resolveRerankModel();
+        if (candidates.isEmpty()) {
+            return new RerankOutcome(RerankStatus.SKIPPED_EMPTY, model, 0, 0L, List.of());
+        }
+
+        long startedAt = System.currentTimeMillis();
+        log.info(StructuredLogMessage.of("qa.rerank.started")
+                .field("model", model)
+                .field("candidateCount", candidates.size())
+                .field("topK", topK)
+                .build());
+        try {
+            List<String> documents = candidates.stream()
+                    .map(this::toRerankDocument)
+                    .toList();
+            AiGatewayClient.RerankGatewayResponse response = aiGatewayClient.createRerank(
+                    model,
+                    question,
+                    documents,
+                    Math.min(topK, candidates.size()),
+                    normalizeInstruct(rerankProperties().getInstruct())
+            );
+            List<RetrievedChunkResponse> reranked = validateAndMapRerankResults(response, candidates, topK);
+            long durationMs = System.currentTimeMillis() - startedAt;
+            String actualModel = response.model() == null || response.model().isBlank() ? model : response.model();
+            log.info(StructuredLogMessage.of("qa.rerank.completed")
+                    .field("model", actualModel)
+                    .field("candidateCount", candidates.size())
+                    .field("resultCount", reranked.size())
+                    .field("durationMs", durationMs)
+                    .build());
+            return new RerankOutcome(
+                    RerankStatus.APPLIED,
+                    actualModel,
+                    candidates.size(),
+                    durationMs,
+                    reranked
+            );
+        } catch (BusinessException ex) {
+            long durationMs = System.currentTimeMillis() - startedAt;
+            log.warn(StructuredLogMessage.of("qa.rerank.degraded")
+                    .field("model", model)
+                    .field("candidateCount", candidates.size())
+                    .field("durationMs", durationMs)
+                    .field("reason", ex.getMessage())
+                    .build());
+            return new RerankOutcome(
+                    RerankStatus.DEGRADED,
+                    model,
+                    candidates.size(),
+                    durationMs,
+                    candidates.stream().limit(topK).toList()
+            );
+        }
+    }
+
+    /** 为 rerank 提供标题和正文，同时不改变 chunk 的稳定映射关系。 */
+    private String toRerankDocument(RetrievedChunkResponse chunk) {
+        return "Document title: " + chunk.documentName() + "\nPassage: " + chunk.content();
+    }
+
+    /** 验证供应商 index/score 契约并映射回原 chunk。 */
+    private List<RetrievedChunkResponse> validateAndMapRerankResults(
+            AiGatewayClient.RerankGatewayResponse response,
+            List<RetrievedChunkResponse> candidates,
+            int topK) {
+        int expectedCount = Math.min(topK, candidates.size());
+        if (response == null || response.results() == null || response.results().size() != expectedCount) {
+            throw new BusinessException("Rerank result count does not match requested top_n");
+        }
+        Set<Integer> seenIndexes = new HashSet<>();
+        List<ScoredChunk> scoredChunks = new ArrayList<>();
+        for (AiGatewayClient.RerankGatewayResult result : response.results()) {
+            Integer index = result == null ? null : result.index();
+            Double score = result == null ? null : result.relevanceScore();
+            if (index == null || index < 0 || index >= candidates.size() || !seenIndexes.add(index)) {
+                throw new BusinessException("Rerank response contains an invalid or duplicate index");
+            }
+            if (score == null || !Double.isFinite(score) || score < 0D || score > 1D) {
+                throw new BusinessException("Rerank response contains an invalid score");
+            }
+            scoredChunks.add(new ScoredChunk(index, score, withRerankScore(candidates.get(index), score)));
+        }
+        scoredChunks.sort((left, right) -> {
+            int scoreComparison = Double.compare(right.score(), left.score());
+            return scoreComparison != 0
+                    ? scoreComparison
+                    : Integer.compare(left.originalIndex(), right.originalIndex());
+        });
+        List<RetrievedChunkResponse> rerankedChunks = new ArrayList<>(scoredChunks.size());
+        for (ScoredChunk scoredChunk : scoredChunks) {
+            rerankedChunks.add(scoredChunk.chunk());
+        }
+        return List.copyOf(rerankedChunks);
+    }
+
+    /** 复制 chunk 并附加本次重排序分数。 */
+    private RetrievedChunkResponse withRerankScore(RetrievedChunkResponse chunk, Double rerankScore) {
+        return new RetrievedChunkResponse(
+                chunk.chunkId(),
+                chunk.documentId(),
+                chunk.documentCode(),
+                chunk.documentName(),
+                chunk.chunkIndex(),
+                chunk.chunkType(),
+                chunk.content(),
+                chunk.startOffset(),
+                chunk.endOffset(),
+                chunk.embeddingModel(),
+                chunk.score(),
+                rerankScore
+        );
+    }
+
     /** 使用 RRF 融合 dense 和 keyword 双路召回结果。 */
     private List<RetrievedChunkResponse> fuseCandidates(List<RetrievedChunkCandidate> denseCandidates,
                                                         List<RetrievedChunkCandidate> keywordCandidates,
@@ -560,5 +753,23 @@ public class QuestionAnsweringService {
         private void setFusedScore(double fusedScore) {
             this.fusedScore = fusedScore;
         }
+    }
+
+    /** 一次重排序阶段的内部结果。 */
+    private record RerankOutcome(
+            RerankStatus status,
+            String model,
+            int candidateCount,
+            long durationMs,
+            List<RetrievedChunkResponse> chunks
+    ) {
+    }
+
+    /** 带原始名次的重排序候选，用于同分时稳定排序。 */
+    private record ScoredChunk(
+            int originalIndex,
+            double score,
+            RetrievedChunkResponse chunk
+    ) {
     }
 }

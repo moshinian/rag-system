@@ -7,8 +7,7 @@ import { ApiErrorAlert } from "../../components/feedback/api-error-alert";
 import { SourceList } from "../../components/source-viewer/source-list";
 import { useCurrentKb } from "../../hooks/use-current-kb";
 import type { RetrievalMode } from "../../types/qa";
-import { formatDateTime, truncateText } from "../../utils/format";
-import { formatFusionStrategy, formatRetrievalMode } from "../../utils/format";
+import { formatDateTime, formatFusionStrategy, formatRerankStatus, formatRetrievalMode, truncateText } from "../../utils/format";
 import {
   DEFAULT_PAGE,
   normalizePaginationParams,
@@ -88,6 +87,12 @@ export function HistoryPage() {
                           </Descriptions.Item>
                           <Descriptions.Item label="融合策略">
                             {formatFusionStrategy(record.fusionStrategy)}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="重排序">
+                            {formatRerankStatus(record.rerankStatus)}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="重排模型">
+                            {record.rerankModel ?? "-"}
                           </Descriptions.Item>
                           <Descriptions.Item label="耗时">{record.latencyMs ?? "-"} ms</Descriptions.Item>
                           <Descriptions.Item label="创建时间">

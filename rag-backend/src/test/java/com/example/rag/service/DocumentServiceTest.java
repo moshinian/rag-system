@@ -2,7 +2,8 @@ package com.example.rag.service;
 
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
-import com.example.rag.ingestion.storage.LocalFileStorageService;
+import com.example.rag.ingestion.storage.FileStorageService;
+import com.example.rag.ingestion.storage.StoredFile;
 import com.example.rag.model.response.DocumentChunkResponse;
 import com.example.rag.model.enums.DocumentStatus;
 import com.example.rag.model.response.DocumentDetailResponse;
@@ -60,7 +61,7 @@ class DocumentServiceTest {
     private IndexingTaskRepository indexingTaskRepository;
 
     @Mock
-    private LocalFileStorageService localFileStorageService;
+    private FileStorageService fileStorageService;
 
     @Mock
     private SnowflakeIdGenerator snowflakeIdGenerator;
@@ -94,8 +95,10 @@ class DocumentServiceTest {
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
         when(documentRepository.existsInKnowledgeBaseByContentHash(eq(100L), any())).thenReturn(false);
         when(snowflakeIdGenerator.nextId()).thenReturn(123456789L);
-        when(localFileStorageService.store(any(), any(), any(), any(), any()))
-                .thenReturn(Path.of("data/uploads/settlement-kb/20260430/DOC-123456789_plan.md"));
+        when(fileStorageService.store(any(), any(), any(), any(), any()))
+                .thenReturn(new StoredFile("local",
+                        "settlement-kb/20260430/DOC-123456789_plan.md",
+                        "data/uploads/settlement-kb/20260430/DOC-123456789_plan.md"));
         when(documentRepository.insert(any())).thenAnswer(invocation -> {
             DocumentEntity entity = invocation.getArgument(0);
             OffsetDateTime now = OffsetDateTime.now();
@@ -133,8 +136,10 @@ class DocumentServiceTest {
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
         when(documentRepository.existsInKnowledgeBaseByContentHash(eq(100L), any())).thenReturn(false);
         when(snowflakeIdGenerator.nextId()).thenReturn(999L);
-        when(localFileStorageService.store(any(), any(), any(), any(), any()))
-                .thenReturn(Path.of("data/uploads/settlement-kb/20260430/DOC-999_notes.txt"));
+        when(fileStorageService.store(any(), any(), any(), any(), any()))
+                .thenReturn(new StoredFile("local",
+                        "settlement-kb/20260430/DOC-999_notes.txt",
+                        "data/uploads/settlement-kb/20260430/DOC-999_notes.txt"));
         when(documentRepository.insert(any())).thenAnswer(invocation -> {
             DocumentEntity entity = invocation.getArgument(0);
             OffsetDateTime now = OffsetDateTime.now();
@@ -168,8 +173,10 @@ class DocumentServiceTest {
         when(knowledgeBaseRepository.findByCode("settlement-kb")).thenReturn(Optional.of(knowledgeBase));
         when(documentRepository.existsInKnowledgeBaseByContentHash(eq(100L), any())).thenReturn(false);
         when(snowflakeIdGenerator.nextId()).thenReturn(1001L);
-        when(localFileStorageService.store(any(), any(), any(), any(), any()))
-                .thenReturn(Path.of("data/uploads/settlement-kb/20260430/DOC-1001_notes.md"));
+        when(fileStorageService.store(any(), any(), any(), any(), any()))
+                .thenReturn(new StoredFile("local",
+                        "settlement-kb/20260430/DOC-1001_notes.md",
+                        "data/uploads/settlement-kb/20260430/DOC-1001_notes.md"));
         when(documentRepository.insert(any())).thenAnswer(invocation -> {
             DocumentEntity entity = invocation.getArgument(0);
             OffsetDateTime now = OffsetDateTime.now();

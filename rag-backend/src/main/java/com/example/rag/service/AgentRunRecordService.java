@@ -34,9 +34,7 @@ public class AgentRunRecordService {
     }
 
     /**
-     * 创建并提交 RUNNING run。
-     *
-     * <p>调用方在本方法返回后才提交后台任务，确保工作线程能查询到已提交记录。</p>
+     * 创建 QUEUED run；任意 Pod 提交后均由集群 Worker Claim。
      */
     @Transactional
     public AgentRunEntity create(String kbCode, AgentRunCreateRequest request) {
@@ -49,9 +47,8 @@ public class AgentRunRecordService {
         entity.setKnowledgeBaseId(knowledgeBase.getId());
         entity.setGoal(request.goal().trim());
         entity.setQuestion(trimToNull(request.question()));
-        entity.setStatus(AgentRunStatus.RUNNING);
-        // 初始化 runtime heartbeat，避免刚创建尚未收到 Python heartbeat 时被恢复扫描误判。
-        entity.setRuntimeHeartbeatAt(OffsetDateTime.now());
+        entity.setStatus(AgentRunStatus.QUEUED);
+        entity.setRuntimeHeartbeatAt(null);
         entity.setCreatedBy(defaultCreatedBy(request.createdBy()));
         return agentRunRepository.insert(entity);
     }

@@ -133,7 +133,7 @@ public class AgentRunCompatibilityEventConverter {
             case SUCCEEDED -> AgentRunEventType.RUN_COMPLETED;
             case FAILED -> AgentRunEventType.RUN_FAILED;
             case WAITING_CONFIRMATION -> AgentRunEventType.RUN_WAITING_CONFIRMATION;
-            case RUNNING -> throw new BusinessException("Agent run is not terminal: " + run.getRunCode());
+            case QUEUED, RUNNING -> throw new BusinessException("Agent run is not terminal: " + run.getRunCode());
         };
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("source", "COMPATIBILITY");

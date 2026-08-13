@@ -88,7 +88,6 @@ public class DocumentIndexingService {
         }
 
         IndexingTaskEntity task = createTask(document, null, IndexingTaskTriggerSource.SUBMIT, normalizeOperator(operator));
-        dispatch(task.getId());
         log.info(StructuredLogMessage.of("indexing.task.submitted")
                 .field("taskId", task.getId())
                 .field("kbCode", kbCode)
@@ -139,7 +138,6 @@ public class DocumentIndexingService {
         }
 
         IndexingTaskEntity retryTask = createRetryTask(document, task, IndexingTaskTriggerSource.MANUAL_RETRY, normalizeOperator(operator));
-        dispatch(retryTask.getId());
         log.info(StructuredLogMessage.of("indexing.task.retried")
                 .field("taskId", retryTask.getId())
                 .field("parentTaskId", task.getId())
@@ -195,7 +193,6 @@ public class DocumentIndexingService {
                     IndexingTaskTriggerSource.MANUAL_RETRY,
                     normalizeOperator(operator)
             );
-            dispatch(retryTask.getId());
             retriedTaskCount++;
             retriedDocumentCodes.add(document.getDocumentCode());
         }
@@ -217,10 +214,6 @@ public class DocumentIndexingService {
     }
 
     /** 定时扫描卡住的队列中/运行中任务，并重新投递。 */
-    @Scheduled(
-            fixedDelayString = "${rag.indexing.recovery.scan-interval-ms:60000}",
-            initialDelayString = "${rag.indexing.recovery.initial-delay-ms:30000}"
-    )
     public void recoverStaleTasks() {
         if (!ragIndexingProperties.getRecovery().isEnabled()) {
             return;
@@ -288,7 +281,6 @@ public class DocumentIndexingService {
         IndexingTaskEntity retryTask = createRetryTask(document, staleTask, IndexingTaskTriggerSource.RECOVERY, staleTask.getCreatedBy());
         staleTask.setErrorMessage(truncate("Recovered by task " + retryTask.getId()));
         indexingTaskRepository.updateById(staleTask);
-        dispatch(retryTask.getId());
         log.info(StructuredLogMessage.of("indexing.recovery.dispatched")
                 .field("taskId", staleTask.getId())
                 .field("recoveryTaskId", retryTask.getId())
@@ -417,8 +409,8 @@ public class DocumentIndexingService {
             task.setTriggerSource(triggerSource);
             task.setRetryCount(0);
             task.setMaxRetryCount(Math.max(1, ragIndexingProperties.getMaxRetryCount()));
-            task.setStartedAt(now);
-            task.setLastHeartbeatAt(now);
+            task.setStartedAt(null);
+            task.setLastHeartbeatAt(null);
             task.setCreatedBy(operator);
             indexingTaskRepository.insert(task);
             return task;

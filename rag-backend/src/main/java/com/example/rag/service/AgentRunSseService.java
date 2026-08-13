@@ -53,6 +53,8 @@ public class AgentRunSseService {
         registerCleanupCallbacks(runCode, channel, subscription);
 
         synchronized (channel.monitor) {
+            subscription.lastDeliveredDatabaseId.set(
+                    eventService.resolveDatabaseCursor(runCode, lastEventId));
             List<AgentRunEventResponse> history = eventService.findEventsAfter(runCode, lastEventId);
             channel.subscriptions.add(subscription);
             try {

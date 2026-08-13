@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.time.OffsetDateTime;
 
 /**
  * Agent 推荐动作访问层。
@@ -45,6 +46,10 @@ public class AgentActionRepository {
         LambdaQueryWrapper<AgentActionEntity> query = new LambdaQueryWrapper<AgentActionEntity>()
                 .eq(AgentActionEntity::getActionCode, actionCode);
         return Optional.ofNullable(mapper.selectOne(query));
+    }
+
+    public boolean claimForExecution(String runCode, String actionCode, String operator, OffsetDateTime now) {
+        return mapper.claimForExecution(runCode, actionCode, operator, now) == 1;
     }
 
     /** 按运行编码查询推荐动作。 */

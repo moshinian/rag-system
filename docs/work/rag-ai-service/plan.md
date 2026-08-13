@@ -22,7 +22,7 @@
 下一阶段要回答的核心问题包括：
 
 1. 如何把 provider 差异继续收口，而不是重新泄漏回 Java 主系统。
-2. 如何让 embedding、chat、后续 rerank 的调用日志、错误分类和健康语义更稳定。
+2. 如何让 embedding、chat、rerank 的调用日志、错误分类和健康语义更稳定。
 3. 如何在不破坏现有 RAG 主链路的前提下，为 vLLM、本地模型和 evaluation 预留真实扩展面。
 4. 如何让这个服务在项目讲解和面试语境里，成为一个独立成立的工程亮点，而不是“顺手拆出去的一层 HTTP 转发”。
 
@@ -37,7 +37,7 @@
 1. 统一承接 embeddings 和 chat completions 能力。
 2. 统一适配 OpenAI-compatible provider，收口 base URL、API key、超时、重试和错误映射。
 3. 透传 `X-Request-Id`，为主链路保留最小可观测口径。
-4. 给后续 rerank、vLLM、本地模型和 evaluation 留出统一扩展面。
+4. 在已接入 rerank 的基础上，给后续 vLLM、本地模型和 evaluation 留出统一扩展面。
 
 当前阶段它不负责的事情包括：
 
@@ -72,7 +72,7 @@
 后续新增能力不应并行发散，建议按这个顺序推进：
 
 1. 先补强现有 embedding/chat 的稳定性和可观测性。
-2. 再评估是否把 rerank 收口进 `rag-ai-service`，形成“检索前后模型能力统一入口”。
+2. 使用真实评测验证已收口的 rerank，并据此决定是否开启环境默认值。
 3. 再考虑接入 vLLM 或本地模型，把部署差异继续隔离在 Gateway 内部。
 4. 最后再决定 evaluation 是作为服务内能力、旁路工具，还是独立板块维护。
 
@@ -103,7 +103,7 @@
 
 这一阶段优先评估和设计：
 
-1. 是否引入 rerank，并明确它在 Java 检索链路中的接入位置。
+1. 完成 rerank 的真实排序与延迟评测，验证 Java fail-open、缓存和历史回放语义。
 2. 是否接入 vLLM 或本地模型，形成“同一契约下多种部署来源”的统一入口。
 3. 是否需要最小 provider 路由或 fallback 规则。
 4. 哪些能力应该继续保留在 Gateway，哪些更适合旁路脚本或独立模块。

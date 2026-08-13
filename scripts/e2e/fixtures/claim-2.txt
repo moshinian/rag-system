@@ -1,0 +1,1 @@
+Distributed claim fixture 2. A task owner renews its lease with an independent heartbeat.

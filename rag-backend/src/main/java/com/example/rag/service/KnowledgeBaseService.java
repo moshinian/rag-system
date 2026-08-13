@@ -3,7 +3,7 @@ package com.example.rag.service;
 import com.example.rag.common.exception.BusinessException;
 import com.example.rag.common.id.SnowflakeIdGenerator;
 import com.example.rag.config.CacheNames;
-import com.example.rag.ingestion.storage.LocalFileStorageService;
+import com.example.rag.ingestion.storage.FileStorageService;
 import com.example.rag.model.enums.AgentRunStatus;
 import com.example.rag.model.enums.KnowledgeBaseStatus;
 import com.example.rag.model.response.KnowledgeBaseEnableResponse;
@@ -53,7 +53,7 @@ public class KnowledgeBaseService {
     private final AgentStepRepository agentStepRepository;
     private final AgentActionRepository agentActionRepository;
     private final AgentRunEventRepository agentRunEventRepository;
-    private final LocalFileStorageService localFileStorageService;
+    private final FileStorageService fileStorageService;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final DocumentIndexingService documentIndexingService;
 
@@ -68,7 +68,7 @@ public class KnowledgeBaseService {
                                 AgentStepRepository agentStepRepository,
                                 AgentActionRepository agentActionRepository,
                                 AgentRunEventRepository agentRunEventRepository,
-                                LocalFileStorageService localFileStorageService,
+                                FileStorageService fileStorageService,
                                 SnowflakeIdGenerator snowflakeIdGenerator,
                                 DocumentIndexingService documentIndexingService) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
@@ -81,7 +81,7 @@ public class KnowledgeBaseService {
         this.agentStepRepository = agentStepRepository;
         this.agentActionRepository = agentActionRepository;
         this.agentRunEventRepository = agentRunEventRepository;
-        this.localFileStorageService = localFileStorageService;
+        this.fileStorageService = fileStorageService;
         this.snowflakeIdGenerator = snowflakeIdGenerator;
         this.documentIndexingService = documentIndexingService;
     }
@@ -188,7 +188,8 @@ public class KnowledgeBaseService {
         if (indexingTaskRepository.existsActiveTaskInKnowledgeBase(entity.getId(), TASK_TYPE_DOCUMENT_INDEXING)) {
             throw new BusinessException("Knowledge base has active indexing tasks and cannot be deleted: " + kbCode);
         }
-        if (agentRunRepository.existsByKnowledgeBaseIdAndStatus(entity.getId(), AgentRunStatus.RUNNING)) {
+        if (agentRunRepository.existsByKnowledgeBaseIdAndStatus(entity.getId(), AgentRunStatus.RUNNING)
+                || agentRunRepository.existsByKnowledgeBaseIdAndStatus(entity.getId(), AgentRunStatus.QUEUED)) {
             throw new BusinessException("Knowledge base has active agent runs and cannot be deleted: " + kbCode);
         }
 
@@ -331,7 +332,7 @@ public class KnowledgeBaseService {
         }
         try {
             // 物料目录按知识库整体删除，避免逐文件清理与数据库级联范围不一致。
-            localFileStorageService.deleteKnowledgeBaseDirectory(kbCode);
+            fileStorageService.deleteKnowledgeBase(kbCode);
         } catch (IOException ex) {
             throw new BusinessException("Failed to delete knowledge base materials: " + ex.getMessage());
         }

@@ -76,6 +76,12 @@ public class AgentRunEventService {
                 .toList();
     }
 
+    /** Pub/Sub 通知只传数据库 ID，接收方回源 PostgreSQL 获取权威事件。 */
+    @Transactional(readOnly = true)
+    public Optional<AgentRunEventResponse> findEventByDatabaseId(Long databaseId) {
+        return eventRepository.findById(databaseId).map(this::toResponse);
+    }
+
     /**
      * 根据 Last-Event-ID 查询后续事件。
      *
@@ -83,17 +89,29 @@ public class AgentRunEventService {
      */
     @Transactional(readOnly = true)
     public List<AgentRunEventResponse> findEventsAfter(String runCode, String lastEventId) {
-        if (lastEventId == null || lastEventId.isBlank()) {
+        long cursor = resolveDatabaseCursor(runCode, lastEventId);
+        if (cursor == 0L) {
             return findAllEvents(runCode);
+        }
+        return eventRepository.findAfterId(runCode, cursor).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    /**
+     * 将浏览器的事件代码游标解析为数据库游标，供历史补发与实时去重共享。
+     */
+    @Transactional(readOnly = true)
+    public long resolveDatabaseCursor(String runCode, String lastEventId) {
+        if (lastEventId == null || lastEventId.isBlank()) {
+            return 0L;
         }
         AgentRunEventEntity lastEvent = eventRepository.findByEventCode(lastEventId.trim())
                 .orElseThrow(() -> new BusinessException("Agent run event not found: " + lastEventId));
         if (!runCode.equals(lastEvent.getRunCode())) {
             throw new BusinessException("Agent run event does not belong to run: " + lastEventId);
         }
-        return eventRepository.findAfterId(runCode, lastEvent.getId()).stream()
-                .map(this::toResponse)
-                .toList();
+        return lastEvent.getId();
     }
 
     /** 将持久化实体转换成 SSE 响应。 */

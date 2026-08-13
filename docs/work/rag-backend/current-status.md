@@ -37,6 +37,9 @@
 2. 第一版 hybrid retrieval、keyword retrieval 和 RRF fusion 已落地。
 3. `retrievalMode / fusionStrategy` 已贯穿 retrieve、ask 和 history。
 4. 前后端已经完成 `DENSE / HYBRID` 模式的真实联调。
+5. 召回后 rerank 已完成代码接入：Dense 或 RRF 候选扩展后通过 AI Gateway 调用 `qwen3-rerank`，再截断最终 TopK。
+6. rerank 默认关闭；启用后支持 `APPLIED / DEGRADED / SKIPPED_EMPTY` 状态、召回分与重排分并存、历史回放和 Agent 观测。
+7. rerank 超时、限流、上游错误或非法响应时 fail-open 到原 Dense/RRF 顺序，降级结果不进入 retrieval cache。
 
 ### 架构演进
 
@@ -56,6 +59,7 @@
 4. `POST /api/admin/embeddings/rebuild` 可完成一次全量重嵌入恢复。
 5. 相关后端单测在 Gateway 重构后仍保持通过。
 6. 2026-05-20 已完成一次真实问答闭环验证：当 Gateway chat 默认模型切换为 `qwen-plus` 后，`qa/ask` 返回体与 `qa/history` 最新记录中的 `chatModel` 都已同步变为 `qwen-plus`。
+7. 2026-07-16 已临时启用 rerank 完成真实 `HYBRID retrieve -> ask -> history`：RRF 后 10 个候选经 `qwen3-rerank` 重排为 Top3，状态为 `APPLIED`，单次重排 627ms，历史回放保留召回分与重排分。
 
 ## 当前未完成 / 风险
 
@@ -65,6 +69,7 @@
 4. 任务取消、批量编排和多实例任务协调还未开始。
 5. 多轮会话和 session reuse 仍停留在 RFC 规划阶段。
 6. embedding 仍保持显式模型配置，不跟随 Gateway 默认 embedding 模型自动漂移；这是为了维持向量维度、readiness 和 rebuild 语义稳定。
+7. rerank 尚未完成真实评测集对照和环境默认值切换；当前 `rag.retrieval.rerank.enabled=false` 是刻意保留的上线门禁。
 
 ## 当前判断
 
@@ -78,7 +83,7 @@
 
 建议后端下一阶段优先推进：
 
-1. 扩大评测集，并把样本重点放在企业知识库常见的专有名词、接口名和错误码问题上。
-2. 基于现有日志口径补 retrieval 与 LLM 的真实延迟对比，为默认模式切换提供依据。
+1. 扩大评测集，并用专有名词、接口名、错误码和 hard negative 样本完成 rerank 前后的真实排序评测。
+2. 基于现有日志口径补 retrieval、rerank 与 LLM 的真实延迟对比，为 rerank 和默认检索模式切换提供依据。
 3. 推进任务取消、批量编排和多实例协调的后台任务治理能力。
 4. 结合 RFC 继续演进 session reuse / 多轮问答模型。

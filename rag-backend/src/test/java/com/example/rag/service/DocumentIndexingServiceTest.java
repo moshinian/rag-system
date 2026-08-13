@@ -22,6 +22,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.OffsetDateTime;
@@ -39,10 +41,12 @@ import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 /** 文档异步索引服务测试。 */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class DocumentIndexingServiceTest {
 
     @Mock
@@ -71,7 +75,7 @@ class DocumentIndexingServiceTest {
     };
 
     @Test
-    void submitShouldQueueAndCompleteAsyncIndexingTask() {
+    void submitShouldOnlyPersistQueuedTask() {
         KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
         knowledgeBase.setId(100L);
         knowledgeBase.setKbCode("settlement-kb");
@@ -126,17 +130,15 @@ class DocumentIndexingServiceTest {
         assertThat(response.taskStage()).isEqualTo("QUEUED");
 
         ArgumentCaptor<IndexingTaskEntity> taskCaptor = ArgumentCaptor.forClass(IndexingTaskEntity.class);
-        verify(indexingTaskRepository, atLeastOnce()).updateById(taskCaptor.capture());
-        verify(indexingTaskRepository, atLeast(3)).updateById(any());
-        IndexingTaskEntity finalTask = taskCaptor.getValue();
-        assertThat(finalTask.getStatus()).isEqualTo(IndexingTaskStatus.SUCCEEDED);
-        assertThat(finalTask.getTaskStage()).isEqualTo(IndexingTaskStage.COMPLETED);
-        assertThat(finalTask.getChunkCount()).isEqualTo(3);
-        assertThat(finalTask.getEmbeddedChunkCount()).isEqualTo(3);
+        verify(indexingTaskRepository).insert(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getStatus()).isEqualTo(IndexingTaskStatus.QUEUED);
+        assertThat(taskCaptor.getValue().getStartedAt()).isNull();
+        verify(documentProcessingService, never()).processForIndexing(any(), any(), any());
+        verify(documentEmbeddingService, never()).embedForIndexing(any(), any());
     }
 
     @Test
-    void submitShouldRetryWhenTaskRecordIsNotImmediatelyVisibleToWorker() {
+    void submitShouldNotReadTaskBackOrExecuteLocally() {
         KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
         knowledgeBase.setId(100L);
         knowledgeBase.setKbCode("settlement-kb");
@@ -193,9 +195,9 @@ class DocumentIndexingServiceTest {
         DocumentIndexingTaskResponse response = service.submit("settlement-kb", "DOC-1", "tester");
 
         assertThat(response.status()).isEqualTo("QUEUED");
-        verify(indexingTaskRepository, atLeast(2)).findById(999L);
-        verify(documentProcessingService).processForIndexing("settlement-kb", "DOC-1", "tester");
-        verify(documentEmbeddingService).embedForIndexing("settlement-kb", "DOC-1");
+        verify(indexingTaskRepository, never()).findById(999L);
+        verify(documentProcessingService, never()).processForIndexing(any(), any(), any());
+        verify(documentEmbeddingService, never()).embedForIndexing(any(), any());
     }
 
     @Test
@@ -269,7 +271,7 @@ class DocumentIndexingServiceTest {
         assertThat(response.parentTaskId()).isEqualTo(500L);
         assertThat(response.triggerSource()).isEqualTo("MANUAL_RETRY");
         assertThat(response.retryCount()).isEqualTo(1);
-        assertThat(failedTask.getRecoveredAt()).isNotNull();
+        assertThat(failedTask.getRecoveredAt()).isNull();
     }
 
     @Test
@@ -522,7 +524,7 @@ class DocumentIndexingServiceTest {
     }
 
     @Test
-    void submitShouldFailWhenExecutorRejectsTask() {
+    void submitShouldNotDependOnLocalExecutorCapacity() {
         KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
         knowledgeBase.setId(100L);
         knowledgeBase.setKbCode("settlement-kb");
@@ -564,14 +566,13 @@ class DocumentIndexingServiceTest {
                 }
         );
 
-        assertThatThrownBy(() -> service.submit("settlement-kb", "DOC-1", "tester"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("executor is busy");
-        verify(indexingTaskRepository).updateById(any());
+        DocumentIndexingTaskResponse response = service.submit("settlement-kb", "DOC-1", "tester");
+        assertThat(response.status()).isEqualTo("QUEUED");
+        verify(indexingTaskRepository, never()).updateById(any());
     }
 
     @Test
-    void submitShouldMarkTaskFailedWhenAsyncPreparationCrashes() {
+    void submitShouldLeavePreparationToClusterWorker() {
         KnowledgeBaseEntity knowledgeBase = new KnowledgeBaseEntity();
         knowledgeBase.setId(100L);
         knowledgeBase.setKbCode("settlement-kb");
@@ -617,10 +618,8 @@ class DocumentIndexingServiceTest {
         DocumentIndexingTaskResponse response = service.submit("settlement-kb", "DOC-1", "tester");
 
         assertThat(response.status()).isEqualTo("QUEUED");
-        verify(indexingTaskRepository, atLeastOnce()).updateById(any());
-        assertThat(queuedTask.getStatus()).isEqualTo(IndexingTaskStatus.FAILED);
-        assertThat(queuedTask.getErrorMessage()).contains("Document not found");
-        assertThat(queuedTask.getFinishedAt()).isNotNull();
+        verify(indexingTaskRepository, never()).updateById(any());
+        assertThat(response.status()).isEqualTo("QUEUED");
     }
 
     @Test

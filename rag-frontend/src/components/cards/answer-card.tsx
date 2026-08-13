@@ -1,6 +1,6 @@
 import { Card, Descriptions, Typography } from "antd";
 import type { QaAnswerResponse } from "../../types/qa";
-import { formatFusionStrategy, formatRetrievalMode } from "../../utils/format";
+import { formatFusionStrategy, formatRerankStatus, formatRetrievalMode } from "../../utils/format";
 
 type AnswerCardProps = {
   answer: QaAnswerResponse;
@@ -18,6 +18,12 @@ export function AnswerCard({ answer }: AnswerCardProps) {
         </Descriptions.Item>
         <Descriptions.Item label="融合策略">
           {formatFusionStrategy(answer.fusionStrategy)}
+        </Descriptions.Item>
+        <Descriptions.Item label="重排序">
+          {formatRerankStatus(answer.rerankStatus)}
+        </Descriptions.Item>
+        <Descriptions.Item label="重排模型">
+          {answer.rerankModel ?? "-"}
         </Descriptions.Item>
       </Descriptions>
       <Typography.Paragraph style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>
