@@ -11,7 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.cache.Cache;
 import org.springframework.cache.interceptor.CacheErrorHandler;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.SerializationException;
 
 import java.lang.reflect.Method;
@@ -42,8 +42,8 @@ class RedisCacheConfigTest {
     void redisSerializerShouldRoundTripRecordResponses() throws Exception {
         Method method = RedisCacheConfig.class.getDeclaredMethod("redisSerializer");
         method.setAccessible(true);
-        GenericJackson2JsonRedisSerializer serializer =
-                (GenericJackson2JsonRedisSerializer) method.invoke(config);
+        GenericJacksonJsonRedisSerializer serializer =
+                (GenericJacksonJsonRedisSerializer) method.invoke(config);
 
         QuestionRetrievalResponse response = new QuestionRetrievalResponse(
                 "kb-test",
@@ -85,8 +85,8 @@ class RedisCacheConfigTest {
     void redisSerializerShouldRoundTripResponsesWithOffsetDateTime() throws Exception {
         Method method = RedisCacheConfig.class.getDeclaredMethod("redisSerializer");
         method.setAccessible(true);
-        GenericJackson2JsonRedisSerializer serializer =
-                (GenericJackson2JsonRedisSerializer) method.invoke(config);
+        GenericJacksonJsonRedisSerializer serializer =
+                (GenericJacksonJsonRedisSerializer) method.invoke(config);
 
         DocumentDetailResponse response = new DocumentDetailResponse(
                 1L,

@@ -40,9 +40,6 @@ public class AgentRunService {
     private final AgentStepRepository agentStepRepository;
     private final AgentActionRepository agentActionRepository;
     private final AgentRunRecordService runRecordService;
-    private final AgentRunExecutor runExecutor;
-    private final AgentRunResultService runResultService;
-    private final AgentRunCompatibilityEventConverter eventConverter;
     private final DocumentIndexingService documentIndexingService;
     private final EmbeddingRebuildService embeddingRebuildService;
     private final RecommendedActionCatalog recommendedActionCatalog;
@@ -54,9 +51,6 @@ public class AgentRunService {
                            AgentStepRepository agentStepRepository,
                            AgentActionRepository agentActionRepository,
                            AgentRunRecordService runRecordService,
-                           AgentRunExecutor runExecutor,
-                           AgentRunResultService runResultService,
-                           AgentRunCompatibilityEventConverter eventConverter,
                            DocumentIndexingService documentIndexingService,
                            EmbeddingRebuildService embeddingRebuildService,
                            RecommendedActionCatalog recommendedActionCatalog,
@@ -66,9 +60,6 @@ public class AgentRunService {
         this.agentStepRepository = agentStepRepository;
         this.agentActionRepository = agentActionRepository;
         this.runRecordService = runRecordService;
-        this.runExecutor = runExecutor;
-        this.runResultService = runResultService;
-        this.eventConverter = eventConverter;
         this.documentIndexingService = documentIndexingService;
         this.embeddingRebuildService = embeddingRebuildService;
         this.recommendedActionCatalog = recommendedActionCatalog;

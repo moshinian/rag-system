@@ -24,10 +24,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /** Agent 运行管理服务测试。 */
@@ -44,12 +42,6 @@ class AgentRunServiceTest {
     @Mock
     private AgentRunRecordService runRecordService;
     @Mock
-    private AgentRunExecutor runExecutor;
-    @Mock
-    private AgentRunResultService runResultService;
-    @Mock
-    private AgentRunCompatibilityEventConverter eventConverter;
-    @Mock
     private DocumentIndexingService documentIndexingService;
     @Mock
     private EmbeddingRebuildService embeddingRebuildService;
@@ -64,9 +56,6 @@ class AgentRunServiceTest {
                 agentStepRepository,
                 agentActionRepository,
                 runRecordService,
-                runExecutor,
-                runResultService,
-                eventConverter,
                 documentIndexingService,
                 embeddingRebuildService,
                 new RecommendedActionCatalog(),
@@ -93,9 +82,6 @@ class AgentRunServiceTest {
         assertThat(response.status()).isEqualTo(AgentRunStatus.QUEUED);
         assertThat(response.steps()).isEmpty();
         assertThat(response.actions()).isEmpty();
-        verify(eventConverter, never()).publishRunStarted(any());
-        verifyNoInteractions(runExecutor);
-        verify(runResultService, never()).complete(any(), any());
     }
 
     @Test
@@ -110,8 +96,6 @@ class AgentRunServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Knowledge base not found");
 
-        verifyNoInteractions(runExecutor);
-        verify(eventConverter, never()).publishRunStarted(any());
     }
 
     @Test

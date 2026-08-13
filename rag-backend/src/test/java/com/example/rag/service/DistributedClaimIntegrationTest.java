@@ -83,7 +83,9 @@ class DistributedClaimIntegrationTest {
         List<Optional<IndexingTaskEntity>> results = race(4, index -> indexingRepository.claimNext(
                 "DOCUMENT_INDEXING", "pod-" + index, OffsetDateTime.now(), OffsetDateTime.now().plusMinutes(2)));
 
-        assertThat(results.stream().flatMap(Optional::stream)).hasSize(1);
+        assertThat(results.stream()
+                .filter(result -> result.isPresent())
+                .map(result -> result.orElseThrow())).hasSize(1);
         IndexingTaskEntity persisted = indexingRepository.findById(taskId).orElseThrow();
         assertThat(persisted.getOwnerInstanceId()).startsWith("pod-");
         assertThat(persisted.getLeaseVersion()).isEqualTo(1L);
@@ -100,7 +102,9 @@ class DistributedClaimIntegrationTest {
         List<Optional<AgentRunEntity>> results = race(4, index -> agentRunRepository.claimNext(
                 "pod-" + index, OffsetDateTime.now(), OffsetDateTime.now().plusMinutes(2)));
 
-        assertThat(results.stream().flatMap(Optional::stream)).hasSize(1);
+        assertThat(results.stream()
+                .filter(result -> result.isPresent())
+                .map(result -> result.orElseThrow())).hasSize(1);
         AgentRunEntity persisted = agentRunRepository.findByRunCode(runCode).orElseThrow();
         assertThat(persisted.getOwnerInstanceId()).startsWith("pod-");
         assertThat(persisted.getLeaseVersion()).isEqualTo(1L);

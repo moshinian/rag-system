@@ -1,7 +1,8 @@
 package com.example.rag.config;
 
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.interceptor.CacheErrorHandler;
@@ -11,15 +12,15 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.SerializationException;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
-import org.springframework.lang.NonNull;
-import org.springframework.lang.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import tools.jackson.databind.jsontype.PolymorphicTypeValidator;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -85,7 +86,7 @@ public class RedisCacheConfig implements CachingConfigurer {
             /** 读取缓存失败时，优先清理坏缓存并允许回源。 */
             @Override
             public void handleCacheGetError(@NonNull RuntimeException exception,
-                                            @NonNull org.springframework.cache.Cache cache,
+                                            @NonNull Cache cache,
                                             @NonNull Object key) {
                 if (exception instanceof SerializationException) {
                     // 脏缓存说明旧值已不可读，直接驱逐并允许业务回源重建，比返回 500 更稳妥。
@@ -105,7 +106,7 @@ public class RedisCacheConfig implements CachingConfigurer {
             /** 写入缓存失败时直接向上抛出异常。 */
             @Override
             public void handleCachePutError(@NonNull RuntimeException exception,
-                                            @NonNull org.springframework.cache.Cache cache,
+                                            @NonNull Cache cache,
                                             @NonNull Object key,
                                             @Nullable Object value) {
                 throw exception;
@@ -114,7 +115,7 @@ public class RedisCacheConfig implements CachingConfigurer {
             /** 删除缓存失败时直接向上抛出异常。 */
             @Override
             public void handleCacheEvictError(@NonNull RuntimeException exception,
-                                              @NonNull org.springframework.cache.Cache cache,
+                                              @NonNull Cache cache,
                                               @NonNull Object key) {
                 throw exception;
             }
@@ -122,7 +123,7 @@ public class RedisCacheConfig implements CachingConfigurer {
             /** 清空缓存失败时直接向上抛出异常。 */
             @Override
             public void handleCacheClearError(@NonNull RuntimeException exception,
-                                              @NonNull org.springframework.cache.Cache cache) {
+                                              @NonNull Cache cache) {
                 throw exception;
             }
         };
@@ -137,15 +138,16 @@ public class RedisCacheConfig implements CachingConfigurer {
 
     /** 构造带时间类型支持的 Redis 值序列化器。 */
     private RedisSerializer<Object> redisSerializer() {
-        GenericJackson2JsonRedisSerializer serializer =
-                new GenericJackson2JsonRedisSerializer();
-
-        serializer.configure(objectMapper -> {
-            // 健康状态、时间戳等响应对象都直接走这个序列化器，因此需要统一启用 JavaTime 支持。
-            objectMapper.registerModule(new JavaTimeModule());
-            objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        });
-
-        return serializer;
+        PolymorphicTypeValidator trustedCacheTypes = BasicPolymorphicTypeValidator.builder()
+                .allowIfSubType("com.example.rag.")
+                .allowIfSubType("java.util.")
+                .allowIfSubType("java.time.")
+                .allowIfSubTypeIsArray()
+                .build();
+        // Redis 只保存应用自己写入的缓存对象；受限多态类型用于把 record 恢复为原始响应类型。
+        return GenericJacksonJsonRedisSerializer.builder()
+                .enableDefaultTyping(trustedCacheTypes)
+                .typePropertyName("@class")
+                .build();
     }
 }

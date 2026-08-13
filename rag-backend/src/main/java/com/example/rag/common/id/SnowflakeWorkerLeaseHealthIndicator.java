@@ -1,7 +1,7 @@
 package com.example.rag.common.id;
 
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.stereotype.Component;
 
 /** Readiness 使用的 WorkerId Lease 健康指标。 */
